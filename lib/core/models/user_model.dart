@@ -57,14 +57,26 @@ class UserModel {
   static const String roleSupervisor = 'supervisor';
   static const String roleGerencia = 'gerencia';
   static const String roleRrhh = 'rrhh';
+  static const String roleAprobador =
+      'aprobador'; // 🆕 ROL ESPECÍFICO PARA APROBAR
 
   /// Verificadores de rol
   bool get isSupervisor => role == roleSupervisor;
   bool get isGerencia => role == roleGerencia;
   bool get isRrhh => role == roleRrhh;
-  bool get canApprove => isGerencia || isRrhh;
+  bool get isAprobador => role == roleAprobador;
+
+  // 🔥 CAMBIO CRÍTICO: Solo aprobadores específicos pueden aprobar
+  bool get canApprove => isAprobador || isGerencia || isRrhh;
+
+  // Supervisores solo pueden crear sanciones
   bool get canCreateSanciones => isSupervisor;
+
+  // Solo gerencia y RRHH pueden ver todas las sanciones
   bool get canViewAllSanciones => isGerencia || isRrhh;
+
+  // 🆕 Nuevo: Solo aprobadores pueden cambiar status
+  bool get canChangeStatus => canApprove;
 
   /// Descripción del rol
   String get roleDescription {
@@ -75,6 +87,8 @@ class UserModel {
         return 'Gerencia';
       case roleRrhh:
         return 'Recursos Humanos';
+      case roleAprobador:
+        return 'Aprobador';
       default:
         return role;
     }
@@ -89,6 +103,8 @@ class UserModel {
         return '👔';
       case roleRrhh:
         return '🧑‍💼';
+      case roleAprobador:
+        return '✅';
       default:
         return '👤';
     }
