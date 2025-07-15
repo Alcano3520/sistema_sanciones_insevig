@@ -3,8 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
 import 'home_screen.dart';
 
-/// Pantalla de login - Similar a tu PantallaLogin de Kivy
-/// Pero con diseño moderno y validaciones
+/// Pantalla de login - SIN credenciales predeterminadas
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -43,9 +42,9 @@ class _LoginScreenState extends State<LoginScreen>
 
     _animationController.forward();
 
-    // Credenciales predeterminadas para testing
-    _emailController.text = 'supervisor@insevig.com';
-    _passwordController.text = '123456789';
+    // 🔥 CREDENCIALES REMOVIDAS - Campos vacíos para producción
+    // _emailController.text = ''; // Vacío
+    // _passwordController.text = ''; // Vacío
   }
 
   @override
@@ -80,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo y título (como tu Kivy)
+                    // Logo y título
                     _buildHeader(),
 
                     const SizedBox(height: 40),
@@ -95,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                     const SizedBox(height: 40),
 
-                    // Footer como tu Kivy
+                    // Footer
                     _buildFooter(),
                   ],
                 ),
@@ -147,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen>
 
         // Subtítulo
         Text(
-          'Versión Flutter - Inspirada en tu app Kivy',
+          'Ingresa tus credenciales para continuar',
           style: TextStyle(
             fontSize: 16,
             color: Colors.white.withOpacity(0.8),
@@ -216,8 +215,8 @@ class _LoginScreenState extends State<LoginScreen>
 
                 const SizedBox(height: 16),
 
-                // Credenciales de prueba
-                _buildTestCredentials(),
+                // 🔥 INFORMACIÓN DE CONTACTO EN LUGAR DE CREDENCIALES
+                _buildContactInfo(),
               ],
             ),
           ),
@@ -372,7 +371,8 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildTestCredentials() {
+  // 🔥 NUEVO: Información de contacto en lugar de credenciales de prueba
+  Widget _buildContactInfo() {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -384,7 +384,7 @@ class _LoginScreenState extends State<LoginScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '🧪 Credenciales de prueba:',
+            '🔑 ¿No tienes acceso?',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E3A8A),
@@ -392,21 +392,17 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 4),
           const Text(
-            'Email: supervisor@insevig.com',
+            'Contacta al administrador para obtener tus credenciales:',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '📧 Email: admin@insevig.com',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const Text(
-            'Contraseña: 123456789',
+            '📞 Tel: (04) XXX-XXXX',
             style: TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '(Ya están pre-llenadas)',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
-              fontStyle: FontStyle.italic,
-            ),
           ),
         ],
       ),
@@ -450,7 +446,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 4),
         Text(
-          'Basado en tu aplicación Kivy original',
+          'Sistema de Sanciones INSEVIG',
           style: TextStyle(
             color: Colors.white.withOpacity(0.6),
             fontSize: 12,
