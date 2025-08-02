@@ -548,34 +548,6 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     );
   }
 
-  Widget _buildPendienteSwitch() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.pending_actions, color: Color(0xFF1E3A8A)),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Marcar como pendiente',
-              style: TextStyle(fontSize: 16),
-            ),
-          ),
-          Switch(
-            value: _pendiente,
-            onChanged: (value) => setState(() => _pendiente = value),
-            activeColor: const Color(0xFF1E3A8A),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildFotoSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
