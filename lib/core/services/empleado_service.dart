@@ -40,7 +40,8 @@ class EmpleadoService {
           .eq('es_activo', true)
           .eq('es_liquidado', false)
           .neq('es_suspendido', true)
-          .order('nombres_completos');
+          .order('nombres_completos')
+          .limit(11000); // 👈 AGREGAR ESTA LÍNEA
       // 🚨 REMOVIDO EL .limit() PARA VER TODOS LOS RESULTADOS
 
       print(
