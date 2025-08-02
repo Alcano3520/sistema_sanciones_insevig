@@ -524,8 +524,7 @@ class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
         final canEdit =
             user.id == _sancion.supervisorId && _sancion.status == 'borrador';
         final canApprove = user.canApprove && _sancion.status == 'enviado';
-        final canTogglePendiente =
-            user.canApprove || user.id == _sancion.supervisorId;
+        final canTogglePendiente = user.canApprove;
 
         if (!canEdit && !canApprove && !canTogglePendiente) {
           return const SizedBox.shrink();

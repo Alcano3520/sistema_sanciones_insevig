@@ -342,8 +342,7 @@ class SancionCard extends StatelessWidget {
         final canEdit =
             user.id == sancion.supervisorId && sancion.status == 'borrador';
         final canApprove = user.canApprove && sancion.status == 'enviado';
-        final canTogglePendiente =
-            user.canApprove || user.id == sancion.supervisorId;
+        final canTogglePendiente = user.canApprove;
 
         if (!canEdit && !canApprove && !canTogglePendiente) {
           return const SizedBox.shrink();
