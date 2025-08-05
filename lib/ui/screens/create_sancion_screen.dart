@@ -331,7 +331,6 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                     const SizedBox(height: 16),
 
                     // Switch de Pendiente (NUEVO CAMPO que pediste)
-                    _buildPendienteSwitch(),
                   ],
                 ),
               ),

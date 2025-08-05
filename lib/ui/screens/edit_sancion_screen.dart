@@ -565,28 +565,95 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
   }
 
   Widget _buildPendienteSwitch() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.pending_actions, color: Color(0xFF1E3A8A)),
-          const SizedBox(width: 12),
-          const Expanded(
-            child:
-                Text('Marcar como pendiente', style: TextStyle(fontSize: 16)),
+    // 🔒 SOLO GERENCIA Y RRHH PUEDEN CAMBIAR ESTO
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        final user = authProvider.currentUser!;
+
+        // Si es supervisor, NO mostrar el switch
+        if (user.isSupervisor) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _pendiente ? Icons.pending_actions : Icons.check_circle,
+                  color: _pendiente ? Colors.orange : Colors.green,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Estado: ${_pendiente ? "PENDIENTE" : "PROCESADO"}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Solo Gerencia/RRHH puede cambiar este estado',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Si es Gerencia/RRHH, mostrar el switch
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
           ),
-          Switch(
-            value: _pendiente,
-            onChanged: (value) => setState(() => _pendiente = value),
-            activeColor: const Color(0xFF1E3A8A),
+          child: Row(
+            children: [
+              const Icon(Icons.pending_actions, color: Color(0xFF1E3A8A)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Estado de Procesamiento',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      _pendiente
+                          ? 'Marcar como PROCESADO'
+                          : 'Marcar como PENDIENTE',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _pendiente,
+                onChanged: (value) => setState(() => _pendiente = value),
+                activeColor: const Color(0xFF1E3A8A),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
