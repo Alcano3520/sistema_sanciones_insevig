@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart'; // 🆕 Para kIsWeb
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:signature/signature.dart';
 import '../config/supabase_config.dart';
@@ -9,6 +10,7 @@ import '../services/image_compression_service.dart'; // 🆕 NUEVO IMPORT
 /// Servicio principal para manejar sanciones
 /// ACTUALIZADO con compresión automática de imágenes
 /// Incluye funcionalidad offline como tu app Kivy
+/// 🆕 COMPATIBLE WEB + ANDROID
 class SancionService {
   SupabaseClient get _supabase => SupabaseConfig.sancionesClient;
 
@@ -58,60 +60,110 @@ class SancionService {
     }
   }
 
-  /// 🆕 NUEVO MÉTODO: Subir foto con compresión automática
+  /// 🆕 MÉTODO UNIVERSAL: Subir foto con compresión (Web + Android compatible)
   Future<String?> _uploadFotoCompressed(File fotoFile, String sancionId) async {
     try {
-      print('🔄 Procesando foto para sanción $sancionId...');
-      
-      // 1. Comprimir imagen automáticamente
-      final compressedFile = await ImageCompressionService.compressImage(fotoFile);
-      
-      // 2. Generar nombre único
-      final fileName = '${sancionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final filePath = 'sanciones/$fileName';
+      print(
+          '🔄 [${kIsWeb ? 'WEB' : 'MOBILE'}] Procesando foto para sanción $sancionId...');
 
-      // 3. Subir imagen comprimida a Supabase
-      await _supabase.storage.from('sancion-photos').upload(filePath, compressedFile);
+      // 1. Comprimir imagen usando el servicio universal
+      final compressedFile =
+          await ImageCompressionService.compressImage(fotoFile);
+
+      // 2. Generar nombre único para Supabase
+      final fileName =
+          '${sancionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final storagePath = 'sanciones/$fileName';
+
+      // 3. Subir según la plataforma
+      await _uploadToSupabase(compressedFile, storagePath);
 
       // 4. Obtener URL pública
-      final publicUrl = _supabase.storage.from('sancion-photos').getPublicUrl(filePath);
-      
-      print('✅ Foto comprimida subida exitosamente');
-      
-      // 5. Limpiar archivo temporal si es diferente al original
-      if (compressedFile.path != fotoFile.path) {
-        try {
-          await compressedFile.delete();
-        } catch (e) {
-          print('⚠️ No se pudo limpiar archivo temporal: $e');
-        }
-      }
-      
+      final publicUrl =
+          _supabase.storage.from('sancion-photos').getPublicUrl(storagePath);
+
+      print('✅ Foto subida exitosamente: $publicUrl');
+
+      // 5. Limpiar archivo temporal (solo en móvil)
+      await _cleanupTempFile(compressedFile, fotoFile);
+
       return publicUrl;
     } catch (e) {
       print('❌ Error subiendo foto comprimida: $e');
-      
-      // 🛡️ FALLBACK: Si falla la compresión, usar método original
-      print('🔄 Intentando subida sin compresión como fallback...');
-      return await _uploadFotoOriginal(fotoFile, sancionId);
+
+      // 🛡️ FALLBACK: Intentar con imagen original
+      return await _uploadFotoOriginalFallback(fotoFile, sancionId);
     }
   }
 
-  /// Método original de subida (como fallback)
-  Future<String?> _uploadFotoOriginal(File fotoFile, String sancionId) async {
-    try {
-      final fileName = '${sancionId}_${DateTime.now().millisecondsSinceEpoch}_original.jpg';
-      final filePath = 'sanciones/$fileName';
+  /// 🆕 Subir archivo a Supabase según la plataforma
+  Future<void> _uploadToSupabase(File file, String storagePath) async {
+    final bytes = await file.readAsBytes();
 
-      await _supabase.storage.from('sancion-photos').upload(filePath, fotoFile);
-      return _supabase.storage.from('sancion-photos').getPublicUrl(filePath);
+    if (kIsWeb) {
+      // WEB: Usar uploadBinary (más confiable en Web)
+      print('🌐 Subiendo en Web con uploadBinary...');
+      await _supabase.storage
+          .from('sancion-photos')
+          .uploadBinary(storagePath, bytes);
+    } else {
+      // ANDROID/iOS: Intentar upload tradicional, fallback a uploadBinary
+      print('📱 Subiendo en móvil...');
+      try {
+        await _supabase.storage
+            .from('sancion-photos')
+            .upload(storagePath, file);
+        print('📱 Subida tradicional exitosa');
+      } catch (e) {
+        print('⚠️ Upload tradicional falló, usando uploadBinary: $e');
+        await _supabase.storage
+            .from('sancion-photos')
+            .uploadBinary(storagePath, bytes);
+        print('📱 UploadBinary exitoso como fallback');
+      }
+    }
+  }
+
+  /// 🆕 Limpiar archivo temporal de forma segura
+  Future<void> _cleanupTempFile(File compressedFile, File originalFile) async {
+    if (!kIsWeb && compressedFile.path != originalFile.path) {
+      try {
+        // Solo intentar eliminar si es un archivo físico diferente al original
+        if (await compressedFile.exists()) {
+          await compressedFile.delete();
+          print('🗑️ Archivo temporal eliminado');
+        }
+      } catch (e) {
+        print('⚠️ No se pudo eliminar archivo temporal: $e');
+        // No es crítico, continuar
+      }
+    }
+  }
+
+  /// 🆕 FALLBACK: Subir imagen original sin compresión
+  Future<String?> _uploadFotoOriginalFallback(
+      File fotoFile, String sancionId) async {
+    try {
+      print('🔄 Intentando subida sin compresión como fallback...');
+
+      final fileName =
+          '${sancionId}_${DateTime.now().millisecondsSinceEpoch}_original.jpg';
+      final storagePath = 'sanciones/$fileName';
+
+      await _uploadToSupabase(fotoFile, storagePath);
+
+      final publicUrl =
+          _supabase.storage.from('sancion-photos').getPublicUrl(storagePath);
+
+      print('✅ Fallback exitoso (sin compresión): $publicUrl');
+      return publicUrl;
     } catch (e) {
-      print('❌ Error subiendo foto original: $e');
+      print('❌ Error en fallback: $e');
       return null;
     }
   }
 
-  /// Subir firma digital
+  /// 🆕 MÉTODO ACTUALIZADO: Subir firma (sin cambios, pero más robusto)
   Future<String?> _uploadFirma(
       SignatureController controller, String sancionId) async {
     try {
@@ -120,15 +172,19 @@ class SancionService {
 
       final fileName =
           '${sancionId}_signature_${DateTime.now().millisecondsSinceEpoch}.png';
-      final filePath = 'firmas/$fileName';
+      final storagePath = 'firmas/$fileName';
 
+      // Usar uploadBinary siempre para firmas (son pequeñas)
       await _supabase.storage
           .from('sancion-signatures')
-          .uploadBinary(filePath, signature);
+          .uploadBinary(storagePath, signature);
 
-      return _supabase.storage
+      final publicUrl = _supabase.storage
           .from('sancion-signatures')
-          .getPublicUrl(filePath);
+          .getPublicUrl(storagePath);
+
+      print('✅ Firma subida: $publicUrl');
+      return publicUrl;
     } catch (e) {
       print('❌ Error subiendo firma: $e');
       return null;
@@ -300,13 +356,14 @@ class SancionService {
   Future<Map<String, dynamic>> validateImage(File imageFile) async {
     try {
       final info = await ImageCompressionService.getImageInfo(imageFile);
-      final needsCompression = await ImageCompressionService.needsCompression(imageFile);
-      
+      final needsCompression =
+          await ImageCompressionService.needsCompression(imageFile);
+
       return {
         'valid': true,
         'info': info,
         'needsCompression': needsCompression,
-        'estimatedCompressedSize': needsCompression 
+        'estimatedCompressedSize': needsCompression
             ? (info['size'] ?? 0) * 0.3 // Estimación: ~30% del tamaño original
             : info['size'] ?? 0,
       };
