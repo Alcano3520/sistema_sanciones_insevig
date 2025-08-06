@@ -1,90 +1,118 @@
+import java.util.Properties
+
+// 🔥 SINTAXIS KOTLIN DSL CORREGIDA
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+val flutterRoot = localProperties.getProperty("flutter.sdk")
+    ?: throw GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
-}
-
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
-
 android {
-    // 🔥 SOLUCIÓN AL ERROR NDK
-    ndkVersion = "27.0.12077973"
-    
     namespace = "com.insevig.sistema_sanciones_insevig"
-    compileSdk = 34
-    
-    // 🆕 CONFIGURACIÓN MEJORADA PARA COMPRESIÓN
-    packagingOptions {
-        pickFirst '**/libc++_shared.so'
-        pickFirst '**/libjsc.so'
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
+    compileSdk = 35 // 🔥 ACTUALIZADO A SDK 35
+    ndkVersion = "27.0.12077973" // 🆕 NDK actualizado
+
+    // 🔥 HABILITAR buildConfig PRIMERO
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11 // 🔥 Java 11 (moderno)
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = "11" // 🔥 Kotlin también a 11
+    }
+
+    sourceSets {
+        getByName("main") {
+            java.srcDirs("src/main/kotlin")
+        }
+    }
+
+    packaging {
+        pickFirst("**/libc++_shared.so")
+        pickFirst("**/libjsc.so")
+        pickFirst("**/libfbjni.so")
+        exclude("META-INF/DEPENDENCIES")
+        exclude("META-INF/LICENSE")
+        exclude("META-INF/LICENSE.txt")
+        exclude("META-INF/NOTICE")
+        exclude("META-INF/NOTICE.txt")
+        
+        // 🆕 CONFIGURACIÓN ESPECÍFICA para librerías nativas
+        pickFirst("lib/x86/libc++_shared.so")
+        pickFirst("lib/x86_64/libc++_shared.so")
+        pickFirst("lib/arm64-v8a/libc++_shared.so")
+        pickFirst("lib/armeabi-v7a/libc++_shared.so")
     }
 
     defaultConfig {
         applicationId = "com.insevig.sistema_sanciones_insevig"
-        // 🔥 VERSIÓN MÍNIMA PARA COMPATIBILIDAD
-        minSdk = 21  // API 21 (Android 5.0) para máxima compatibilidad
-        targetSdk = 34
-        versionCode = flutterVersionCode.toInteger()
+        minSdk = 21
+        targetSdk = 34 // Mantener 34 para compatibilidad
+        versionCode = flutterVersionCode?.toIntOrNull() ?: 1
         versionName = flutterVersionName
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
-        // 🆕 CONFIGURACIÓN ADICIONAL PARA IMÁGENES
-        multiDexEnabled = true
+        // 🔥 CONFIGURAR ARQUITECTURAS SOPORTADAS
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+        }
         
-        // Permitir HTTP en debug (útil para desarrollo local)
-        buildConfigField "boolean", "ALLOW_HTTP", "true"
+        // 🆕 Config para HTTP en debug
+        buildConfigField("Boolean", "ALLOW_HTTP", "true")
     }
 
+    // 🔥 SIMPLIFICADO: Sin keystore personalizado para desarrollo
+    
+    // 🆕 CONFIGURACIÓN DE SPLITS (opcional - para APKs más pequeños)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true // 🔥 CREAR APK UNIVERSAL (incluye todas las arquitecturas)
+        }
+    }
+    
     buildTypes {
-        release {
-            signingConfig = signingConfigs.debug
+        getByName("release") {
+            // 🔥 Sin signing personalizado para desarrollo
+            // signingConfig = signingConfigs.getByName("debug")
             
-            // 🔥 OPTIMIZACIONES PARA RELEASE
-            minifyEnabled = true
-            shrinkResources = true
+            isMinifyEnabled = true
+            isShrinkResources = true
+            
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
             
-            // Configuración para imágenes en producción
-            buildConfigField "boolean", "ALLOW_HTTP", "false"
+            buildConfigField("Boolean", "ALLOW_HTTP", "false")
         }
-        
-        debug {
-            applicationIdSuffix = ".debug"
-            debuggable = true
-            minifyEnabled = false
-            shrinkResources = false
+
+        getByName("debug") {
+            isDebuggable = true
+            isMinifyEnabled = false
+            isShrinkResources = false
+            
+            buildConfigField("Boolean", "ALLOW_HTTP", "true")
         }
     }
 }
@@ -94,14 +122,14 @@ flutter {
 }
 
 dependencies {
-    implementation("androidx.window:window:1.0.0")
-    implementation("androidx.window:window-java:1.0.0")
+    // 🆕 Dependencias para compresión de imágenes y compatibilidad
+    implementation("androidx.exifinterface:exifinterface:1.3.6")
+    implementation("androidx.core:core-ktx:1.12.0")
     
-    // 🆕 DEPENDENCIAS PARA MANEJO DE IMÁGENES
-    implementation 'androidx.exifinterface:exifinterface:1.3.6'
-    implementation 'androidx.core:core-ktx:1.12.0'
+    // Dependencias Android básicas
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.activity:activity-ktx:1.8.2")
     
-    // Para compatibilidad con versiones anteriores de Android
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.activity:activity-ktx:1.8.2'
+    // 🆕 DEPENDENCIA para compatibilidad de arquitecturas
+    implementation("androidx.annotation:annotation:1.7.1")
 }

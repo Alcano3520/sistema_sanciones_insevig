@@ -1,45 +1,57 @@
 name: sistema_sanciones_insevig
-description: Sistema de Registro de Sanciones como el de Kivy - INSEVIG
+description: "Sistema de gestión de sanciones para INSEVIG"
+
 publish_to: 'none'
+
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
-  flutter: ">=3.10.0"
+  sdk: '>=3.1.0 <4.0.0'
+  flutter: ">=3.13.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Backend y base de datos
-  supabase_flutter: ^2.3.4
+  # 🔥 DEPENDENCIAS PRINCIPALES (mantén las que ya tienes)
+  supabase_flutter: ^2.5.6
+  provider: ^6.1.2
+  image_picker: ^1.0.7
+  signature: ^5.4.0
+  intl: ^0.19.0
+  shared_preferences: ^2.2.2
+  url_launcher: ^6.2.4
+  permission_handler: ^11.3.0
 
-  # UI básico
-  cupertino_icons: ^1.0.2
-
-  # Formularios (versión compatible)
-  flutter_form_builder: ^10.1.0
-
-  # Imágenes y firma
-  image_picker: ^1.0.4
-  signature: ^6.3.0
-  
+  # 🆕 DEPENDENCIAS PARA COMPRESIÓN (corregidas)
   image: ^4.1.7
-  path_provider: ^2.1.2
+  path_provider: ^2.1.1
   path: ^1.8.3
-
-  # Estado
-  provider: ^6.1.1
-
-  # Utilidades (versión compatible)
-  intl: ^0.20.2
-  uuid: ^4.2.1
- 
+  # universal_io: ^2.2.2  # ❌ ELIMINADA - causaba conflictos
   
+  # 🆕 DEPENDENCIA FALTANTE para UUID
+  uuid: ^4.3.3
+
+  # 🆕 DEPENDENCIAS ADICIONALES para Web compatibilidad
+  flutter_web_plugins:
+    sdk: flutter
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
+
+  # 🎨 ASSETS (comentados hasta que los crees)
+  # assets:
+  #   - assets/images/
+  #   - assets/icons/
+
+  # 🔤 FONTS (si usas)
+  # fonts:
+  #   - family: CustomFont
+  #     fonts:
+  #       - asset: assets/fonts/CustomFont.ttf
