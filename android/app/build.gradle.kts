@@ -53,12 +53,6 @@ android {
         exclude("META-INF/LICENSE.txt")
         exclude("META-INF/NOTICE")
         exclude("META-INF/NOTICE.txt")
-        
-        // 🆕 CONFIGURACIÓN ESPECÍFICA para librerías nativas
-        pickFirst("lib/x86/libc++_shared.so")
-        pickFirst("lib/x86_64/libc++_shared.so")
-        pickFirst("lib/arm64-v8a/libc++_shared.so")
-        pickFirst("lib/armeabi-v7a/libc++_shared.so")
     }
 
     defaultConfig {
@@ -70,9 +64,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
-        // 🔥 CONFIGURAR ARQUITECTURAS SOPORTADAS
+        // 🔥 CONFIGURACIÓN ESPECÍFICA para Galaxy Note 10+ (android-x64)
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters.clear()
+            abiFilters.add("armeabi-v7a")  //
         }
         
         // 🆕 Config para HTTP en debug
@@ -81,15 +76,15 @@ android {
 
     // 🔥 SIMPLIFICADO: Sin keystore personalizado para desarrollo
     
-    // 🆕 CONFIGURACIÓN DE SPLITS (opcional - para APKs más pequeños)
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true // 🔥 CREAR APK UNIVERSAL (incluye todas las arquitecturas)
-        }
-    }
+    // 🆕 SPLITS deshabilitados temporalmente para debugging
+    // splits {
+    //     abi {
+    //         isEnable = true
+    //         reset()
+    //         include("arm64-v8a", "armeabi-v7a")
+    //         isUniversalApk = true
+    //     }
+    // }
     
     buildTypes {
         getByName("release") {
