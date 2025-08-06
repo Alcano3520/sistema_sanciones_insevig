@@ -12,6 +12,7 @@ import '../../core/services/empleado_service.dart';
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para EDITAR sanción existente
+/// ACTUALIZADA con compresión automática de imágenes
 /// Permite modificar borradores y cambiar su status
 class EditSancionScreen extends StatefulWidget {
   final SancionModel sancion;
@@ -46,6 +47,7 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
   int? _horasExtras;
   bool _pendiente = true;
   bool _isLoading = false;
+  bool _isProcessingImage = false; // 🆕 Para mostrar estado de compresión
 
   @override
   void initState() {
@@ -661,13 +663,35 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Foto de evidencia',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E3A8A),
-          ),
+        Row(
+          children: [
+            const Text(
+              'Foto de evidencia',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+            // 🆕 Indicador de procesamiento de imagen
+            if (_isProcessingImage) ...[
+              const SizedBox(width: 12),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Optimizando...',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.blue,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 12),
 
@@ -723,8 +747,14 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
           children: [
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: _tomarFoto,
-                icon: const Icon(Icons.camera_alt),
+                onPressed: _isProcessingImage ? null : _tomarFoto,
+                icon: _isProcessingImage 
+                  ? const SizedBox(
+                      width: 16, 
+                      height: 16, 
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                    )
+                  : const Icon(Icons.camera_alt),
                 label: Text(
                     _fotoSeleccionada == null && widget.sancion.fotoUrl == null
                         ? 'Tomar Foto'
@@ -739,7 +769,7 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
                 widget.sancion.fotoUrl != null) ...[
               const SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: () => setState(() => _fotoSeleccionada = null),
+                onPressed: _isProcessingImage ? null : () => setState(() => _fotoSeleccionada = null),
                 icon: const Icon(Icons.delete),
                 label: const Text('Eliminar'),
                 style: ElevatedButton.styleFrom(
@@ -915,21 +945,122 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
     }
   }
 
+  /// 🆕 MÉTODO MEJORADO: Tomar foto con compresión y feedback
   Future<void> _tomarFoto() async {
-    final picker = ImagePicker();
-    final foto = await picker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 80,
-    );
+    try {
+      setState(() => _isProcessingImage = true);
+      
+      final picker = ImagePicker();
+      final foto = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
 
-    if (foto != null) {
-      setState(() => _fotoSeleccionada = File(foto.path));
+      if (foto != null && mounted) {
+        // Mostrar indicador de procesamiento
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Text('📸 Procesando y optimizando imagen...'),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Convertir XFile a File
+        final file = File(foto.path);
+        
+        // 🆕 Pre-validar la imagen
+        final sancionService = SancionService();
+        final validation = await sancionService.validateImage(file);
+        
+        if (validation['valid']) {
+          final info = validation['info'] as Map<String, dynamic>;
+          final needsCompression = validation['needsCompression'] as bool;
+          final originalSize = info['size'] ?? 0;
+          final estimatedSize = validation['estimatedCompressedSize'] ?? originalSize;
+          
+          setState(() => _fotoSeleccionada = file);
+
+          if (mounted) {
+            // Mostrar información de optimización
+            if (needsCompression) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.compress, color: Colors.white, size: 16),
+                          SizedBox(width: 8),
+                          Text('🎯 Imagen optimizada automáticamente', 
+                               style: TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('📊 Original: ${_formatBytes(originalSize)}', 
+                           style: const TextStyle(fontSize: 12)),
+                      Text('📉 Optimizada: ~${_formatBytes(estimatedSize)}', 
+                           style: const TextStyle(fontSize: 12)),
+                      Text('💾 Ahorro: ~${((originalSize - estimatedSize) / originalSize * 100).round()}%', 
+                           style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 4),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text('✅ Imagen agregada (ya optimizada)'),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        } else {
+          // Error de validación
+          _mostrarError('Error procesando imagen: ${validation['error']}');
+        }
+      }
+    } catch (e) {
+      _mostrarError('Error al tomar foto: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingImage = false);
+      }
     }
   }
 
-// Cambiar solo el método _guardarSancion() en edit_sancion_screen.dart:
+  /// 🆕 Función auxiliar para formatear bytes
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    var i = (bytes.bitLength - 1) ~/ 10;
+    return '${(bytes / (1 << (i * 10))).toStringAsFixed(1)} ${suffixes[i]}';
+  }
 
   Future<void> _guardarSancion(String status) async {
     if (!_formKey.currentState!.validate()) return;
@@ -966,14 +1097,14 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         updatedAt: DateTime.now(),
       );
 
-      // 🔥 USAR EL MÉTODO CORREGIDO CON ARCHIVOS
+      // 🔥 USAR EL MÉTODO CORREGIDO CON ARCHIVOS Y COMPRESIÓN AUTOMÁTICA
       bool success;
 
       if (_fotoSeleccionada != null || (_signatureController.isNotEmpty)) {
-        // Si hay archivos nuevos, usar el método con archivos
+        // Si hay archivos nuevos, usar el método con archivos (CON COMPRESIÓN)
         success = await sancionService.updateSancionWithFiles(
           sancion: sancionActualizada,
-          nuevaFoto: _fotoSeleccionada,
+          nuevaFoto: _fotoSeleccionada, // Se comprime automáticamente
           nuevaFirma:
               _signatureController.isNotEmpty ? _signatureController : null,
         );
@@ -981,6 +1112,9 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         // Si no hay archivos nuevos, usar método simple
         success = await sancionService.updateSancionSimple(sancionActualizada);
       }
+
+      // 🆕 Limpiar archivos temporales después de guardar
+      await sancionService.cleanupTempFiles();
 
       if (success) {
         if (mounted) {
@@ -1015,11 +1149,19 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
   }
 
   void _mostrarError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('❌ $mensaje'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text('❌ $mensaje')),
+            ],
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

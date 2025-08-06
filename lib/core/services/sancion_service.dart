@@ -4,8 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:signature/signature.dart';
 import '../config/supabase_config.dart';
 import '../models/sancion_model.dart';
+import '../services/image_compression_service.dart'; // 🆕 NUEVO IMPORT
 
 /// Servicio principal para manejar sanciones
+/// ACTUALIZADO con compresión automática de imágenes
 /// Incluye funcionalidad offline como tu app Kivy
 class SancionService {
   SupabaseClient get _supabase => SupabaseConfig.sancionesClient;
@@ -22,10 +24,10 @@ class SancionService {
       String? fotoUrl;
       String? firmaPath;
 
-      // 1. Subir foto si existe
+      // 1. Subir foto si existe (CON COMPRESIÓN AUTOMÁTICA) 🆕
       if (fotoFile != null) {
-        fotoUrl = await _uploadFoto(fotoFile, sancion.id);
-        print('📷 Foto subida: $fotoUrl');
+        fotoUrl = await _uploadFotoCompressed(fotoFile, sancion.id);
+        print('📷 Foto comprimida y subida: $fotoUrl');
       }
 
       // 2. Subir firma si existe
@@ -56,7 +58,84 @@ class SancionService {
     }
   }
 
-  /// 🔥 ACTUALIZAR SANCIÓN EXISTENTE - MÉTODO CORREGIDO
+  /// 🆕 NUEVO MÉTODO: Subir foto con compresión automática
+  Future<String?> _uploadFotoCompressed(File fotoFile, String sancionId) async {
+    try {
+      print('🔄 Procesando foto para sanción $sancionId...');
+      
+      // 1. Comprimir imagen automáticamente
+      final compressedFile = await ImageCompressionService.compressImage(fotoFile);
+      
+      // 2. Generar nombre único
+      final fileName = '${sancionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final filePath = 'sanciones/$fileName';
+
+      // 3. Subir imagen comprimida a Supabase
+      await _supabase.storage.from('sancion-photos').upload(filePath, compressedFile);
+
+      // 4. Obtener URL pública
+      final publicUrl = _supabase.storage.from('sancion-photos').getPublicUrl(filePath);
+      
+      print('✅ Foto comprimida subida exitosamente');
+      
+      // 5. Limpiar archivo temporal si es diferente al original
+      if (compressedFile.path != fotoFile.path) {
+        try {
+          await compressedFile.delete();
+        } catch (e) {
+          print('⚠️ No se pudo limpiar archivo temporal: $e');
+        }
+      }
+      
+      return publicUrl;
+    } catch (e) {
+      print('❌ Error subiendo foto comprimida: $e');
+      
+      // 🛡️ FALLBACK: Si falla la compresión, usar método original
+      print('🔄 Intentando subida sin compresión como fallback...');
+      return await _uploadFotoOriginal(fotoFile, sancionId);
+    }
+  }
+
+  /// Método original de subida (como fallback)
+  Future<String?> _uploadFotoOriginal(File fotoFile, String sancionId) async {
+    try {
+      final fileName = '${sancionId}_${DateTime.now().millisecondsSinceEpoch}_original.jpg';
+      final filePath = 'sanciones/$fileName';
+
+      await _supabase.storage.from('sancion-photos').upload(filePath, fotoFile);
+      return _supabase.storage.from('sancion-photos').getPublicUrl(filePath);
+    } catch (e) {
+      print('❌ Error subiendo foto original: $e');
+      return null;
+    }
+  }
+
+  /// Subir firma digital
+  Future<String?> _uploadFirma(
+      SignatureController controller, String sancionId) async {
+    try {
+      final signature = await controller.toPngBytes();
+      if (signature == null) return null;
+
+      final fileName =
+          '${sancionId}_signature_${DateTime.now().millisecondsSinceEpoch}.png';
+      final filePath = 'firmas/$fileName';
+
+      await _supabase.storage
+          .from('sancion-signatures')
+          .uploadBinary(filePath, signature);
+
+      return _supabase.storage
+          .from('sancion-signatures')
+          .getPublicUrl(filePath);
+    } catch (e) {
+      print('❌ Error subiendo firma: $e');
+      return null;
+    }
+  }
+
+  /// 🔥 ACTUALIZAR SANCIÓN EXISTENTE - MÉTODO CORREGIDO CON COMPRESIÓN
   Future<bool> updateSancion(
     SancionModel sancion, {
     File? nuevaFoto,
@@ -68,10 +147,10 @@ class SancionService {
       String? fotoUrl = sancion.fotoUrl;
       String? firmaPath = sancion.firmaPath;
 
-      // 1. Subir nueva foto si se proporcionó
+      // 1. Subir nueva foto CON COMPRESIÓN si se proporcionó 🆕
       if (nuevaFoto != null) {
-        fotoUrl = await _uploadFoto(nuevaFoto, sancion.id);
-        print('📷 Nueva foto subida: $fotoUrl');
+        fotoUrl = await _uploadFotoCompressed(nuevaFoto, sancion.id);
+        print('📷 Nueva foto comprimida: $fotoUrl');
       }
 
       // 2. Subir nueva firma si se proporcionó
@@ -122,44 +201,126 @@ class SancionService {
     }
   }
 
-  /// Subir foto de sanción
-  Future<String?> _uploadFoto(File fotoFile, String sancionId) async {
+  /// 🔥 MÉTODO AUXILIAR PARA ACTUALIZACIÓN CON ARCHIVOS - ACTUALIZADO CON COMPRESIÓN
+  Future<bool> updateSancionWithFiles({
+    required SancionModel sancion,
+    File? nuevaFoto,
+    SignatureController? nuevaFirma,
+  }) async {
     try {
-      final fileName =
-          '${sancionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final filePath = 'sanciones/$fileName';
+      print('🔄 Actualizando sanción con archivos ${sancion.id}...');
 
-      await _supabase.storage.from('sancion-photos').upload(filePath, fotoFile);
+      String? fotoUrl = sancion.fotoUrl;
+      String? firmaPath = sancion.firmaPath;
 
-      return _supabase.storage.from('sancion-photos').getPublicUrl(filePath);
+      // Subir nueva foto CON COMPRESIÓN si se proporcionó 🆕
+      if (nuevaFoto != null) {
+        fotoUrl = await _uploadFotoCompressed(nuevaFoto, sancion.id);
+        print('📷 Nueva foto comprimida subida: $fotoUrl');
+      }
+
+      // Subir nueva firma si se proporcionó
+      if (nuevaFirma != null && nuevaFirma.isNotEmpty) {
+        firmaPath = await _uploadFirma(nuevaFirma, sancion.id);
+        print('✍️ Nueva firma subida: $firmaPath');
+      }
+
+      // Crear sanción con URLs actualizadas
+      final sancionActualizada = sancion.copyWith(
+        fotoUrl: fotoUrl,
+        firmaPath: firmaPath,
+        updatedAt: DateTime.now(),
+      );
+
+      // Actualizar usando el método principal
+      return await updateSancionSimple(sancionActualizada);
     } catch (e) {
-      print('❌ Error subiendo foto: $e');
-      return null;
+      print('❌ Error actualizando sanción con archivos: $e');
+      return false;
     }
   }
 
-  /// Subir firma digital
-  Future<String?> _uploadFirma(
-      SignatureController controller, String sancionId) async {
+  /// 🔥 MÉTODO SIMPLIFICADO PARA DEBUG
+  Future<bool> updateSancionSimple(SancionModel sancion) async {
     try {
-      final signature = await controller.toPngBytes();
-      if (signature == null) return null;
+      print('🔄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
+      print('🔄 [DEBUG] Datos a actualizar:');
+      print('   - Empleado: ${sancion.empleadoNombre}');
+      print('   - Puesto: ${sancion.puesto}');
+      print('   - Agente: ${sancion.agente}');
+      print('   - Status: ${sancion.status}');
 
-      final fileName =
-          '${sancionId}_signature_${DateTime.now().millisecondsSinceEpoch}.png';
-      final filePath = 'firmas/$fileName';
+      // Preparar solo los campos esenciales
+      final updateData = {
+        'empleado_cod': sancion.empleadoCod,
+        'empleado_nombre': sancion.empleadoNombre,
+        'puesto': sancion.puesto,
+        'agente': sancion.agente,
+        'fecha': sancion.fecha.toIso8601String().split('T')[0],
+        'hora': sancion.hora,
+        'tipo_sancion': sancion.tipoSancion,
+        'observaciones': sancion.observaciones,
+        'observaciones_adicionales': sancion.observacionesAdicionales,
+        'pendiente': sancion.pendiente,
+        'status': sancion.status,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
 
-      await _supabase.storage
-          .from('sancion-signatures')
-          .uploadBinary(filePath, signature);
+      // Solo agregar campos opcionales si no son null
+      if (sancion.horasExtras != null) {
+        updateData['horas_extras'] = sancion.horasExtras;
+      }
 
-      return _supabase.storage
-          .from('sancion-signatures')
-          .getPublicUrl(filePath);
+      print('🔄 [DEBUG] Datos preparados para Supabase:');
+      updateData.forEach((key, value) {
+        print('   $key: $value');
+      });
+
+      final response = await _supabase
+          .from('sanciones')
+          .update(updateData)
+          .eq('id', sancion.id)
+          .select();
+
+      if (response.isNotEmpty) {
+        print('✅ [DEBUG] Sanción actualizada exitosamente');
+        return true;
+      } else {
+        print('❌ [DEBUG] Respuesta vacía al actualizar');
+        return false;
+      }
     } catch (e) {
-      print('❌ Error subiendo firma: $e');
-      return null;
+      print('❌ [DEBUG] Error detallado: $e');
+      print('❌ [DEBUG] Tipo de error: ${e.runtimeType}');
+      rethrow;
     }
+  }
+
+  /// 🆕 NUEVO: Método para pre-validar imagen antes de subir
+  Future<Map<String, dynamic>> validateImage(File imageFile) async {
+    try {
+      final info = await ImageCompressionService.getImageInfo(imageFile);
+      final needsCompression = await ImageCompressionService.needsCompression(imageFile);
+      
+      return {
+        'valid': true,
+        'info': info,
+        'needsCompression': needsCompression,
+        'estimatedCompressedSize': needsCompression 
+            ? (info['size'] ?? 0) * 0.3 // Estimación: ~30% del tamaño original
+            : info['size'] ?? 0,
+      };
+    } catch (e) {
+      return {
+        'valid': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// 🆕 NUEVO: Limpiar archivos temporales (llamar periódicamente)
+  Future<void> cleanupTempFiles() async {
+    await ImageCompressionService.cleanupTempFiles();
   }
 
   /// Obtener sanciones del supervisor actual
@@ -412,101 +573,6 @@ class SancionService {
     } catch (e) {
       print('❌ Error obteniendo sanción $id: $e');
       return null;
-    }
-  }
-
-  /// 🔥 MÉTODO AUXILIAR PARA ACTUALIZACIÓN CON ARCHIVOS
-  Future<bool> updateSancionWithFiles({
-    required SancionModel sancion,
-    File? nuevaFoto,
-    SignatureController? nuevaFirma,
-  }) async {
-    try {
-      print('🔄 Actualizando sanción con archivos ${sancion.id}...');
-
-      String? fotoUrl = sancion.fotoUrl;
-      String? firmaPath = sancion.firmaPath;
-
-      // Subir nueva foto si se proporcionó
-      if (nuevaFoto != null) {
-        fotoUrl = await _uploadFoto(nuevaFoto, sancion.id);
-        print('📷 Nueva foto subida: $fotoUrl');
-      }
-
-      // Subir nueva firma si se proporcionó
-      if (nuevaFirma != null && nuevaFirma.isNotEmpty) {
-        firmaPath = await _uploadFirma(nuevaFirma, sancion.id);
-        print('✍️ Nueva firma subida: $firmaPath');
-      }
-
-      // Crear sanción con URLs actualizadas
-      final sancionActualizada = sancion.copyWith(
-        fotoUrl: fotoUrl,
-        firmaPath: firmaPath,
-        updatedAt: DateTime.now(),
-      );
-
-      // Actualizar usando el método principal
-      return await updateSancion(sancionActualizada);
-    } catch (e) {
-      print('❌ Error actualizando sanción con archivos: $e');
-      return false;
-    }
-  }
-
-  /// 🔥 MÉTODO SIMPLIFICADO PARA DEBUG
-  Future<bool> updateSancionSimple(SancionModel sancion) async {
-    try {
-      print('🔄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
-      print('🔄 [DEBUG] Datos a actualizar:');
-      print('   - Empleado: ${sancion.empleadoNombre}');
-      print('   - Puesto: ${sancion.puesto}');
-      print('   - Agente: ${sancion.agente}');
-      print('   - Status: ${sancion.status}');
-
-      // Preparar solo los campos esenciales
-      final updateData = {
-        'empleado_cod': sancion.empleadoCod,
-        'empleado_nombre': sancion.empleadoNombre,
-        'puesto': sancion.puesto,
-        'agente': sancion.agente,
-        'fecha': sancion.fecha.toIso8601String().split('T')[0],
-        'hora': sancion.hora,
-        'tipo_sancion': sancion.tipoSancion,
-        'observaciones': sancion.observaciones,
-        'observaciones_adicionales': sancion.observacionesAdicionales,
-        'pendiente': sancion.pendiente,
-        'status': sancion.status,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-
-      // Solo agregar campos opcionales si no son null
-      if (sancion.horasExtras != null) {
-        updateData['horas_extras'] = sancion.horasExtras;
-      }
-
-      print('🔄 [DEBUG] Datos preparados para Supabase:');
-      updateData.forEach((key, value) {
-        print('   $key: $value');
-      });
-
-      final response = await _supabase
-          .from('sanciones')
-          .update(updateData)
-          .eq('id', sancion.id)
-          .select();
-
-      if (response.isNotEmpty) {
-        print('✅ [DEBUG] Sanción actualizada exitosamente');
-        return true;
-      } else {
-        print('❌ [DEBUG] Respuesta vacía al actualizar');
-        return false;
-      }
-    } catch (e) {
-      print('❌ [DEBUG] Error detallado: $e');
-      print('❌ [DEBUG] Tipo de error: ${e.runtimeType}');
-      rethrow;
     }
   }
 }
