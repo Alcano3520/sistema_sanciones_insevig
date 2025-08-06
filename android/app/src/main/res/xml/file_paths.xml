@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 📸 Para archivos de cámara temporales -->
+    <external-cache-path name="external_cache" path="." />
+    <cache-path name="cache" path="." />
+    
+    <!-- 📁 Para archivos de almacenamiento -->
+    <external-files-path name="external_files" path="." />
+    <files-path name="files" path="." />
+    
+    <!-- 🖼️ Para imágenes comprimidas -->
+    <external-path name="external_storage" path="." />
+</paths>

@@ -1,5 +1,5 @@
 name: sistema_sanciones_insevig
-description: "Sistema de gestión de sanciones para INSEVIG"
+description: "Sistema de gestión de sanciones para INSEVIG - Migración desde Kivy"
 
 publish_to: 'none'
 
@@ -12,46 +12,76 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # 🔥 DEPENDENCIAS PRINCIPALES (mantén las que ya tienes)
-  supabase_flutter: ^2.5.6
-  provider: ^6.1.2
-  image_picker: ^1.0.7
-  signature: ^5.4.0
-  intl: ^0.19.0
-  shared_preferences: ^2.2.2
-  url_launcher: ^6.2.4
-  permission_handler: ^11.3.0
-
-  # 🆕 DEPENDENCIAS PARA COMPRESIÓN (corregidas)
-  image: ^4.1.7
-  path_provider: ^2.1.1
-  path: ^1.8.3
-  # universal_io: ^2.2.2  # ❌ ELIMINADA - causaba conflictos
-  
-  # 🆕 DEPENDENCIA FALTANTE para UUID
-  uuid: ^4.3.3
-
-  # 🆕 DEPENDENCIAS ADICIONALES para Web compatibilidad
   flutter_web_plugins:
     sdk: flutter
+
+  # 🔥 SUPABASE - Base de datos y autenticación
+  supabase_flutter: ^2.5.6
+  
+  # 🔥 GESTIÓN DE ESTADO
+  provider: ^6.1.2
+  
+  # 🔥 CÁMARA Y GALERÍA
+  image_picker: ^1.0.7
+  
+  # 🔥 PROCESAMIENTO DE IMÁGENES (tu servicio de compresión)
+  image: ^4.1.7
+  
+  # 🔥 FIRMA DIGITAL
+  signature: ^5.4.0
+  
+  # 🔥 SISTEMA DE ARCHIVOS
+  path_provider: ^2.1.1
+  path: ^1.8.3
+  
+  # 🔥 PERMISOS
+  permission_handler: ^11.3.0
+  
+  # 🔥 UTILIDADES
+  uuid: ^4.3.3
+  intl: ^0.19.0
+  
+  # 🔥 ALMACENAMIENTO LOCAL
+  shared_preferences: ^2.2.2
+  
+  # 🔥 NAVEGACIÓN Y URLS
+  url_launcher: ^6.2.4
+  
+  # 🔥 HTTP Y CONECTIVIDAD
+  http: ^1.1.2
+  connectivity_plus: ^5.0.2
+  
+  # 🔥 CUPERTINO ICONS (iOS style icons)
+  cupertino_icons: ^1.0.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
+    
+  # 🔥 LINTING
   flutter_lints: ^3.0.0
+  
+  # 🔥 TESTING
+  integration_test:
+    sdk: flutter
 
+# 🔥 CONFIGURACIÓN FLUTTER (SECCIÓN ÚNICA - SIN DUPLICADOS)
 flutter:
   uses-material-design: true
-
-  # 🎨 ASSETS (comentados hasta que los crees)
+  
+  # 🎨 ASSETS (comentados hasta que crees las carpetas)
   # assets:
   #   - assets/images/
   #   - assets/icons/
-
-  # 🔤 FONTS (si usas)
+  
+  # 🔤 FONTS (opcional)
   # fonts:
-  #   - family: CustomFont
+  #   - family: Roboto
   #     fonts:
-  #       - asset: assets/fonts/CustomFont.ttf
+  #       - asset: assets/fonts/Roboto-Regular.ttf
+  #         weight: 400
+
+# 🔥 DEPENDENCY OVERRIDES (para resolver conflictos si aparecen)
+dependency_overrides:
+  # Si hay conflictos de versiones, se resuelven aquí
+  web: ^0.5.1

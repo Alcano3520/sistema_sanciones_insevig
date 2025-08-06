@@ -24,16 +24,16 @@ if (flutterVersionName == null) {
 
 android {
     namespace = "com.insevig.sistema_sanciones_insevig"
-    compileSdk 35
-    ndkVersion "27.0.12077973"
+    compileSdk 34 // 🔥 DOWNGRADE para compatibilidad
+    ndkVersion "25.1.8937393" // 🔥 VERSIÓN ESTABLE
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_1_8 // 🔥 JAVA 8 para compatibilidad
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = '11'
+        jvmTarget = '1.8' // 🔥 JAVA 8 para compatibilidad
     }
 
     sourceSets {
@@ -43,30 +43,47 @@ android {
     defaultConfig {
         applicationId = "com.insevig.sistema_sanciones_insevig"
         minSdk 21
-        targetSdk 34
+        targetSdk 33 // 🔥 TARGET SDK 33 para compatibilidad
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 🔥 MULTIDEX HABILITADO
+        multiDexEnabled true
     }
 
+    // 🔥 BUILDFEATURES SIMPLIFICADO
     buildFeatures {
-        buildConfig true
+        buildConfig = true
     }
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            // 🔥 CONFIGURACIÓN DE RELEASE SIMPLIFICADA
+            minifyEnabled false // 🔥 DESHABILITADO para evitar problemas
+            shrinkResources false
             
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         
         debug {
+            // 🔥 CONFIGURACIÓN DE DEBUG
             debuggable true
             minifyEnabled false
             shrinkResources false
         }
+    }
+
+    // 🔥 PACKAGING OPTIONS SIMPLIFICADO
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
     }
 }
 
@@ -75,8 +92,13 @@ flutter {
 }
 
 dependencies {
-    implementation 'androidx.exifinterface:exifinterface:1.3.6'
-    implementation 'androidx.core:core-ktx:1.12.0'
+    // 🔥 DEPENDENCIAS BÁSICAS Y ESTABLES
+    implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.activity:activity-ktx:1.8.2'
+    
+    // 🔥 MULTIDEX
+    implementation 'androidx.multidex:multidex:2.0.1'
+    
+    // 🔥 PARA IMÁGENES
+    implementation 'androidx.exifinterface:exifinterface:1.3.6'
 }
