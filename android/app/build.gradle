@@ -24,16 +24,16 @@ if (flutterVersionName == null) {
 
 android {
     namespace = "com.insevig.sistema_sanciones_insevig"
-    compileSdk 35
-    ndkVersion "27.0.12077973"
+    compileSdk 34  // 🔥 BAJADO DE 35 A 34 para mayor estabilidad
+    ndkVersion "25.1.8937393"  // 🔥 NDK más estable
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_1_8  // 🔥 Java 8 más compatible
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = '11'
+        jvmTarget = '1.8'  // 🔥 Kotlin a 1.8
     }
 
     sourceSets {
@@ -48,16 +48,32 @@ android {
         versionName flutterVersionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 🆕 ARQUITECTURAS completas
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
     }
 
     buildFeatures {
         buildConfig true
     }
 
+    // 🆕 CONFIGURACIÓN DE EMPAQUETADO para evitar conflictos
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+    }
+
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false  // 🔥 DESHABILITADO temporalmente
+            shrinkResources false  // 🔥 DESHABILITADO temporalmente
             
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -76,7 +92,7 @@ flutter {
 
 dependencies {
     implementation 'androidx.exifinterface:exifinterface:1.3.6'
-    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.core:core-ktx:1.10.1'  // 🔥 VERSIÓN más estable
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.activity:activity-ktx:1.8.2'
+    implementation 'androidx.activity:activity-ktx:1.7.2'  // 🔥 VERSIÓN más estable
 }
