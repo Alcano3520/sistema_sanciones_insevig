@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/sancion_service.dart';
+import '../widgets/image_display_widget.dart';
 import 'edit_sancion_screen.dart'; // 🆕 IMPORT AGREGADO
 
 /// Pantalla de detalle completo de una sanción
@@ -397,39 +398,9 @@ class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
             const SizedBox(height: 8),
             GestureDetector(
               onTap: () => _verFotoCompleta(_sancion.fotoUrl!),
-              child: Container(
+              child: ImageDisplayWidget(
+                networkUrl: _sancion.fotoUrl,
                 height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    _sancion.fotoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline,
-                                size: 48, color: Colors.grey),
-                            Text('Error cargando imagen'),
-                          ],
-                        ),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
-                    },
-                  ),
-                ),
               ),
             ),
           ],

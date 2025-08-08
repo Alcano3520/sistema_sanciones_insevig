@@ -282,55 +282,66 @@ class SancionCard extends StatelessWidget {
     );
   }
 
+  // 🔥 MÉTODO _buildFooter() COMPLETAMENTE REEMPLAZADO (ARREGLA OVERFLOW)
   Widget _buildFooter(BuildContext context) {
     return Row(
       children: [
-        // Fecha y hora
-        Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
-        const SizedBox(width: 4),
-        Text(
-          sancion.fechaFormateada,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
-        const SizedBox(width: 4),
-        Text(
-          sancion.hora,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
+        // Fecha y hora - ENVUELTO EN FLEXIBLE
+        Flexible(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  sancion.fechaFormateada,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                sancion.hora,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
         ),
 
         const Spacer(),
 
         // Indicadores de archivos
-        Row(
-          children: [
-            if (sancion.fotoUrl != null)
-              Container(
-                margin: const EdgeInsets.only(right: 4),
-                child: Icon(
+        if (sancion.fotoUrl != null || sancion.firmaPath != null) ...[
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (sancion.fotoUrl != null)
+                Icon(
                   Icons.camera_alt,
                   size: 16,
                   color: Colors.green.shade600,
                 ),
-              ),
-            if (sancion.firmaPath != null)
-              Container(
-                margin: const EdgeInsets.only(right: 4),
-                child: Icon(
+              if (sancion.fotoUrl != null && sancion.firmaPath != null)
+                const SizedBox(width: 4),
+              if (sancion.firmaPath != null)
+                Icon(
                   Icons.draw,
                   size: 16,
                   color: Colors.blue.shade600,
                 ),
-              ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
 
         // Menú de acciones
         _buildActionsMenu(context),

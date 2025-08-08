@@ -10,6 +10,7 @@ import '../../core/models/empleado_model.dart';
 import '../../core/services/sancion_service.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/services/empleado_service.dart';
+import '../widgets/image_display_widget.dart';
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para EDITAR sanción existente
@@ -715,17 +716,20 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         ),
         const SizedBox(height: 12),
 
-        if (_fotoSeleccionada != null) ...[
-          Container(
+        // 🔥 LUGAR 1 - Foto existente de la sanción (CORREGIDO)
+        if (widget.sancion.fotoUrl != null && _fotoSeleccionada == null) ...[
+          ImageDisplayWidget(
+            networkUrl: widget.sancion.fotoUrl,
             height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: FileImage(_fotoSeleccionada!),
-                fit: BoxFit.cover,
-              ),
-            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // 🔥 LUGAR 2 - Nueva foto seleccionada (CORREGIDO)
+        if (_fotoSeleccionada != null) ...[
+          ImageDisplayWidget(
+            imageFile: _fotoSeleccionada,
+            height: 200,
           ),
           const SizedBox(height: 12),
         ],

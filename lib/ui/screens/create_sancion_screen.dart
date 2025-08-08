@@ -10,6 +10,7 @@ import '../../core/models/empleado_model.dart';
 import '../../core/services/sancion_service.dart';
 import '../../core/services/empleado_service.dart';
 import 'package:flutter/foundation.dart';
+import '../widgets/image_display_widget.dart';
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
@@ -619,16 +620,9 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         const SizedBox(height: 12),
 
         if (_fotoSeleccionada != null) ...[
-          Container(
+          ImageDisplayWidget(
+            imageFile: _fotoSeleccionada,
             height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: FileImage(_fotoSeleccionada!),
-                fit: BoxFit.cover,
-              ),
-            ),
           ),
           const SizedBox(height: 12),
         ],
