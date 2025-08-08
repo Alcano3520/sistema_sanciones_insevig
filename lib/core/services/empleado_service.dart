@@ -28,21 +28,13 @@ class EmpleadoService {
             estado, es_activo, es_liquidado, es_suspendido,
             telefono, created_at, updated_at
           ''')
-          .or('''
-            nombres_completos.ilike.%$query%,
-            nombres.ilike.%$query%,
-            apellidos.ilike.%$query%,
-            cedula.ilike.%$query%,
-            nomcargo.ilike.%$query%,
-            nomdep.ilike.%$query%,
-            cod.eq.${int.tryParse(query) ?? -1}
-          ''')
+          // 🔥 ARREGLO: Todo en una sola línea sin saltos
+          .or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}')
           .eq('es_activo', true)
           .eq('es_liquidado', false)
           .neq('es_suspendido', true)
           .order('nombres_completos')
-          .limit(11000); // 👈 AGREGAR ESTA LÍNEA
-      // 🚨 REMOVIDO EL .limit() PARA VER TODOS LOS RESULTADOS
+          .limit(11000); // 👈 LÍMITE ALTO PARA OBTENER MÁS RESULTADOS
 
       print(
           '✅ [EMPLEADOS API] Encontrados ${response.length} empleados activos');
@@ -459,13 +451,9 @@ class EmpleadoService {
 
       // Filtro por texto
       if (query != null && query.trim().isNotEmpty) {
-        queryBuilder = queryBuilder.or('''
-          nombres_completos.ilike.%$query%,
-          nombres.ilike.%$query%,
-          apellidos.ilike.%$query%,
-          cedula.ilike.%$query%,
-          cod.eq.${int.tryParse(query) ?? -1}
-        ''');
+        // 🔥 ARREGLO: Todo en una sola línea sin saltos
+        queryBuilder = queryBuilder.or(
+            'nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}');
       }
 
       // Filtros específicos
