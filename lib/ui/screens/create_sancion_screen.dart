@@ -9,6 +9,7 @@ import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
 import '../../core/services/sancion_service.dart';
 import '../../core/services/empleado_service.dart';
+import 'package:flutter/foundation.dart';
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
@@ -770,12 +771,46 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       setState(() => _isProcessingImage = true);
 
       final picker = ImagePicker();
-      final foto = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 80,
-      );
+      XFile? foto;
+
+      // 🔥 DETECTAR PLATAFORMA
+      if (kIsWeb) {
+        // EN WEB: Seleccionar archivo
+        foto = await picker.pickImage(
+          source: ImageSource.gallery, // Galería en web
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 80,
+        );
+
+        if (foto != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('📸 Imagen seleccionada correctamente'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // EN MÓVIL: Mostrar opciones
+        final ImageSource? source = await _showImageSourceDialog();
+
+        if (source != null) {
+          foto = await picker.pickImage(
+            source: source,
+            maxWidth: 1024,
+            maxHeight: 1024,
+            imageQuality: 80,
+          );
+        }
+      }
 
       if (foto != null && mounted) {
         // Mostrar indicador de procesamiento
@@ -801,7 +836,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         // Convertir XFile a File
         final file = File(foto.path);
 
-        // 🆕 Pre-validar la imagen
+        // Pre-validar la imagen
         final sancionService = SancionService();
         final validation = await sancionService.validateImage(file);
 
@@ -868,12 +903,56 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         }
       }
     } catch (e) {
-      _mostrarError('Error al tomar foto: $e');
+      _mostrarError('Error al seleccionar imagen: $e');
     } finally {
       if (mounted) {
         setState(() => _isProcessingImage = false);
       }
     }
+  }
+
+  // 🆕 Agregar este método para mostrar opciones en móvil:
+  Future<ImageSource?> _showImageSourceDialog() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Seleccionar imagen',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF1E3A8A)),
+              title: const Text('Tomar foto'),
+              subtitle: const Text('Usar la cámara del dispositivo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.photo_library, color: Color(0xFF1E3A8A)),
+              title: const Text('Seleccionar de galería'),
+              subtitle: const Text('Elegir una imagen existente'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// 🆕 Función auxiliar para formatear bytes
