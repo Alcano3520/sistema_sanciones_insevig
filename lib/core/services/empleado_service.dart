@@ -19,22 +19,16 @@ class EmpleadoService {
       print(
           '🔍 [EMPLEADOS API] Buscando: "$query" en proyecto empleados-insevig');
 
-      // 🔥 ESTRATEGIA MEJORADA: Búsqueda SIN LÍMITE inicial
+      // 🔥 ESTRATEGIA SIMPLIFICADA Y CORREGIDA
       final response = await _empleadosClient
           .from('empleados')
-          .select('''
-            id, cod, nombres, apellidos, cedula, nombres_completos,
-            nomcargo, cod_cargo, nomdep, cod_departamento, seccion,
-            estado, es_activo, es_liquidado, es_suspendido,
-            telefono, created_at, updated_at
-          ''')
-          // 🔥 ARREGLO: Todo en una sola línea sin saltos
-          .or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}')
+          .select('*') // Simplificado
+          .or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}') // Todo en una línea
           .eq('es_activo', true)
           .eq('es_liquidado', false)
           .neq('es_suspendido', true)
           .order('nombres_completos')
-          .limit(11000); // 👈 LÍMITE ALTO PARA OBTENER MÁS RESULTADOS
+          .limit(100);
 
       print(
           '✅ [EMPLEADOS API] Encontrados ${response.length} empleados activos');

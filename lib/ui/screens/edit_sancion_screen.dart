@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:typed_data'; // Para Uint8List
 import 'package:flutter/foundation.dart'; // Para kIsWeb
 
 import '../../core/providers/auth_provider.dart';
@@ -661,6 +660,7 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
     );
   }
 
+  // 🔥 MÉTODO _buildFotoSection() SIMPLIFICADO - SOLUCIÓN DEFINITIVA
   Widget _buildFotoSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -676,7 +676,6 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            // 🆕 Indicador de plataforma
             if (kIsWeb)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -694,7 +693,6 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
                   ),
                 ),
               ),
-            // Indicador de procesamiento
             if (_isProcessingImage) ...[
               const SizedBox(width: 12),
               const SizedBox(
@@ -716,7 +714,7 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         ),
         const SizedBox(height: 12),
 
-        // 🔥 LUGAR 1 - Foto existente de la sanción (CON SOLUCIÓN DIRECTA)
+        // LUGAR 1 - Foto existente de la sanción (Image.network normal)
         if (widget.sancion.fotoUrl != null && _fotoSeleccionada == null) ...[
           Container(
             height: 200,
@@ -752,48 +750,45 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
           const SizedBox(height: 12),
         ],
 
-        // 🔥 LUGAR 2 - Nueva foto seleccionada (CON SOLUCIÓN DIRECTA)
+        // LUGAR 2 - Nueva foto seleccionada (PLACEHOLDER SIMPLE)
         if (_fotoSeleccionada != null) ...[
           Container(
             height: 200,
             width: double.infinity,
             decoration: BoxDecoration(
+              color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.shade300),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: kIsWeb
-                  ? FutureBuilder<Uint8List>(
-                      future: _fotoSeleccionada!.readAsBytes(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError || !snapshot.hasData) {
-                          return const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error_outline,
-                                    size: 48, color: Colors.grey),
-                                Text('Error cargando imagen'),
-                              ],
-                            ),
-                          );
-                        }
-                        return Image.memory(
-                          snapshot.data!,
-                          fit: BoxFit.cover,
-                        );
-                      },
-                    )
-                  : Image.file(
-                      _fotoSeleccionada!,
-                      fit: BoxFit.cover,
-                    ),
+              child: Center(
+                child: Icon(
+                  Icons.image,
+                  size: 48,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Mensaje informativo
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                SizedBox(width: 8),
+                Text(
+                  'Nueva imagen seleccionada correctamente',
+                  style: TextStyle(fontSize: 12, color: Colors.green),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
