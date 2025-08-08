@@ -577,7 +577,26 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                 color: Color(0xFF1E3A8A),
               ),
             ),
-            // 🆕 Indicador de procesamiento de imagen
+            const SizedBox(width: 8),
+            // 🆕 Indicador de plataforma
+            if (kIsWeb)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: const Text(
+                  'Web',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            // Indicador de procesamiento
             if (_isProcessingImage) ...[
               const SizedBox(width: 12),
               const SizedBox(
@@ -598,6 +617,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
           ],
         ),
         const SizedBox(height: 12),
+
         if (_fotoSeleccionada != null) ...[
           Container(
             height: 200,
@@ -612,6 +632,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
           ),
           const SizedBox(height: 12),
         ],
+
         Row(
           children: [
             Expanded(
@@ -623,9 +644,10 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                         height: 16,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.camera_alt),
-                label: Text(
-                    _fotoSeleccionada == null ? 'Tomar Foto' : 'Cambiar Foto'),
+                    : Icon(kIsWeb ? Icons.upload_file : Icons.camera_alt),
+                label: Text(_fotoSeleccionada == null
+                    ? (kIsWeb ? 'Seleccionar Imagen' : 'Agregar Foto')
+                    : 'Cambiar Imagen'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
@@ -648,6 +670,31 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
             ],
           ],
         ),
+
+        // 🆕 Información adicional para web
+        if (kIsWeb && _fotoSeleccionada == null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'En la versión web puedes seleccionar imágenes desde tu computadora',
+                    style: TextStyle(fontSize: 12, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

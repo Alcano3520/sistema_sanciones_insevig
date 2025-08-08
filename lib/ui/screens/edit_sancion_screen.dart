@@ -8,6 +8,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
 import '../../core/services/sancion_service.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/services/empleado_service.dart';
 import '../widgets/empleado_search_field.dart';
 
@@ -673,7 +674,26 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
                 color: Color(0xFF1E3A8A),
               ),
             ),
-            // 🆕 Indicador de procesamiento de imagen
+            const SizedBox(width: 8),
+            // 🆕 Indicador de plataforma
+            if (kIsWeb)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: const Text(
+                  'Web',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            // Indicador de procesamiento
             if (_isProcessingImage) ...[
               const SizedBox(width: 12),
               const SizedBox(
@@ -695,39 +715,6 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Mostrar foto existente si la hay
-        if (widget.sancion.fotoUrl != null && _fotoSeleccionada == null) ...[
-          Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                widget.sancion.fotoUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey.shade200,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                        Text('Error cargando imagen'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // Mostrar nueva foto seleccionada
         if (_fotoSeleccionada != null) ...[
           Container(
             height: 200,
@@ -748,28 +735,28 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _isProcessingImage ? null : _tomarFoto,
-                icon: _isProcessingImage 
-                  ? const SizedBox(
-                      width: 16, 
-                      height: 16, 
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                    )
-                  : const Icon(Icons.camera_alt),
-                label: Text(
-                    _fotoSeleccionada == null && widget.sancion.fotoUrl == null
-                        ? 'Tomar Foto'
-                        : 'Cambiar Foto'),
+                icon: _isProcessingImage
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Icon(kIsWeb ? Icons.upload_file : Icons.camera_alt),
+                label: Text(_fotoSeleccionada == null
+                    ? (kIsWeb ? 'Seleccionar Imagen' : 'Agregar Foto')
+                    : 'Cambiar Imagen'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
                 ),
               ),
             ),
-            if (_fotoSeleccionada != null ||
-                widget.sancion.fotoUrl != null) ...[
+            if (_fotoSeleccionada != null) ...[
               const SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: _isProcessingImage ? null : () => setState(() => _fotoSeleccionada = null),
+                onPressed: _isProcessingImage
+                    ? null
+                    : () => setState(() => _fotoSeleccionada = null),
                 icon: const Icon(Icons.delete),
                 label: const Text('Eliminar'),
                 style: ElevatedButton.styleFrom(
@@ -780,6 +767,31 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
             ],
           ],
         ),
+
+        // 🆕 Información adicional para web
+        if (kIsWeb && _fotoSeleccionada == null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'En la versión web puedes seleccionar imágenes desde tu computadora',
+                    style: TextStyle(fontSize: 12, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -949,14 +961,48 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
   Future<void> _tomarFoto() async {
     try {
       setState(() => _isProcessingImage = true);
-      
+
       final picker = ImagePicker();
-      final foto = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 80,
-      );
+      XFile? foto;
+
+      // 🔥 DETECTAR PLATAFORMA
+      if (kIsWeb) {
+        // EN WEB: Seleccionar archivo
+        foto = await picker.pickImage(
+          source: ImageSource.gallery, // Galería en web
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 80,
+        );
+
+        if (foto != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('📸 Imagen seleccionada correctamente'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // EN MÓVIL: Mostrar opciones
+        final ImageSource? source = await _showImageSourceDialog();
+
+        if (source != null) {
+          foto = await picker.pickImage(
+            source: source,
+            maxWidth: 1024,
+            maxHeight: 1024,
+            imageQuality: 80,
+          );
+        }
+      }
 
       if (foto != null && mounted) {
         // Mostrar indicador de procesamiento
@@ -967,7 +1013,8 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
                 SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 ),
                 SizedBox(width: 12),
                 Text('📸 Procesando y optimizando imagen...'),
@@ -980,17 +1027,18 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
 
         // Convertir XFile a File
         final file = File(foto.path);
-        
-        // 🆕 Pre-validar la imagen
+
+        // Pre-validar la imagen
         final sancionService = SancionService();
         final validation = await sancionService.validateImage(file);
-        
+
         if (validation['valid']) {
           final info = validation['info'] as Map<String, dynamic>;
           final needsCompression = validation['needsCompression'] as bool;
           final originalSize = info['size'] ?? 0;
-          final estimatedSize = validation['estimatedCompressedSize'] ?? originalSize;
-          
+          final estimatedSize =
+              validation['estimatedCompressedSize'] ?? originalSize;
+
           setState(() => _fotoSeleccionada = file);
 
           if (mounted) {
@@ -1006,17 +1054,18 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
                         children: [
                           Icon(Icons.compress, color: Colors.white, size: 16),
                           SizedBox(width: 8),
-                          Text('🎯 Imagen optimizada automáticamente', 
-                               style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('🎯 Imagen optimizada automáticamente',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('📊 Original: ${_formatBytes(originalSize)}', 
-                           style: const TextStyle(fontSize: 12)),
-                      Text('📉 Optimizada: ~${_formatBytes(estimatedSize)}', 
-                           style: const TextStyle(fontSize: 12)),
-                      Text('💾 Ahorro: ~${((originalSize - estimatedSize) / originalSize * 100).round()}%', 
-                           style: const TextStyle(fontSize: 12)),
+                      Text('📊 Original: ${_formatBytes(originalSize)}',
+                          style: const TextStyle(fontSize: 12)),
+                      Text('📉 Optimizada: ~${_formatBytes(estimatedSize)}',
+                          style: const TextStyle(fontSize: 12)),
+                      Text(
+                          '💾 Ahorro: ~${((originalSize - estimatedSize) / originalSize * 100).round()}%',
+                          style: const TextStyle(fontSize: 12)),
                     ],
                   ),
                   backgroundColor: Colors.green,
@@ -1046,12 +1095,56 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         }
       }
     } catch (e) {
-      _mostrarError('Error al tomar foto: $e');
+      _mostrarError('Error al seleccionar imagen: $e');
     } finally {
       if (mounted) {
         setState(() => _isProcessingImage = false);
       }
     }
+  }
+
+  // 🆕 Agregar este método para mostrar opciones en móvil:
+  Future<ImageSource?> _showImageSourceDialog() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Seleccionar imagen',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF1E3A8A)),
+              title: const Text('Tomar foto'),
+              subtitle: const Text('Usar la cámara del dispositivo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.photo_library, color: Color(0xFF1E3A8A)),
+              title: const Text('Seleccionar de galería'),
+              subtitle: const Text('Elegir una imagen existente'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// 🆕 Función auxiliar para formatear bytes
