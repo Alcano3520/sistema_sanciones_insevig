@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/config/supabase_config.dart';
 import 'core/providers/auth_provider.dart';
+import 'core/services/offline_manager.dart'; // 🆕 Importar OfflineManager
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/create_sancion_screen.dart';
@@ -15,6 +16,10 @@ void main() async {
 
     // Inicializar configuración dual
     await SupabaseConfig.initialize();
+
+    // 🆕 Inicializar funcionalidad offline (solo móvil)
+    final offlineManager = OfflineManager.instance;
+    await offlineManager.initialize();
 
     // Mostrar configuración para debug
     SupabaseConfig.mostrarConfiguracion();
