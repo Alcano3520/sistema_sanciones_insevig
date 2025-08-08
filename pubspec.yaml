@@ -35,12 +35,19 @@ dependencies:
   # 🆕 DEPENDENCIAS ADICIONALES para Web compatibilidad
   flutter_web_plugins:
     sdk: flutter
+  # 🆕 OFFLINE MÓVIL (condicionalmente importadas)
+  hive: ^2.2.3               # Base de datos local ultrarrápida
+  hive_flutter: ^1.1.0       # Integración Flutter + paths automáticos
+  connectivity_plus: ^5.0.2  # Detección conectividad multiplataforma
+  path_provider: ^2.1.2      # Rutas de almacenamiento móvil
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^3.0.0
+  hive_generator: ^2.0.1     # Generador TypeAdapters automático
+  build_runner: ^2.4.8       # Builder para generación código
 
 flutter:
   uses-material-design: true
