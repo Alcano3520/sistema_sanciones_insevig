@@ -388,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12), // Reducido de 16 a 12
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -403,25 +403,47 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 32)),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E3A8A),
+            // Emoji con tamaño flexible
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                emoji,
+                style: const TextStyle(fontSize: 28), // Reducido de 32
               ),
-              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
+
+            const SizedBox(height: 4), // Reducido de 8
+
+            // Título con control de overflow
+            Flexible(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14, // Reducido de 16
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E3A8A),
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 2), // Reducido de 4
+
+            // Subtítulo con mejor control
+            Flexible(
+              child: Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11, // Reducido de 12
+                  color: Colors.grey,
+                  height: 1.2, // Altura de línea ajustada
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
