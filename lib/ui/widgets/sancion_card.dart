@@ -59,19 +59,20 @@ class SancionCard extends StatelessWidget {
         // Avatar del empleado
         CircleAvatar(
           backgroundColor: _getStatusColor(),
-          radius: 24,
+          radius: 20, // Reducido de 24
           child: Text(
             sancion.empleadoNombre.split(' ').take(2).map((e) => e[0]).join(),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
+              fontSize: 14, // Reducido
             ),
           ),
         ),
 
         const SizedBox(width: 12),
 
-        // Información del empleado
+        // Información del empleado - EXPANDIDO CORRECTAMENTE
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,7 +80,7 @@ class SancionCard extends StatelessWidget {
               Text(
                 sancion.empleadoNombre,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 14, // Reducido de 16
                   fontWeight: FontWeight.bold,
                 ),
                 maxLines: 1,
@@ -88,13 +89,15 @@ class SancionCard extends StatelessWidget {
               Text(
                 'Cód: ${sancion.empleadoCod}',
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 11, // Reducido de 12
                   color: Colors.grey,
                 ),
               ),
             ],
           ),
         ),
+
+        const SizedBox(width: 8), // Espacio antes del badge
 
         // Status badge
         _buildStatusBadge(),

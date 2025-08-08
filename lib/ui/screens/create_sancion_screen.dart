@@ -466,16 +466,24 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       ),
       child: DropdownButtonFormField<String>(
         value: _tipoSancion.isEmpty ? null : _tipoSancion,
+        isExpanded: true, // Importante para evitar overflow
         decoration: const InputDecoration(
           labelText: 'Seleccionar sanción',
           prefixIcon: Icon(Icons.warning, color: Color(0xFF1E3A8A)),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.all(16),
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
         items: SancionModel.tiposSancion.map((tipo) {
           return DropdownMenuItem(
             value: tipo,
-            child: Text(_getTipoSancionLabel(tipo)),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 250), // Limitar ancho
+              child: Text(
+                _getTipoSancionLabel(tipo),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
           );
         }).toList(),
         onChanged: (value) => _onTipoSancionChanged(value!),
@@ -485,6 +493,11 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
           }
           return null;
         },
+        // Personalizar el dropdown menu
+        dropdownColor: Colors.white,
+        menuMaxHeight: 300,
+        icon: const Icon(Icons.arrow_drop_down),
+        iconSize: 24,
       ),
     );
   }
@@ -603,13 +616,13 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _isProcessingImage ? null : _tomarFoto,
-                icon: _isProcessingImage 
-                  ? const SizedBox(
-                      width: 16, 
-                      height: 16, 
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                    )
-                  : const Icon(Icons.camera_alt),
+                icon: _isProcessingImage
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.camera_alt),
                 label: Text(
                     _fotoSeleccionada == null ? 'Tomar Foto' : 'Cambiar Foto'),
                 style: ElevatedButton.styleFrom(
@@ -621,7 +634,9 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
             if (_fotoSeleccionada != null) ...[
               const SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: _isProcessingImage ? null : () => setState(() => _fotoSeleccionada = null),
+                onPressed: _isProcessingImage
+                    ? null
+                    : () => setState(() => _fotoSeleccionada = null),
                 icon: const Icon(Icons.delete),
                 label: const Text('Eliminar'),
                 style: ElevatedButton.styleFrom(
@@ -753,7 +768,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
   Future<void> _tomarFoto() async {
     try {
       setState(() => _isProcessingImage = true);
-      
+
       final picker = ImagePicker();
       final foto = await picker.pickImage(
         source: ImageSource.camera,
@@ -771,7 +786,8 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                 SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 ),
                 SizedBox(width: 12),
                 Text('📸 Procesando y optimizando imagen...'),
@@ -784,17 +800,18 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
         // Convertir XFile a File
         final file = File(foto.path);
-        
+
         // 🆕 Pre-validar la imagen
         final sancionService = SancionService();
         final validation = await sancionService.validateImage(file);
-        
+
         if (validation['valid']) {
           final info = validation['info'] as Map<String, dynamic>;
           final needsCompression = validation['needsCompression'] as bool;
           final originalSize = info['size'] ?? 0;
-          final estimatedSize = validation['estimatedCompressedSize'] ?? originalSize;
-          
+          final estimatedSize =
+              validation['estimatedCompressedSize'] ?? originalSize;
+
           setState(() => _fotoSeleccionada = file);
 
           if (mounted) {
@@ -810,17 +827,18 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                         children: [
                           Icon(Icons.compress, color: Colors.white, size: 16),
                           SizedBox(width: 8),
-                          Text('🎯 Imagen optimizada automáticamente', 
-                               style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('🎯 Imagen optimizada automáticamente',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('📊 Original: ${_formatBytes(originalSize)}', 
-                           style: const TextStyle(fontSize: 12)),
-                      Text('📉 Optimizada: ~${_formatBytes(estimatedSize)}', 
-                           style: const TextStyle(fontSize: 12)),
-                      Text('💾 Ahorro: ~${((originalSize - estimatedSize) / originalSize * 100).round()}%', 
-                           style: const TextStyle(fontSize: 12)),
+                      Text('📊 Original: ${_formatBytes(originalSize)}',
+                          style: const TextStyle(fontSize: 12)),
+                      Text('📉 Optimizada: ~${_formatBytes(estimatedSize)}',
+                          style: const TextStyle(fontSize: 12)),
+                      Text(
+                          '💾 Ahorro: ~${((originalSize - estimatedSize) / originalSize * 100).round()}%',
+                          style: const TextStyle(fontSize: 12)),
                     ],
                   ),
                   backgroundColor: Colors.green,
