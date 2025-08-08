@@ -329,6 +329,9 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser!;
 
+        // Detectar si es móvil o web
+        final isMobile = MediaQuery.of(context).size.width < 600;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -341,25 +344,27 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // Grid adaptativo
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.5,
+              childAspectRatio: isMobile ? 1.3 : 1.5, // Más espacio en móvil
               children: [
                 if (user.canCreateSanciones)
                   _buildActionCard(
                     '📝',
                     'Nueva Sanción',
-                    'Registrar una nueva sanción',
+                    'Registrar sanción', // Texto más corto
                     () => _createNewSancion(),
                   ),
                 _buildActionCard(
                   '📋',
                   'Ver Historial',
-                  'Ver sanciones anteriores',
+                  'Sanciones anteriores', // Texto más corto
                   () => _viewHistory(),
                 ),
                 if (user.canViewAllSanciones)
