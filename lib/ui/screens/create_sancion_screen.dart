@@ -3,14 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data'; // Para Uint8List
+import 'package:flutter/foundation.dart'; // Para kIsWeb
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
 import '../../core/services/sancion_service.dart';
 import '../../core/services/empleado_service.dart';
-import 'package:flutter/foundation.dart';
-import '../widgets/image_display_widget.dart';
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
@@ -619,10 +619,49 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         ),
         const SizedBox(height: 12),
 
+        // 🔥 SOLUCIÓN DIRECTA PARA WEB/MÓVIL - SIN ImageDisplayWidget
         if (_fotoSeleccionada != null) ...[
-          ImageDisplayWidget(
-            imageFile: _fotoSeleccionada,
+          Container(
             height: 200,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: kIsWeb
+                  ? FutureBuilder<Uint8List>(
+                      future: _fotoSeleccionada!.readAsBytes(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error_outline,
+                                    size: 48, color: Colors.grey),
+                                Text('Error cargando imagen'),
+                              ],
+                            ),
+                          );
+                        }
+                        return Image.memory(
+                          snapshot.data!,
+                          fit: BoxFit.cover,
+                        );
+                      },
+                    )
+                  : Image.file(
+                      _fotoSeleccionada!,
+                      fit: BoxFit.cover,
+                    ),
+            ),
           ),
           const SizedBox(height: 12),
         ],

@@ -3,14 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data'; // Para Uint8List
+import 'package:flutter/foundation.dart'; // Para kIsWeb
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
 import '../../core/services/sancion_service.dart';
-import 'package:flutter/foundation.dart';
 import '../../core/services/empleado_service.dart';
-import '../widgets/image_display_widget.dart';
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para EDITAR sanción existente
@@ -716,20 +716,85 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         ),
         const SizedBox(height: 12),
 
-        // 🔥 LUGAR 1 - Foto existente de la sanción (CORREGIDO)
+        // 🔥 LUGAR 1 - Foto existente de la sanción (CON SOLUCIÓN DIRECTA)
         if (widget.sancion.fotoUrl != null && _fotoSeleccionada == null) ...[
-          ImageDisplayWidget(
-            networkUrl: widget.sancion.fotoUrl,
+          Container(
             height: 200,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                widget.sancion.fotoUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                        Text('Error cargando imagen'),
+                      ],
+                    ),
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const Center(child: CircularProgressIndicator());
+                },
+              ),
+            ),
           ),
           const SizedBox(height: 12),
         ],
 
-        // 🔥 LUGAR 2 - Nueva foto seleccionada (CORREGIDO)
+        // 🔥 LUGAR 2 - Nueva foto seleccionada (CON SOLUCIÓN DIRECTA)
         if (_fotoSeleccionada != null) ...[
-          ImageDisplayWidget(
-            imageFile: _fotoSeleccionada,
+          Container(
             height: 200,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: kIsWeb
+                  ? FutureBuilder<Uint8List>(
+                      future: _fotoSeleccionada!.readAsBytes(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error_outline,
+                                    size: 48, color: Colors.grey),
+                                Text('Error cargando imagen'),
+                              ],
+                            ),
+                          );
+                        }
+                        return Image.memory(
+                          snapshot.data!,
+                          fit: BoxFit.cover,
+                        );
+                      },
+                    )
+                  : Image.file(
+                      _fotoSeleccionada!,
+                      fit: BoxFit.cover,
+                    ),
+            ),
           ),
           const SizedBox(height: 12),
         ],
