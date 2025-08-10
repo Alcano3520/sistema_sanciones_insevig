@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'core/config/supabase_config.dart';
 import 'core/providers/auth_provider.dart';
-import 'core/offline/offline_manager.dart'; // 🆕 Importar OfflineManager
+import 'core/offline/offline_manager.dart';
+import 'core/offline/empleado_repository.dart';
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/create_sancion_screen.dart';
@@ -18,8 +20,37 @@ void main() async {
     await SupabaseConfig.initialize();
 
     // 🆕 Inicializar funcionalidad offline (solo móvil)
-    final offlineManager = OfflineManager.instance;
-    await offlineManager.initialize();
+    if (!kIsWeb) {
+      print('📱 Inicializando modo offline...');
+      final offlineManager = OfflineManager.instance;
+      final offlineReady = await offlineManager.initialize();
+      
+      if (!offlineReady) {
+        print('⚠️ ADVERTENCIA: Modo offline no pudo inicializarse completamente');
+      } else {
+        print('✅ Modo offline listo');
+        
+        // 🆕 PRE-CARGAR empleados en cache si hay conexión
+        if (!offlineManager.isOfflineMode) {
+          print('📥 Pre-cargando empleados en cache...');
+          try {
+            final empleados = await EmpleadoRepository.instance.getAllEmpleadosActivos();
+            print('✅ ${empleados.length} empleados cargados en cache');
+          } catch (e) {
+            print('⚠️ No se pudieron pre-cargar empleados: $e');
+          }
+        } else {
+          print('📴 Iniciando en modo offline');
+        }
+        
+        // Mostrar estadísticas iniciales
+        final stats = offlineManager.getOfflineStats();
+        print('📊 Estado inicial:');
+        print('   - Modo: ${stats['mode']}');
+        print('   - Empleados en cache: ${stats['empleados_cached']}');
+        print('   - Sanciones pendientes: ${stats['pending_sync']}');
+      }
+    }
 
     // Mostrar configuración para debug
     SupabaseConfig.mostrarConfiguracion();
