@@ -8,13 +8,12 @@ import 'package:flutter/foundation.dart'; // Para kIsWeb
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
-import '../../core/services/sancion_service.dart';
-import '../../core/services/empleado_service.dart';
+import '../../core/offline/sancion_repository.dart'; // 🔥 CAMBIO: Repository
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
 /// ACTUALIZADA con compresión automática de imágenes
-/// Incluye todos los campos: fecha, hora, puesto, agente, tipo, observaciones, foto, firma
+/// 🔥 ACTUALIZADA para usar repositories con funcionalidad offline
 class CreateSancionScreen extends StatefulWidget {
   const CreateSancionScreen({super.key});
 
@@ -911,8 +910,8 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         final file = File(foto.path);
 
         // Pre-validar la imagen
-        final sancionService = SancionService();
-        final validation = await sancionService.validateImage(file);
+        final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
+        final validation = await sancionRepository.validateImage(file);
 
         if (validation['valid']) {
           final info = validation['info'] as Map<String, dynamic>;
@@ -1049,7 +1048,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final sancionService = SancionService();
+      final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
 
       final sancion = SancionModel(
         supervisorId: authProvider.currentUser!.id,
@@ -1073,8 +1072,8 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         status: status,
       );
 
-      // 🆕 Usar el servicio ACTUALIZADO con compresión automática
-      await sancionService.createSancion(
+      // 🔥 CAMBIO: Usar el repository ACTUALIZADO con compresión automática
+      await sancionRepository.createSancion(
         sancion: sancion,
         fotoFile: _fotoSeleccionada, // Se comprime automáticamente
         signatureController:
@@ -1082,22 +1081,38 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       );
 
       // 🆕 Limpiar archivos temporales después de guardar
-      await sancionService.cleanupTempFiles();
+      await sancionRepository.cleanupTempFiles();
 
       if (mounted) {
         Navigator.pop(context, true); // Regresar con resultado exitoso
+
+        // 🔥 NUEVO: Mostrar si se guardó offline
+        final isOffline = sancionRepository.isOffline;
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white),
+                Icon(
+                  isOffline ? Icons.wifi_off : Icons.check_circle,
+                  color: Colors.white,
+                ),
                 const SizedBox(width: 8),
-                Text(status == 'borrador'
-                    ? '✅ Borrador guardado correctamente'
-                    : '📤 Sanción enviada correctamente'),
+                Expanded(
+                  child: Text(
+                    status == 'borrador'
+                        ? isOffline
+                            ? '✅ Borrador guardado offline (se sincronizará cuando haya conexión)'
+                            : '✅ Borrador guardado correctamente'
+                        : isOffline
+                            ? '📤 Sanción guardada offline (se enviará cuando haya conexión)'
+                            : '📤 Sanción enviada correctamente',
+                  ),
+                ),
               ],
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: isOffline ? Colors.orange : Colors.green,
+            duration: Duration(seconds: isOffline ? 5 : 3),
           ),
         );
       }
@@ -1112,16 +1127,28 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
   void _mostrarError(String mensaje) {
     if (mounted) {
+      // 🔥 NUEVO: Detectar si es un error de conexión
+      final isConnectionError = mensaje.contains('SocketException') ||
+          mensaje.contains('offline') ||
+          mensaje.contains('conexión');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error_outline, color: Colors.white),
+              Icon(
+                isConnectionError ? Icons.wifi_off : Icons.error_outline,
+                color: Colors.white,
+              ),
               const SizedBox(width: 8),
-              Expanded(child: Text('❌ $mensaje')),
+              Expanded(
+                child: Text(
+                  isConnectionError ? '❌ Sin conexión: $mensaje' : '❌ $mensaje',
+                ),
+              ),
             ],
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: isConnectionError ? Colors.orange : Colors.red,
         ),
       );
     }

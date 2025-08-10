@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/models/empleado_model.dart';
-import '../../core/services/empleado_service.dart';
+import '../../core/offline/empleado_repository.dart'; // 🔥 CAMBIO: Repository en vez de Service
 
 /// Widget de búsqueda de empleados con autocompletado
 /// Replica la funcionalidad de búsqueda de tu app Kivy
+/// 🔥 ACTUALIZADO para usar EmpleadoRepository con funcionalidad offline
 class EmpleadoSearchField extends StatefulWidget {
   final Function(EmpleadoModel) onEmpleadoSelected;
   final String? hintText;
@@ -20,7 +21,8 @@ class EmpleadoSearchField extends StatefulWidget {
 
 class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
   final TextEditingController _controller = TextEditingController();
-  final EmpleadoService _empleadoService = EmpleadoService();
+  final EmpleadoRepository _empleadoRepository =
+      EmpleadoRepository.instance; // 🔥 CAMBIO
 
   List<EmpleadoModel> _resultados = [];
   bool _isSearching = false;
@@ -305,7 +307,8 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
     });
 
     try {
-      final resultados = await _empleadoService.searchEmpleados(query);
+      // 🔥 CAMBIO: Usando repository en vez de service
+      final resultados = await _empleadoRepository.searchEmpleados(query);
 
       if (mounted) {
         setState(() {
@@ -320,10 +323,29 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
           _isSearching = false;
         });
 
+        // 🔥 NUEVO: Mostrar si estamos offline
+        final isOffline = e.toString().contains('offline') ||
+            e.toString().contains('SocketException');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error buscando empleados: $e'),
-            backgroundColor: Colors.red,
+            content: Row(
+              children: [
+                Icon(
+                  isOffline ? Icons.wifi_off : Icons.error_outline,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isOffline
+                        ? 'Modo offline: mostrando resultados guardados'
+                        : 'Error buscando empleados: $e',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: isOffline ? Colors.orange : Colors.red,
           ),
         );
       }

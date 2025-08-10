@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../core/services/sancion_service.dart';
-import '../../core/services/empleado_service.dart';
-import 'create_sancion_screen.dart'; // Añadir esta línea
-import 'historial_sanciones_screen.dart'; // Añadir esta lí
+import '../../core/offline/sancion_repository.dart'; // 🔥 CAMBIO: Repository
+import '../../core/offline/empleado_repository.dart'; // 🔥 CAMBIO: Repository
+import '../../core/offline/connectivity_service.dart'; // 🔥 NUEVO: Para verificar conectividad
+import 'create_sancion_screen.dart';
+import 'historial_sanciones_screen.dart';
 
 /// Pantalla principal después del login
 /// Equivalente a tu pantalla principal de Kivy pero modernizada
+/// 🔥 ACTUALIZADA para usar repositories con funcionalidad offline
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,11 +21,63 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic> _stats = {};
   Map<String, int> _empleadoStats = {};
   bool _isLoading = true;
+  bool _isOnline = true; // 🔥 NUEVO: Estado de conectividad
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _listenToConnectivity(); // 🔥 NUEVO: Escuchar cambios de conectividad
+  }
+
+  // 🔥 NUEVO: Escuchar cambios en la conectividad
+  void _listenToConnectivity() {
+    ConnectivityService.instance.connectivityStream.listen((isConnected) {
+      if (mounted) {
+        setState(() => _isOnline = isConnected);
+
+        // Si volvemos online, intentar sincronizar
+        if (isConnected && !_isOnline) {
+          _syncPendingData();
+        }
+      }
+    });
+  }
+
+  // 🔥 NUEVO: Sincronizar datos pendientes
+  Future<void> _syncPendingData() async {
+    try {
+      final sancionRepository = SancionRepository.instance;
+      final pendingCount = await sancionRepository.getPendingSyncCount();
+
+      if (pendingCount > 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text('Sincronizando $pendingCount sanciones pendientes...'),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+
+        await sancionRepository.syncPendingSanciones();
+        await _loadData(); // Recargar estadísticas
+      }
+    } catch (e) {
+      print('❌ Error sincronizando: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -31,21 +85,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final sancionService = SancionService();
-      final empleadoService = EmpleadoService();
+      final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
+      final empleadoRepository = EmpleadoRepository.instance; // 🔥 CAMBIO
 
       // Cargar estadísticas según el rol
       if (authProvider.currentUser!.isSupervisor) {
-        _stats = await sancionService.getEstadisticas(
+        _stats = await sancionRepository.getEstadisticas(
           supervisorId: authProvider.currentUser!.id,
         );
       } else {
-        _stats = await sancionService.getEstadisticas();
+        _stats = await sancionRepository.getEstadisticas();
       }
 
-      _empleadoStats = await empleadoService.getEstadisticasEmpleados();
+      _empleadoStats = await empleadoRepository.getEstadisticasEmpleados();
+
+      // 🔥 NUEVO: Actualizar estado de conectividad
+      _isOnline = ConnectivityService.instance.isConnected;
     } catch (e) {
       print('❌ Error cargando datos: $e');
+
+      // 🔥 NUEVO: Si hay error, probablemente estamos offline
+      if (e.toString().contains('SocketException')) {
+        setState(() => _isOnline = false);
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -68,6 +130,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 🔥 NUEVO: Banner de estado offline
+                    if (!_isOnline) _buildOfflineBanner(),
+
                     _buildWelcomeCard(),
                     const SizedBox(height: 20),
                     _buildStatsSection(),
@@ -83,13 +148,105 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // 🔥 NUEVO: Banner indicando modo offline
+  Widget _buildOfflineBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off, color: Colors.orange),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Modo Offline',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+                const Text(
+                  'Los cambios se sincronizarán cuando haya conexión',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange,
+                  ),
+                ),
+                FutureBuilder<int>(
+                  future: SancionRepository.instance.getPendingSyncCount(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data! > 0) {
+                      return Text(
+                        '${snapshot.data} sanciones pendientes de sincronizar',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.orange),
+            onPressed: _loadData,
+            tooltip: 'Intentar reconectar',
+          ),
+        ],
+      ),
+    );
+  }
+
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: const Text('Sistema de Sanciones - INSEVIG'),
+      title: Row(
+        children: [
+          const Text('Sistema de Sanciones - INSEVIG'),
+          const SizedBox(width: 8),
+          // 🔥 NUEVO: Indicador de conectividad en el AppBar
+          Icon(
+            _isOnline ? Icons.wifi : Icons.wifi_off,
+            size: 16,
+            color: _isOnline ? Colors.green : Colors.orange,
+          ),
+        ],
+      ),
       backgroundColor: const Color(0xFF1E3A8A),
       foregroundColor: Colors.white,
       elevation: 0,
       actions: [
+        // 🔥 NUEVO: Botón para verificar conectividad
+        IconButton(
+          icon: Icon(
+            _isOnline ? Icons.cloud_done : Icons.cloud_off,
+            color: _isOnline ? Colors.green : Colors.orange,
+          ),
+          onPressed: () {
+            final connectivity = ConnectivityService.instance;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Conectividad: ${connectivity.isConnected ? "ONLINE ✅" : "OFFLINE ⚠️"}',
+                ),
+                backgroundColor:
+                    connectivity.isConnected ? Colors.green : Colors.orange,
+              ),
+            );
+          },
+          tooltip: 'Estado de conexión',
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           onPressed: _loadData,
