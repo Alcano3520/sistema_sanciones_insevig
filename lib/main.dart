@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/config/supabase_config.dart';
 import 'core/providers/auth_provider.dart';
-import 'core/services/offline_manager.dart'; // 🆕 Importar OfflineManager
+import 'core/offline/offline_manager.dart'; // 🆕 Importar OfflineManager
 import 'ui/screens/login_screen.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/create_sancion_screen.dart';
