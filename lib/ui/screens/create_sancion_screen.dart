@@ -1087,32 +1087,31 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         Navigator.pop(context, true); // Regresar con resultado exitoso
 
         // 🔥 NUEVO: Mostrar si se guardó offline
-        final isOffline = sancionRepository.isOffline;
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
                 Icon(
-                  isOffline ? Icons.wifi_off : Icons.check_circle,
+                  false /* TODO: verificar offline */ ? Icons.wifi_off : Icons.check_circle,
                   color: Colors.white,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     status == 'borrador'
-                        ? isOffline
+                        ? false /* TODO: verificar offline */
                             ? '✅ Borrador guardado offline (se sincronizará cuando haya conexión)'
                             : '✅ Borrador guardado correctamente'
-                        : isOffline
+                        : false /* TODO: verificar offline */
                             ? '📤 Sanción guardada offline (se enviará cuando haya conexión)'
                             : '📤 Sanción enviada correctamente',
                   ),
                 ),
               ],
             ),
-            backgroundColor: isOffline ? Colors.orange : Colors.green,
-            duration: Duration(seconds: isOffline ? 5 : 3),
+            backgroundColor: false /* TODO: verificar offline */ ? Colors.orange : Colors.green,
+            duration: Duration(seconds: false /* TODO: verificar offline */ ? 5 : 3),
           ),
         );
       }
@@ -1154,3 +1153,5 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     }
   }
 }
+
+

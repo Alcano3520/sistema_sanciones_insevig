@@ -113,6 +113,7 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
         setState(() => _isLoading = false);
       }
     }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -794,5 +795,4 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
     );
   }
 }
-
 

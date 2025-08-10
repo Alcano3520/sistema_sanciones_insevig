@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart'; // Para kIsWeb
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
+import '../../core/offline/sancion_repository.dart';
 import '../../core/models/empleado_model.dart';
+import '../../core/offline/empleado_repository.dart';
 import '../../core/services/sancion_service.dart';
 import '../../core/services/empleado_service.dart';
 import '../widgets/empleado_search_field.dart';
@@ -104,8 +106,8 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
   /// Cargar datos del empleado
   Future<void> _cargarEmpleado(int empleadoCod) async {
     try {
-      final empleadoService = EmpleadoService();
-      final empleado = await empleadoService.getEmpleadoByCod(empleadoCod);
+      final empleadoRepository = EmpleadoRepository.instance;
+      final empleado = await empleadoRepository.getEmpleadoByCod(empleadoCod);
 
       if (empleado != null) {
         setState(() {
@@ -1093,8 +1095,8 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         final file = File(foto.path);
 
         // Pre-validar la imagen
-        final sancionService = SancionService();
-        final validation = await sancionService.validateImage(file);
+        final sancionRepository = SancionRepository.instance;
+        final validation = await sancionRepository.validateImage(file);
 
         if (validation['valid']) {
           final info = validation['info'] as Map<String, dynamic>;
@@ -1230,7 +1232,7 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final sancionService = SancionService();
+      final sancionRepository = SancionRepository.instance;
 
       // Crear sanción actualizada
       final sancionActualizada = widget.sancion.copyWith(
@@ -1259,7 +1261,7 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
 
       if (_fotoSeleccionada != null || (_signatureController.isNotEmpty)) {
         // Si hay archivos nuevos, usar el método con archivos (CON COMPRESIÓN)
-        success = await sancionService.updateSancionWithFiles(
+        success = await sancionRepository.updateSancion(
           sancion: sancionActualizada,
           nuevaFoto: _fotoSeleccionada, // Se comprime automáticamente
           nuevaFirma:
@@ -1267,11 +1269,11 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
         );
       } else {
         // Si no hay archivos nuevos, usar método simple
-        success = await sancionService.updateSancionSimple(sancionActualizada);
+        success = await sancionRepository.updateSancionSimple(sancionActualizada);
       }
 
       // 🆕 Limpiar archivos temporales después de guardar
-      await sancionService.cleanupTempFiles();
+      await sancionRepository.cleanupTempFiles();
 
       if (success) {
         if (mounted) {
@@ -1322,3 +1324,6 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
     }
   }
 }
+
+
+

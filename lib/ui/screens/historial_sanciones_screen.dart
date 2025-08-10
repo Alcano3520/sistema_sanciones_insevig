@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
-import '../../core/services/sancion_service.dart';
+import '../../core/offline/sancion_repository.dart';
 import '../widgets/sancion_card.dart'; // ← ESTA LÍNEA DEBE ESTAR
 import '../widgets/filtros_dialog.dart'; // ← ESTA LÍNEA DEBE ESTAR
 import 'detalle_sancion_screen.dart'; // ← ESTA LÍNEA DEBE ESTAR
-import 'create_sancion_screen.dart'; // ← AÑADIR ESTA TAMBIÉN
 
 /// Pantalla de historial de sanciones - Como tu PantallaHistorial de Kivy
 /// Incluye filtros, búsqueda y visualización completa de sanciones
@@ -21,7 +19,7 @@ class HistorialSancionesScreen extends StatefulWidget {
 }
 
 class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
-  final SancionService _sancionService = SancionService();
+  final SancionRepository _sancionRepository = SancionRepository.instance;
   final ScrollController _scrollController = ScrollController();
 
   List<SancionModel> _sanciones = [];
@@ -395,10 +393,10 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
 
       if (user.canViewAllSanciones && !_soloMias) {
         // Gerencia/RRHH pueden ver todas
-        sanciones = await _sancionService.getAllSanciones();
+        sanciones = await _sancionRepository.getAllSanciones();
       } else {
         // Supervisores solo ven las suyas
-        sanciones = await _sancionService.getMySanciones(user.id);
+        sanciones = await _sancionRepository.getMySanciones(user.id);
       }
 
       if (mounted) {
@@ -585,3 +583,4 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     );
   }
 }
+
