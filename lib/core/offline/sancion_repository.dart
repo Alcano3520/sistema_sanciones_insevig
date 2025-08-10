@@ -12,7 +12,7 @@ import 'offline_manager.dart';
 class SancionRepository {
   static SancionRepository? _instance;
   static SancionRepository get instance => _instance ??= SancionRepository._();
-  
+
   SancionRepository._();
 
   final SancionService _sancionService = SancionService();
@@ -59,7 +59,8 @@ class SancionRepository {
     }
 
     // 📱 Móvil: con cache offline
-    return await _offlineManager.getSanciones(supervisorId, allSanciones: false);
+    return await _offlineManager.getSanciones(supervisorId,
+        allSanciones: false);
   }
 
   /// Obtener todas las sanciones (para gerencia/RRHH)
@@ -80,7 +81,7 @@ class SancionRepository {
       return await _sancionService.getSancionById(id);
     } catch (e) {
       print('❌ Error obteniendo sanción $id online: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: buscar en cache local
         final sancionesLocales = _offlineManager.database.getSanciones();
@@ -90,7 +91,7 @@ class SancionRepository {
           return null;
         }
       }
-      
+
       return null;
     }
   }
@@ -156,8 +157,9 @@ class SancionRepository {
       if (!kIsWeb && success) {
         // En móvil: actualizar cache local también
         final sancionesLocales = _offlineManager.database.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-        
+        final sancionIndex =
+            sancionesLocales.indexWhere((s) => s.id == sancionId);
+
         if (sancionIndex != -1) {
           final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
             status: newStatus,
@@ -166,7 +168,7 @@ class SancionRepository {
             fechaRevision: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-          
+
           await _offlineManager.database.saveSancion(sancionActualizada);
         }
       }
@@ -174,7 +176,7 @@ class SancionRepository {
       return success;
     } catch (e) {
       print('❌ Error cambiando status: $e');
-      
+
       if (!kIsWeb) {
         // En móvil: agregar a cola de sincronización
         await _offlineManager.database.addToSyncQueue('change_status', {
@@ -183,11 +185,12 @@ class SancionRepository {
           'comentarios': comentarios,
           'reviewed_by': reviewedBy,
         });
-        
+
         // Actualizar localmente
         final sancionesLocales = _offlineManager.database.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-        
+        final sancionIndex =
+            sancionesLocales.indexWhere((s) => s.id == sancionId);
+
         if (sancionIndex != -1) {
           final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
             status: newStatus,
@@ -196,12 +199,12 @@ class SancionRepository {
             fechaRevision: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-          
+
           await _offlineManager.database.saveSancion(sancionActualizada);
           return true; // Exitoso localmente
         }
       }
-      
+
       return false;
     }
   }
@@ -210,49 +213,52 @@ class SancionRepository {
   Future<bool> togglePendiente(String sancionId, bool pendiente) async {
     try {
       // Intentar online primero
-      final success = await _sancionService.togglePendiente(sancionId, pendiente);
+      final success =
+          await _sancionService.togglePendiente(sancionId, pendiente);
 
       if (!kIsWeb && success) {
         // Actualizar cache local en móvil
-        final sancionesLocales = _offlineManager._db.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-        
+        final sancionesLocales = _offlineManager.database.getSanciones();
+        final sancionIndex =
+            sancionesLocales.indexWhere((s) => s.id == sancionId);
+
         if (sancionIndex != -1) {
           final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
             pendiente: pendiente,
             updatedAt: DateTime.now(),
           );
-          
-          await _offlineManager._db.saveSancion(sancionActualizada);
+
+          await _offlineManager.database.saveSancion(sancionActualizada);
         }
       }
 
       return success;
     } catch (e) {
       print('❌ Error toggle pendiente: $e');
-      
+
       if (!kIsWeb) {
         // Fallback offline en móvil
-        await _offlineManager._db.addToSyncQueue('toggle_pendiente', {
+        await _offlineManager.database.addToSyncQueue('toggle_pendiente', {
           'sancion_id': sancionId,
           'pendiente': pendiente,
         });
-        
+
         // Actualizar localmente
-        final sancionesLocales = _offlineManager._db.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-        
+        final sancionesLocales = _offlineManager.database.getSanciones();
+        final sancionIndex =
+            sancionesLocales.indexWhere((s) => s.id == sancionId);
+
         if (sancionIndex != -1) {
           final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
             pendiente: pendiente,
             updatedAt: DateTime.now(),
           );
-          
-          await _offlineManager._db.saveSancion(sancionActualizada);
+
+          await _offlineManager.database.saveSancion(sancionActualizada);
           return true;
         }
       }
-      
+
       return false;
     }
   }
@@ -269,23 +275,23 @@ class SancionRepository {
 
       if (!kIsWeb) {
         // En móvil: eliminar de cache local también
-        await _offlineManager._db.deleteSancion(sancionId);
+        await _offlineManager.database.deleteSancion(sancionId);
       }
 
       return success;
     } catch (e) {
       print('❌ Error eliminando sanción: $e');
-      
+
       if (!kIsWeb) {
         // En móvil: eliminar localmente y agregar a cola
-        await _offlineManager._db.deleteSancion(sancionId);
-        await _offlineManager._db.addToSyncQueue('delete_sancion', {
+        await _offlineManager.database.deleteSancion(sancionId);
+        await _offlineManager.database.addToSyncQueue('delete_sancion', {
           'sancion_id': sancionId,
         });
-        
+
         return true; // Exitoso localmente
       }
-      
+
       return false;
     }
   }
@@ -300,13 +306,15 @@ class SancionRepository {
       return await _sancionService.getSancionesByEmpleado(empleadoCod);
     } catch (e) {
       print('❌ Error obteniendo sanciones del empleado: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: buscar en cache local
-        final sancionesLocales = _offlineManager._db.getSanciones();
-        return sancionesLocales.where((s) => s.empleadoCod == empleadoCod).toList();
+        final sancionesLocales = _offlineManager.database.getSanciones();
+        return sancionesLocales
+            .where((s) => s.empleadoCod == empleadoCod)
+            .toList();
       }
-      
+
       return [];
     }
   }
@@ -317,19 +325,21 @@ class SancionRepository {
     DateTime fechaFin,
   ) async {
     try {
-      return await _sancionService.getSancionesByDateRange(fechaInicio, fechaFin);
+      return await _sancionService.getSancionesByDateRange(
+          fechaInicio, fechaFin);
     } catch (e) {
       print('❌ Error obteniendo sanciones por rango: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: filtrar cache local
-        final sancionesLocales = _offlineManager._db.getSanciones();
+        final sancionesLocales = _offlineManager.database.getSanciones();
         return sancionesLocales.where((sancion) {
-          return sancion.fecha.isAfter(fechaInicio.subtract(const Duration(days: 1))) &&
-                 sancion.fecha.isBefore(fechaFin.add(const Duration(days: 1)));
+          return sancion.fecha
+                  .isAfter(fechaInicio.subtract(const Duration(days: 1))) &&
+              sancion.fecha.isBefore(fechaFin.add(const Duration(days: 1)));
         }).toList();
       }
-      
+
       return [];
     }
   }
@@ -340,13 +350,13 @@ class SancionRepository {
       return await _sancionService.getSancionesPendientes();
     } catch (e) {
       print('❌ Error obteniendo sanciones pendientes: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: filtrar cache local
-        final sancionesLocales = _offlineManager._db.getSanciones();
+        final sancionesLocales = _offlineManager.database.getSanciones();
         return sancionesLocales.where((s) => s.pendiente).toList();
       }
-      
+
       return [];
     }
   }
@@ -361,13 +371,14 @@ class SancionRepository {
       return await _sancionService.getEstadisticas(supervisorId: supervisorId);
     } catch (e) {
       print('❌ Error obteniendo estadísticas: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: calcular estadísticas de cache local
-        var sanciones = _offlineManager._db.getSanciones();
-        
+        var sanciones = _offlineManager.database.getSanciones();
+
         if (supervisorId != null) {
-          sanciones = sanciones.where((s) => s.supervisorId == supervisorId).toList();
+          sanciones =
+              sanciones.where((s) => s.supervisorId == supervisorId).toList();
         }
 
         final stats = {
@@ -411,7 +422,8 @@ class SancionRepository {
 
           // Contar por tipo
           final porTipo = stats['porTipo'] as Map<String, int>;
-          porTipo[sancion.tipoSancion] = (porTipo[sancion.tipoSancion] ?? 0) + 1;
+          porTipo[sancion.tipoSancion] =
+              (porTipo[sancion.tipoSancion] ?? 0) + 1;
 
           // Último mes
           if (sancion.createdAt.isAfter(hace30Dias)) {
@@ -421,7 +433,7 @@ class SancionRepository {
 
         return stats;
       }
-      
+
       return {
         'total': 0,
         'borradores': 0,
@@ -490,8 +502,8 @@ class SancionRepository {
   /// Obtener operaciones pendientes de sincronización
   List<Map<String, dynamic>> getPendingSyncOperations() {
     if (kIsWeb) return [];
-    
-    return _offlineManager._db.getPendingSyncOperations();
+
+    return _offlineManager.database.getPendingSyncOperations();
   }
 
   /// Limpiar cache de sanciones (solo móvil)
@@ -502,7 +514,7 @@ class SancionRepository {
     }
 
     try {
-      final sancionesBox = _offlineManager._db.sancionesBox;
+      final sancionesBox = _offlineManager.database.sancionesBox;
       if (sancionesBox != null) {
         await sancionesBox.clear();
         print('🧹 Cache de sanciones limpiado');
@@ -518,8 +530,8 @@ class SancionRepository {
   /// Limpiar cola de sincronización
   Future<bool> clearSyncQueue() async {
     if (kIsWeb) return true;
-    
-    return await _offlineManager._db.clearSyncQueue();
+
+    return await _offlineManager.database.clearSyncQueue();
   }
 
   /// Obtener estadísticas offline completas
@@ -537,8 +549,9 @@ class SancionRepository {
       print('🌐 Web: Modo offline no disponible');
       return;
     }
-    
+
     // Este método podría usarse para testing
-    print('🔧 Modo offline ${forceOffline ? "activado" : "desactivado"} para testing');
+    print(
+        '🔧 Modo offline ${forceOffline ? "activado" : "desactivado"} para testing');
   }
 }
