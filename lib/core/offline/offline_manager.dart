@@ -18,14 +18,15 @@ import 'connectivity_service.dart';
 class OfflineManager {
   static OfflineManager? _instance;
   static OfflineManager get instance => _instance ??= OfflineManager._();
-  
+
   OfflineManager._();
 
   final OfflineDatabase _db = OfflineDatabase.instance;
   final ConnectivityService _connectivity = ConnectivityService.instance;
-  
+
   bool _isInitialized = false;
   bool _isSyncing = false;
+  bool get isInitialized => _isInitialized;
   StreamSubscription<bool>? _connectivitySubscription;
 
   /// Inicializar offline manager
@@ -56,7 +57,7 @@ class OfflineManager {
 
       _isInitialized = true;
       print('✅ OfflineManager inicializado correctamente');
-      
+
       return true;
     } catch (e) {
       print('❌ Error inicializando OfflineManager: $e');
@@ -68,9 +69,11 @@ class OfflineManager {
   void _setupConnectivityListener() {
     if (kIsWeb) return;
 
-    _connectivitySubscription = _connectivity.connectionStream.listen((isConnected) {
-      print('🎯 OfflineManager: Conectividad cambió a ${isConnected ? "ONLINE" : "OFFLINE"}');
-      
+    _connectivitySubscription =
+        _connectivity.connectionStream.listen((isConnected) {
+      print(
+          '🎯 OfflineManager: Conectividad cambió a ${isConnected ? "ONLINE" : "OFFLINE"}');
+
       if (isConnected && !_isSyncing) {
         // Al reconectar, intentar sincronización automática
         print('🔄 Iniciando sincronización automática...');
@@ -94,30 +97,30 @@ class OfflineManager {
       if (_connectivity.isConnected) {
         // 📱 Móvil ONLINE: obtener de Supabase y actualizar cache
         print('🌐 Buscando empleados online: "$query"');
-        
+
         final empleadosOnline = await EmpleadoService().searchEmpleados(query);
-        
+
         // Actualizar cache local con resultados (sin bloquear)
         if (empleadosOnline.isNotEmpty) {
           _updateEmpleadosCache(empleadosOnline);
         }
-        
+
         return empleadosOnline;
       } else {
         // 📱 Móvil OFFLINE: buscar en cache local
         print('📱 Buscando empleados offline: "$query"');
-        
+
         final empleadosOffline = _db.searchEmpleados(query);
-        
+
         if (empleadosOffline.isEmpty) {
           print('⚠️ No hay empleados en cache local para: "$query"');
         }
-        
+
         return empleadosOffline;
       }
     } catch (e) {
       print('❌ Error buscando empleados, fallback a offline: $e');
-      
+
       // Fallback: intentar cache local si falla online
       return _db.searchEmpleados(query);
     }
@@ -134,12 +137,12 @@ class OfflineManager {
       if (_connectivity.isConnected) {
         // 📱 Móvil ONLINE
         final empleadoOnline = await EmpleadoService().getEmpleadoByCod(cod);
-        
+
         // Actualizar cache
         if (empleadoOnline != null) {
           _updateEmpleadosCache([empleadoOnline]);
         }
-        
+
         return empleadoOnline;
       } else {
         // 📱 Móvil OFFLINE
@@ -159,12 +162,12 @@ class OfflineManager {
       // Obtener empleados existentes en cache
       final existingEmpleados = _db.getEmpleados();
       final existingMap = {for (var e in existingEmpleados) e.cod: e};
-      
+
       // Agregar nuevos empleados al mapa
       for (var empleado in empleados) {
         existingMap[empleado.cod] = empleado;
       }
-      
+
       // Guardar mapa actualizado
       await _db.saveEmpleados(existingMap.values.toList());
     } catch (e) {
@@ -195,27 +198,27 @@ class OfflineManager {
       if (_connectivity.isConnected) {
         // 📱 Móvil ONLINE: crear en Supabase
         print('🌐 Creando sanción online...');
-        
+
         final sancionId = await SancionService().createSancion(
           sancion: sancion,
           fotoFile: fotoFile,
           signatureController: signatureController,
         );
-        
+
         // Guardar también en cache local
         if (sancionId != null) {
           final sancionConId = sancion.copyWith(id: sancionId);
           await _db.saveSancion(sancionConId);
         }
-        
+
         return sancionId;
       } else {
         // 📱 Móvil OFFLINE: guardar localmente y marcar para sync
         print('📱 Creando sanción offline...');
-        
+
         // Guardar en base local
         await _db.saveSancion(sancion);
-        
+
         // Agregar a cola de sincronización
         await _db.addToSyncQueue('create_sancion', {
           'sancion_id': sancion.id,
@@ -224,13 +227,13 @@ class OfflineManager {
           'has_firma': signatureController != null,
           // TODO: Manejar archivos offline (guardar rutas locales)
         });
-        
+
         print('✅ Sanción guardada offline, se sincronizará al reconectar');
         return sancion.id;
       }
     } catch (e) {
       print('❌ Error creando sanción, guardando offline: $e');
-      
+
       // Fallback: guardar offline
       await _db.saveSancion(sancion);
       await _db.addToSyncQueue('create_sancion', {
@@ -238,57 +241,59 @@ class OfflineManager {
         'sancion_data': sancion.toMap(),
         'error_online': e.toString(),
       });
-      
+
       return sancion.id;
     }
   }
 
   /// Obtener sanciones (online first, offline fallback)
-  Future<List<SancionModel>> getSanciones(String supervisorId, {bool allSanciones = false}) async {
+  Future<List<SancionModel>> getSanciones(String supervisorId,
+      {bool allSanciones = false}) async {
     if (kIsWeb) {
       // 🌐 Web: usar servicio directo
       final sancionService = SancionService();
-      return allSanciones 
-        ? await sancionService.getAllSanciones()
-        : await sancionService.getMySanciones(supervisorId);
+      return allSanciones
+          ? await sancionService.getAllSanciones()
+          : await sancionService.getMySanciones(supervisorId);
     }
 
     try {
       if (_connectivity.isConnected) {
         // 📱 Móvil ONLINE: obtener de Supabase y actualizar cache
         print('🌐 Obteniendo sanciones online...');
-        
+
         final sancionService = SancionService();
-        final sancionesOnline = allSanciones 
-          ? await sancionService.getAllSanciones()
-          : await sancionService.getMySanciones(supervisorId);
-        
+        final sancionesOnline = allSanciones
+            ? await sancionService.getAllSanciones()
+            : await sancionService.getMySanciones(supervisorId);
+
         // Actualizar cache local
         for (var sancion in sancionesOnline) {
           await _db.saveSancion(sancion);
         }
-        
+
         return sancionesOnline;
       } else {
         // 📱 Móvil OFFLINE: obtener de cache local
         print('📱 Obteniendo sanciones offline...');
-        
+
         return allSanciones
-          ? _db.getSanciones()
-          : _db.getSancionesBySupervisor(supervisorId);
+            ? _db.getSanciones()
+            : _db.getSancionesBySupervisor(supervisorId);
       }
     } catch (e) {
       print('❌ Error obteniendo sanciones, fallback a offline: $e');
-      
+
       // Fallback a cache local
       return allSanciones
-        ? _db.getSanciones()
-        : _db.getSancionesBySupervisor(supervisorId);
+          ? _db.getSanciones()
+          : _db.getSancionesBySupervisor(supervisorId);
     }
   }
 
   /// Actualizar sanción
-  Future<bool> updateSancion(SancionModel sancion, {File? nuevaFoto, dynamic nuevaFirma}) async {
+  Future<bool> updateSancion(SancionModel sancion,
+      {File? nuevaFoto, dynamic nuevaFirma}) async {
     if (kIsWeb) {
       // 🌐 Web: usar servicio directo
       return await SancionService().updateSancionWithFiles(
@@ -301,41 +306,41 @@ class OfflineManager {
     try {
       // Siempre actualizar cache local primero
       await _db.saveSancion(sancion);
-      
+
       if (_connectivity.isConnected) {
         // 📱 Móvil ONLINE: actualizar en Supabase
         print('🌐 Actualizando sanción online...');
-        
+
         final success = await SancionService().updateSancionWithFiles(
           sancion: sancion,
           nuevaFoto: nuevaFoto,
           nuevaFirma: nuevaFirma,
         );
-        
+
         return success;
       } else {
         // 📱 Móvil OFFLINE: marcar para sync
         print('📱 Actualizando sanción offline...');
-        
+
         await _db.addToSyncQueue('update_sancion', {
           'sancion_id': sancion.id,
           'sancion_data': sancion.toMap(),
           'has_nueva_foto': nuevaFoto != null,
           'has_nueva_firma': nuevaFirma != null,
         });
-        
+
         return true; // Siempre exitoso offline
       }
     } catch (e) {
       print('❌ Error actualizando sanción: $e');
-      
+
       // La sanción ya está guardada localmente
       await _db.addToSyncQueue('update_sancion', {
         'sancion_id': sancion.id,
         'sancion_data': sancion.toMap(),
         'error_online': e.toString(),
       });
-      
+
       return true; // Exitoso localmente
     }
   }
@@ -370,7 +375,7 @@ class OfflineManager {
   /// Realizar sincronización
   Future<bool> _performSync() async {
     if (_isSyncing) return false;
-    
+
     _isSyncing = true;
     print('🔄 Iniciando sincronización...');
 
@@ -395,19 +400,20 @@ class OfflineManager {
   Future<void> _syncEmpleados() async {
     try {
       print('🔄 Sincronizando empleados...');
-      
+
       // Obtener timestamp de última sincronización
       final lastSync = _db.getMetadata<String>('last_empleados_sync');
-      
+
       // Por ahora, obtener todos los empleados activos
       // TODO: Implementar sync incremental basado en timestamp
       final empleadosService = EmpleadoService();
       final empleadosOnline = await empleadosService.getAllEmpleadosActivos();
-      
+
       if (empleadosOnline.isNotEmpty) {
         await _db.saveEmpleados(empleadosOnline);
-        await _db.saveMetadata('last_empleados_sync', DateTime.now().toIso8601String());
-        
+        await _db.saveMetadata(
+            'last_empleados_sync', DateTime.now().toIso8601String());
+
         print('✅ ${empleadosOnline.length} empleados sincronizados');
       }
     } catch (e) {
@@ -419,14 +425,15 @@ class OfflineManager {
   Future<void> _processSyncQueue() async {
     try {
       final pendingOperations = _db.getPendingSyncOperations();
-      
+
       if (pendingOperations.isEmpty) {
         print('📝 No hay operaciones pendientes de sync');
         return;
       }
-      
-      print('🔄 Procesando ${pendingOperations.length} operaciones pendientes...');
-      
+
+      print(
+          '🔄 Procesando ${pendingOperations.length} operaciones pendientes...');
+
       for (var operation in pendingOperations) {
         try {
           await _processSingleOperation(operation);
@@ -435,7 +442,7 @@ class OfflineManager {
           // Continuar con la siguiente operación
         }
       }
-      
+
       // Si todo salió bien, limpiar cola
       await _db.clearSyncQueue();
       print('✅ Cola de sincronización procesada');
@@ -448,9 +455,9 @@ class OfflineManager {
   Future<void> _processSingleOperation(Map<String, dynamic> operation) async {
     final operationType = operation['operation'] as String;
     final data = operation['data'] as Map<String, dynamic>;
-    
+
     print('🔄 Procesando: $operationType');
-    
+
     switch (operationType) {
       case 'create_sancion':
         await _syncCreateSancion(data);
@@ -468,15 +475,15 @@ class OfflineManager {
     try {
       final sancionData = data['sancion_data'] as Map<String, dynamic>;
       final sancion = SancionModel.fromMap(sancionData);
-      
+
       // TODO: Manejar archivos (foto/firma) offline
       final sancionId = await SancionService().createSancion(sancion: sancion);
-      
+
       if (sancionId != null) {
         // Actualizar sanción local con datos del servidor
         final sancionConId = sancion.copyWith(id: sancionId);
         await _db.saveSancion(sancionConId);
-        
+
         print('✅ Sanción offline sincronizada: $sancionId');
       }
     } catch (e) {
@@ -490,9 +497,9 @@ class OfflineManager {
     try {
       final sancionData = data['sancion_data'] as Map<String, dynamic>;
       final sancion = SancionModel.fromMap(sancionData);
-      
+
       final success = await SancionService().updateSancionSimple(sancion);
-      
+
       if (success) {
         print('✅ Actualización de sanción sincronizada: ${sancion.id}');
       }

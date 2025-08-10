@@ -1,8 +1,8 @@
+// connectivity_service.dart - VERSIÓN CORREGIDA
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-/// 📡 Servicio de detectar conectividad SOLO para móvil
 class ConnectivityService {
   static ConnectivityService? _instance;
   static ConnectivityService get instance => _instance ??= ConnectivityService._();
@@ -37,12 +37,11 @@ class ConnectivityService {
     
     try {
       final connectivity = Connectivity();
-      
-      // Verificar conexión inicial
-      final List<ConnectivityResult> results = await connectivity.checkConnectivity();
+      // 🔥 CAMBIO: checkConnectivity ahora retorna List<ConnectivityResult>
+      final results = await connectivity.checkConnectivity();
       _updateConnectionStatus(results);
       
-      // Escuchar cambios
+      // 🔥 CAMBIO: onConnectivityChanged ahora emite List<ConnectivityResult>
       connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
         _updateConnectionStatus(results);
       });
@@ -55,25 +54,28 @@ class ConnectivityService {
     }
   }
 
+  // 🔥 CAMBIO: Actualizar para manejar List<ConnectivityResult>
   void _updateConnectionStatus(List<ConnectivityResult> results) {
     if (kIsWeb) return;
     
     final wasConnected = _isConnected;
     
-    // 🔥 CORREGIDO: Verificar si hay alguna conexión disponible
-    _isConnected = results.any((result) => 
-      result == ConnectivityResult.wifi ||
-      result == ConnectivityResult.mobile ||
-      result == ConnectivityResult.ethernet ||
-      result == ConnectivityResult.vpn ||
-      result == ConnectivityResult.bluetooth ||
-      result == ConnectivityResult.other
-    );
+    // Verificar si hay alguna conexión activa
+    _isConnected = results.contains(ConnectivityResult.wifi) ||
+                   results.contains(ConnectivityResult.mobile) ||
+                   results.contains(ConnectivityResult.ethernet) ||
+                   results.contains(ConnectivityResult.vpn) ||
+                   results.contains(ConnectivityResult.bluetooth) ||
+                   results.contains(ConnectivityResult.other);
     
-    // Solo notificar si cambió el estado
+    // Solo está offline si contiene none
+    if (results.contains(ConnectivityResult.none)) {
+      _isConnected = false;
+    }
+    
     if (wasConnected != _isConnected) {
       print('📡 Conectividad cambió: ${_isConnected ? "🟢 ONLINE" : "🔴 OFFLINE"}');
-      print('   Tipos de conexión: ${results.map((r) => r.toString()).join(", ")}');
+      print('   Tipos de conexión: $results');
       _connectionController?.add(_isConnected);
     }
   }
@@ -83,36 +85,19 @@ class ConnectivityService {
     
     try {
       final connectivity = Connectivity();
-      final List<ConnectivityResult> results = await connectivity.checkConnectivity();
+      // 🔥 CAMBIO: Manejar List<ConnectivityResult>
+      final results = await connectivity.checkConnectivity();
       
-      // 🔥 IMPORTANTE: Verificar cualquier tipo de conexión
-      final hasConnection = results.any((result) => 
-        result == ConnectivityResult.wifi ||
-        result == ConnectivityResult.mobile ||
-        result == ConnectivityResult.ethernet ||
-        result == ConnectivityResult.vpn ||
-        result == ConnectivityResult.bluetooth ||
-        result == ConnectivityResult.other
-      );
+      final hasConnection = !results.contains(ConnectivityResult.none) &&
+                           (results.contains(ConnectivityResult.wifi) ||
+                            results.contains(ConnectivityResult.mobile) ||
+                            results.contains(ConnectivityResult.ethernet));
       
-      print('📡 Conectividad real: ${results.map((r) => r.toString()).join(", ")} -> ${hasConnection ? "ONLINE" : "OFFLINE"}');
+      print('📡 Verificación de conexión: $results -> ${hasConnection ? "ONLINE" : "OFFLINE"}');
       return hasConnection;
     } catch (e) {
       print('📡 Error verificando conexión real: $e');
       return false;
-    }
-  }
-
-  // 🆕 Método para forzar actualización del estado
-  Future<void> forceCheck() async {
-    if (kIsWeb) return;
-    
-    try {
-      final connectivity = Connectivity();
-      final results = await connectivity.checkConnectivity();
-      _updateConnectionStatus(results);
-    } catch (e) {
-      print('📡 Error en verificación forzada: $e');
     }
   }
 

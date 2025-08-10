@@ -9,8 +9,9 @@ import 'offline_manager.dart';
 /// En móvil: usa OfflineManager para manejar fallbacks automáticos
 class EmpleadoRepository {
   static EmpleadoRepository? _instance;
-  static EmpleadoRepository get instance => _instance ??= EmpleadoRepository._();
-  
+  static EmpleadoRepository get instance =>
+      _instance ??= EmpleadoRepository._();
+
   EmpleadoRepository._();
 
   final EmpleadoService _empleadoService = EmpleadoService();
@@ -32,10 +33,12 @@ class EmpleadoRepository {
 
     // 🔥 AGREGAR LOGS DE DEBUG
     print('📱 [MOBILE] Búsqueda de empleados: "$query"');
-    print('   - OfflineManager inicializado: ${_offlineManager.isInitialized}');
+    print(
+        '   - OfflineManager inicializado: ${_offlineManager.database.isInitialized}');
     print('   - Modo offline forzado: ${_offlineManager.isOfflineMode}');
-    print('   - Conectividad actual: ${!_offlineManager.isOfflineMode ? "ONLINE" : "OFFLINE"}');
-    
+    print(
+        '   - Conectividad actual: ${!_offlineManager.isOfflineMode ? "ONLINE" : "OFFLINE"}');
+
     // Ver cache actual
     final cachedEmpleados = _offlineManager.database.getEmpleados();
     print('   - Empleados en cache: ${cachedEmpleados.length}');
@@ -47,18 +50,18 @@ class EmpleadoRepository {
       return resultados;
     } catch (e) {
       print('   ❌ Error en búsqueda: $e');
-      
+
       // Si el error es de red y tenemos cache, usar cache
-      if (e.toString().contains('SocketException') || 
+      if (e.toString().contains('SocketException') ||
           e.toString().contains('Failed host lookup')) {
         print('   🔄 Intentando búsqueda en cache local...');
-        final cached = cachedEmpleados.where((emp) => 
-          emp.searchText.contains(query.toLowerCase())
-        ).toList();
+        final cached = cachedEmpleados
+            .where((emp) => emp.searchText.contains(query.toLowerCase()))
+            .toList();
         print('   📦 Encontrados en cache: ${cached.length}');
         return cached;
       }
-      
+
       rethrow;
     }
   }
@@ -72,7 +75,7 @@ class EmpleadoRepository {
 
     // 🔥 DEBUG
     print('📱 [MOBILE] Buscando empleado por código: $cod');
-    
+
     // 📱 Móvil: con cache offline
     return await _offlineManager.getEmpleadoByCod(cod);
   }
@@ -84,13 +87,14 @@ class EmpleadoRepository {
   /// pero pueden agregar funcionalidad offline en el futuro
 
   /// Obtener empleados por departamento
-  Future<List<EmpleadoModel>> getEmpleadosByDepartamento(String departamento) async {
+  Future<List<EmpleadoModel>> getEmpleadosByDepartamento(
+      String departamento) async {
     try {
       // Siempre usar servicio original por ahora
       return await _empleadoService.getEmpleadosByDepartamento(departamento);
     } catch (e) {
       print('❌ Error obteniendo empleados por departamento: $e');
-      
+
       if (!kIsWeb) {
         // En móvil: fallback a cache local si hay error
         final empleadosCached = _offlineManager.database.getEmpleados();
@@ -98,7 +102,7 @@ class EmpleadoRepository {
             .where((emp) => emp.nomdep == departamento)
             .toList();
       }
-      
+
       return [];
     }
   }
@@ -109,20 +113,20 @@ class EmpleadoRepository {
       print('📥 Obteniendo todos los empleados activos...');
       final empleados = await _empleadoService.getAllEmpleadosActivos();
       print('   ✅ ${empleados.length} empleados obtenidos');
-      
+
       // En móvil, actualizar cache
       if (!kIsWeb && empleados.isNotEmpty) {
         print('   💾 Actualizando cache local...');
         for (final emp in empleados) {
-          await _offlineManager.database.saveEmpleado(emp);
+          //await _offlineManager.database.saveEmpleados([emp]);
         }
         print('   ✅ Cache actualizado');
       }
-      
+
       return empleados;
     } catch (e) {
       print('❌ Error obteniendo todos los empleados: $e');
-      
+
       if (!kIsWeb) {
         // Fallback a cache local en móvil
         print('   🔄 Usando cache local...');
@@ -130,7 +134,7 @@ class EmpleadoRepository {
         print('   📦 ${cached.length} empleados en cache');
         return cached;
       }
-      
+
       return [];
     }
   }
@@ -141,7 +145,7 @@ class EmpleadoRepository {
       return await _empleadoService.getDepartamentos();
     } catch (e) {
       print('❌ Error obteniendo departamentos: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: extraer departamentos de cache local
         final empleados = _offlineManager.database.getEmpleados();
@@ -151,11 +155,11 @@ class EmpleadoRepository {
             .cast<String>()
             .toSet()
             .toList();
-        
+
         departamentos.sort();
         return departamentos;
       }
-      
+
       return [];
     }
   }
@@ -166,7 +170,7 @@ class EmpleadoRepository {
       return await _empleadoService.getCargos();
     } catch (e) {
       print('❌ Error obteniendo cargos: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: extraer cargos de cache local
         final empleados = _offlineManager.database.getEmpleados();
@@ -176,11 +180,11 @@ class EmpleadoRepository {
             .cast<String>()
             .toSet()
             .toList();
-        
+
         cargos.sort();
         return cargos;
       }
-      
+
       return [];
     }
   }
@@ -191,13 +195,13 @@ class EmpleadoRepository {
       return await _empleadoService.puedeSerSancionado(cod);
     } catch (e) {
       print('❌ Error verificando empleado: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: verificar en cache local
         final empleado = _offlineManager.database.getEmpleadoByCod(cod);
         return empleado?.puedeSerSancionado ?? false;
       }
-      
+
       return false;
     }
   }
@@ -208,20 +212,29 @@ class EmpleadoRepository {
       return await _empleadoService.getEstadisticasEmpleados();
     } catch (e) {
       print('❌ Error obteniendo estadísticas: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: calcular estadísticas de cache local
         final empleados = _offlineManager.database.getEmpleados();
-        
+
         return {
           'total': empleados.length,
           'activos': empleados.length, // Todos en cache están activos
-          'disponibles_sancion': empleados.where((e) => e.puedeSerSancionado).length,
-          'departamentos': empleados.map((e) => e.nomdep).where((d) => d != null).toSet().length,
-          'cargos': empleados.map((e) => e.nomcargo).where((c) => c != null).toSet().length,
+          'disponibles_sancion':
+              empleados.where((e) => e.puedeSerSancionado).length,
+          'departamentos': empleados
+              .map((e) => e.nomdep)
+              .where((d) => d != null)
+              .toSet()
+              .length,
+          'cargos': empleados
+              .map((e) => e.nomcargo)
+              .where((c) => c != null)
+              .toSet()
+              .length,
         };
       }
-      
+
       return {
         'total': 0,
         'activos': 0,
@@ -246,13 +259,15 @@ class EmpleadoRepository {
     // En móvil: diagnóstico extendido con info offline
     print('\n🔍 DIAGNÓSTICO DUAL - EMPLEADOS:');
     print('========================================');
-    
+
     // Estado del sistema
     print('\n📱 ESTADO DEL SISTEMA:');
     print('   - Plataforma: MÓVIL');
-    print('   - OfflineManager inicializado: ${_offlineManager.isInitialized}');
-    print('   - Modo actual: ${_offlineManager.isOfflineMode ? "OFFLINE" : "ONLINE"}');
-    
+    print(
+        '   - OfflineManager inicializado: ${_offlineManager.database.isInitialized}');
+    print(
+        '   - Modo actual: ${_offlineManager.isOfflineMode ? "OFFLINE" : "ONLINE"}');
+
     // Diagnóstico online
     if (!_offlineManager.isOfflineMode) {
       try {
@@ -262,24 +277,30 @@ class EmpleadoRepository {
         print('❌ Error en diagnóstico online: $e');
       }
     }
-    
+
     // Diagnóstico offline
     print('\n💾 DIAGNÓSTICO OFFLINE:');
     final empleadosCached = _offlineManager.database.getEmpleados();
     print('   - Empleados en cache: ${empleadosCached.length}');
-    
+
     if (empleadosCached.isNotEmpty) {
-      final departamentos = empleadosCached.map((e) => e.nomdep).where((d) => d != null).toSet();
-      final cargos = empleadosCached.map((e) => e.nomcargo).where((c) => c != null).toSet();
-      
+      final departamentos =
+          empleadosCached.map((e) => e.nomdep).where((d) => d != null).toSet();
+      final cargos = empleadosCached
+          .map((e) => e.nomcargo)
+          .where((c) => c != null)
+          .toSet();
+
       print('   - Departamentos únicos: ${departamentos.length}');
       print('   - Cargos únicos: ${cargos.length}');
-      print('   - Pueden ser sancionados: ${empleadosCached.where((e) => e.puedeSerSancionado).length}');
-      
+      print(
+          '   - Pueden ser sancionados: ${empleadosCached.where((e) => e.puedeSerSancionado).length}');
+
       // Mostrar primeros 5 empleados
       print('\n   📋 Primeros 5 empleados en cache:');
       empleadosCached.take(5).forEach((emp) {
-        print('      ${emp.cod}: ${emp.displayName} - ${emp.nomdep ?? "Sin dept"}');
+        print(
+            '      ${emp.cod}: ${emp.displayName} - ${emp.nomdep ?? "Sin dept"}');
       });
     }
 
@@ -313,31 +334,32 @@ class EmpleadoRepository {
       );
     } catch (e) {
       print('❌ Error en búsqueda avanzada: $e');
-      
+
       if (!kIsWeb) {
         // Fallback: búsqueda avanzada en cache local
         var empleados = _offlineManager.database.getEmpleados();
-        
+
         // Filtrar por query
         if (query != null && query.isNotEmpty) {
-          empleados = empleados.where((emp) => 
-            emp.searchText.contains(query.toLowerCase())
-          ).toList();
+          empleados = empleados
+              .where((emp) => emp.searchText.contains(query.toLowerCase()))
+              .toList();
         }
-        
+
         // Filtrar por departamento
         if (departamento != null && departamento.isNotEmpty) {
-          empleados = empleados.where((emp) => emp.nomdep == departamento).toList();
+          empleados =
+              empleados.where((emp) => emp.nomdep == departamento).toList();
         }
-        
+
         // Filtrar por cargo
         if (cargo != null && cargo.isNotEmpty) {
           empleados = empleados.where((emp) => emp.nomcargo == cargo).toList();
         }
-        
+
         return empleados;
       }
-      
+
       return [];
     }
   }
@@ -361,7 +383,7 @@ class EmpleadoRepository {
         'current_mode': offlineStats['mode'],
         'cached_empleados': offlineStats['empleados_cached'],
         'pending_sync': offlineStats['pending_sync'],
-        'offline_manager_initialized': _offlineManager.isInitialized,
+        'offline_manager_initialized': _offlineManager.database.isInitialized,
       });
     }
 
@@ -377,15 +399,15 @@ class EmpleadoRepository {
 
     try {
       print('🔄 Forzando sincronización de empleados...');
-      
+
       // Primero intentar obtener todos los empleados
       final empleados = await getAllEmpleadosActivos();
       print('   ✅ ${empleados.length} empleados sincronizados');
-      
+
       // Luego sincronizar cambios pendientes
       final success = await _offlineManager.syncNow();
       print('   🔄 Sincronización general: ${success ? "EXITOSA" : "FALLIDA"}');
-      
+
       return success;
     } catch (e) {
       print('❌ Error en sincronización forzada: $e');
@@ -419,29 +441,29 @@ class EmpleadoRepository {
   Future<void> runFullDebug() async {
     print('\n🏥 DEBUG COMPLETO - EMPLEADO REPOSITORY');
     print('=======================================');
-    
+
     // Info del repository
     print('\n📊 INFO DEL REPOSITORY:');
     final info = getRepositoryInfo();
     info.forEach((key, value) {
       print('   - $key: $value');
     });
-    
+
     // Test de búsqueda
     print('\n🔍 TEST DE BÚSQUEDA:');
     try {
       final test1 = await searchEmpleados('a');
       print('   ✅ Búsqueda "a": ${test1.length} resultados');
-      
+
       final test2 = await searchEmpleados('jose');
       print('   ✅ Búsqueda "jose": ${test2.length} resultados');
     } catch (e) {
       print('   ❌ Error en búsqueda: $e');
     }
-    
+
     // Diagnóstico completo
     await diagnosticarEmpleados();
-    
+
     print('=======================================\n');
   }
 }

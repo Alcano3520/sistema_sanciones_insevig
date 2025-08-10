@@ -1262,14 +1262,15 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
       if (_fotoSeleccionada != null || (_signatureController.isNotEmpty)) {
         // Si hay archivos nuevos, usar el método con archivos (CON COMPRESIÓN)
         success = await sancionRepository.updateSancion(
-          sancion: sancionActualizada,
+          sancionActualizada,
           nuevaFoto: _fotoSeleccionada, // Se comprime automáticamente
           nuevaFirma:
               _signatureController.isNotEmpty ? _signatureController : null,
         );
       } else {
         // Si no hay archivos nuevos, usar método simple
-        success = await sancionRepository.updateSancionSimple(sancionActualizada);
+        success =
+            await sancionRepository.updateSancionSimple(sancionActualizada);
       }
 
       // 🆕 Limpiar archivos temporales después de guardar
@@ -1324,6 +1325,3 @@ class _EditSancionScreenState extends State<EditSancionScreen> {
     }
   }
 }
-
-
-
