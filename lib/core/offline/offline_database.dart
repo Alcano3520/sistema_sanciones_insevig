@@ -1,9 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart' if (dart.library.html) 'dart:html';
-
-// 🆕 Imports condicionales para Hive (solo móvil)
-import 'package:hive_flutter/hive_flutter.dart' if (dart.library.html) 'dart:html' as hive;
+import 'package:path_provider/path_provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/empleado_model.dart';
 import '../models/sancion_model.dart';

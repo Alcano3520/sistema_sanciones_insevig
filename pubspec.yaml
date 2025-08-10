@@ -39,7 +39,7 @@ dependencies:
   hive: ^2.2.3               # Base de datos local ultrarrápida
   hive_flutter: ^1.1.0       # Integración Flutter + paths automáticos
   connectivity_plus: ^5.0.2  # Detección conectividad multiplataforma
-  path_provider: ^2.1.2      # Rutas de almacenamiento móvil
+    # Rutas de almacenamiento móvil
 
 dev_dependencies:
   flutter_test:

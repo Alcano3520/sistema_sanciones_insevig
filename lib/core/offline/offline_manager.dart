@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
+import 'package:signature/signature.dart';
 
 import '../models/empleado_model.dart';
 import '../models/sancion_model.dart';
@@ -501,8 +503,11 @@ class OfflineManager {
   }
 
   /// =============================================
-  /// 🎯 ESTADO Y ESTADÍSTICAS
+  /// 🎯 GETTERS PÚBLICOS PARA REPOSITORIES
   /// =============================================
+
+  /// Acceso público a la base de datos (para repositories)
+  OfflineDatabase get database => _db;
 
   /// Verificar si está en modo offline
   bool get isOfflineMode => !kIsWeb && !_connectivity.isConnected;

@@ -83,11 +83,12 @@ class SancionRepository {
       
       if (!kIsWeb) {
         // Fallback: buscar en cache local
-        final sancionesLocales = _offlineManager._db.getSanciones();
-        return sancionesLocales.firstWhere(
-          (s) => s.id == id,
-          orElse: () => null as SancionModel,
-        );
+        final sancionesLocales = _offlineManager.database.getSanciones();
+        try {
+          return sancionesLocales.firstWhere((s) => s.id == id);
+        } catch (e) {
+          return null;
+        }
       }
       
       return null;
@@ -154,7 +155,7 @@ class SancionRepository {
 
       if (!kIsWeb && success) {
         // En móvil: actualizar cache local también
-        final sancionesLocales = _offlineManager._db.getSanciones();
+        final sancionesLocales = _offlineManager.database.getSanciones();
         final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
         
         if (sancionIndex != -1) {
@@ -166,7 +167,7 @@ class SancionRepository {
             updatedAt: DateTime.now(),
           );
           
-          await _offlineManager._db.saveSancion(sancionActualizada);
+          await _offlineManager.database.saveSancion(sancionActualizada);
         }
       }
 
@@ -176,7 +177,7 @@ class SancionRepository {
       
       if (!kIsWeb) {
         // En móvil: agregar a cola de sincronización
-        await _offlineManager._db.addToSyncQueue('change_status', {
+        await _offlineManager.database.addToSyncQueue('change_status', {
           'sancion_id': sancionId,
           'new_status': newStatus,
           'comentarios': comentarios,
@@ -184,7 +185,7 @@ class SancionRepository {
         });
         
         // Actualizar localmente
-        final sancionesLocales = _offlineManager._db.getSanciones();
+        final sancionesLocales = _offlineManager.database.getSanciones();
         final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
         
         if (sancionIndex != -1) {
@@ -196,7 +197,7 @@ class SancionRepository {
             updatedAt: DateTime.now(),
           );
           
-          await _offlineManager._db.saveSancion(sancionActualizada);
+          await _offlineManager.database.saveSancion(sancionActualizada);
           return true; // Exitoso localmente
         }
       }

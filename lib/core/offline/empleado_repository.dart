@@ -60,7 +60,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // En móvil: fallback a cache local si hay error
-        final empleadosCached = _offlineManager._db.getEmpleados();
+        final empleadosCached = _offlineManager.database.getEmpleados();
         return empleadosCached
             .where((emp) => emp.nomdep == departamento)
             .toList();
@@ -79,7 +79,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // Fallback a cache local en móvil
-        return _offlineManager._db.getEmpleados();
+        return _offlineManager.database.getEmpleados();
       }
       
       return [];
@@ -95,7 +95,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // Fallback: extraer departamentos de cache local
-        final empleados = _offlineManager._db.getEmpleados();
+        final empleados = _offlineManager.database.getEmpleados();
         final departamentos = empleados
             .map((e) => e.nomdep)
             .where((dept) => dept != null && dept.isNotEmpty)
@@ -120,7 +120,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // Fallback: extraer cargos de cache local
-        final empleados = _offlineManager._db.getEmpleados();
+        final empleados = _offlineManager.database.getEmpleados();
         final cargos = empleados
             .map((e) => e.nomcargo)
             .where((cargo) => cargo != null && cargo.isNotEmpty)
@@ -145,7 +145,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // Fallback: verificar en cache local
-        final empleado = _offlineManager._db.getEmpleadoByCod(cod);
+        final empleado = _offlineManager.database.getEmpleadoByCod(cod);
         return empleado?.puedeSerSancionado ?? false;
       }
       
@@ -162,7 +162,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // Fallback: calcular estadísticas de cache local
-        final empleados = _offlineManager._db.getEmpleados();
+        final empleados = _offlineManager.database.getEmpleados();
         
         return {
           'total': empleados.length,
@@ -207,7 +207,7 @@ class EmpleadoRepository {
     
     // Diagnóstico offline
     print('\n📱 OFFLINE:');
-    final empleadosCached = _offlineManager._db.getEmpleados();
+    final empleadosCached = _offlineManager.database.getEmpleados();
     print('   💾 Empleados en cache: ${empleadosCached.length}');
     
     if (empleadosCached.isNotEmpty) {
@@ -251,7 +251,7 @@ class EmpleadoRepository {
       
       if (!kIsWeb) {
         // Fallback: búsqueda avanzada en cache local
-        var empleados = _offlineManager._db.getEmpleados();
+        var empleados = _offlineManager.database.getEmpleados();
         
         // Filtrar por query
         if (query != null && query.isNotEmpty) {
@@ -326,7 +326,7 @@ class EmpleadoRepository {
 
     try {
       // Limpiar solo empleados, mantener sanciones
-      final empleadosBox = _offlineManager._db.empleadosBox;
+      final empleadosBox = _offlineManager.database.empleadosBox;
       if (empleadosBox != null) {
         await empleadosBox.clear();
         print('🧹 Cache de empleados limpiado');
