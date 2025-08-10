@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
-import '../../core/offline/sancion_repository.dart'; // 🔥 CAMBIO: Repository
-import '../../core/offline/empleado_repository.dart'; // 🔥 CAMBIO: Repository
-import '../../core/offline/connectivity_service.dart'; // 🔥 NUEVO: Para verificar conectividad
+import '../../core/offline/sancion_repository.dart';
+import '../../core/offline/empleado_repository.dart';
+import '../../core/offline/connectivity_service.dart';
+import '../../core/offline/offline_manager.dart';
 import 'create_sancion_screen.dart';
 import 'historial_sanciones_screen.dart';
 
@@ -18,21 +21,34 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // 🔥 DECLARAR VARIABLES Y REPOSITORIES
+  final SancionRepository _sancionRepository = SancionRepository.instance;
+  final EmpleadoRepository _empleadoRepository = EmpleadoRepository.instance;
+  
   Map<String, dynamic> _stats = {};
   Map<String, int> _empleadoStats = {};
   bool _isLoading = true;
-  bool _isOnline = true; // 🔥 NUEVO: Estado de conectividad
+  bool _isOnline = true;
+  StreamSubscription<bool>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _listenToConnectivity(); // 🔥 NUEVO: Escuchar cambios de conectividad
+    _listenToConnectivity();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
   }
 
   // 🔥 NUEVO: Escuchar cambios en la conectividad
   void _listenToConnectivity() {
-      // L�nea de connectivityStream removida temporalmente
+    if (kIsWeb) return;
+    
+    _connectivitySubscription = ConnectivityService.instance.connectionStream.listen((isConnected) {
       if (mounted) {
         setState(() => _isOnline = isConnected);
 
@@ -47,8 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // 🔥 NUEVO: Sincronizar datos pendientes
   Future<void> _syncPendingData() async {
     try {
-      final sancionRepository = SancionRepository.instance;
-0; // TODO: implementar pendingCount
+      final offlineManager = OfflineManager.instance;
+      final stats = offlineManager.getOfflineStats();
+      final pendingCount = stats['pending_sync'] ?? 0;
 
       if (pendingCount > 0 && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -72,8 +89,19 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
 
-Future.delayed(Duration(seconds: 1)); // TODO: sync
-        await _loadData(); // Recargar estadísticas
+        final success = await offlineManager.syncNow();
+        if (success) {
+          await _loadData(); // Recargar estadísticas
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Sincronización completada'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       print('❌ Error sincronizando: $e');
@@ -85,19 +113,17 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
-      final empleadoRepository = EmpleadoRepository.instance; // 🔥 CAMBIO
 
-      // Cargar estadísticas según el rol
+      // 🆕 USAR REPOSITORIES en lugar de services
       if (authProvider.currentUser!.isSupervisor) {
-        _stats = await sancionRepository.getEstadisticas(
+        _stats = await _sancionRepository.getEstadisticas(
           supervisorId: authProvider.currentUser!.id,
         );
       } else {
-        _stats = await sancionRepository.getEstadisticas();
+        _stats = await _sancionRepository.getEstadisticas();
       }
 
-      _empleadoStats = await empleadoRepository.getEstadisticasEmpleados();
+      _empleadoStats = await _empleadoRepository.getEstadisticasEmpleados();
 
       // 🔥 NUEVO: Actualizar estado de conectividad
       _isOnline = ConnectivityService.instance.isConnected;
@@ -105,7 +131,8 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
       print('❌ Error cargando datos: $e');
 
       // 🔥 NUEVO: Si hay error, probablemente estamos offline
-      if (e.toString().contains('SocketException')) {
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Failed host lookup')) {
         setState(() => _isOnline = false);
       }
     } finally {
@@ -113,41 +140,124 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
         setState(() => _isLoading = false);
       }
     }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: _buildAppBar(),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 🔥 NUEVO: Banner de estado offline
-                    if (!_isOnline) _buildOfflineBanner(),
+      body: Column(
+        children: [
+          // 🔥 BANNER DE DEBUG (solo en modo desarrollo)
+          if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
+          
+          // Contenido principal
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _loadData,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 🔥 NUEVO: Banner de estado offline
+                          if (!_isOnline && !kDebugMode) _buildOfflineBanner(),
 
-                    _buildWelcomeCard(),
-                    const SizedBox(height: 20),
-                    _buildStatsSection(),
-                    const SizedBox(height: 20),
-                    _buildActionsSection(),
-                    const SizedBox(height: 20),
-                    _buildRecentActivity(),
-                  ],
-                ),
-              ),
-            ),
+                          _buildWelcomeCard(),
+                          const SizedBox(height: 20),
+                          _buildStatsSection(),
+                          const SizedBox(height: 20),
+                          _buildActionsSection(),
+                          const SizedBox(height: 20),
+                          _buildRecentActivity(),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
       floatingActionButton: _buildFloatingActionButton(),
     );
   }
 
-  // 🔥 NUEVO: Banner indicando modo offline
+  // 🔥 NUEVO: Banner de debug para ver estado del sistema offline
+  Widget _buildOfflineDebugBanner() {
+    return Container(
+      color: Colors.black87,
+      padding: const EdgeInsets.all(8),
+      child: StreamBuilder<bool>(
+        stream: ConnectivityService.instance.connectionStream,
+        builder: (context, snapshot) {
+          final isOnline = snapshot.data ?? true;
+          final stats = OfflineManager.instance.getOfflineStats();
+          
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isOnline ? Icons.cloud_done : Icons.cloud_off,
+                    color: isOnline ? Colors.green : Colors.orange,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Conexión: ${isOnline ? "ONLINE" : "OFFLINE"}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Cache: ${stats['empleados_cached']} empleados',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                ],
+              ),
+              if (!isOnline || stats['pending_sync'] > 0) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      'Modo: ${stats['mode']}',
+                      style: const TextStyle(color: Colors.orange, fontSize: 11),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Pendientes sync: ${stats['pending_sync']}',
+                      style: const TextStyle(color: Colors.orange, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ],
+              // Botón de test
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _runOfflineTest,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      minimumSize: const Size(0, 0),
+                    ),
+                    child: const Text(
+                      'TEST OFFLINE',
+                      style: TextStyle(fontSize: 10, color: Colors.white70),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // 🔥 NUEVO: Banner indicando modo offline (producción)
   Widget _buildOfflineBanner() {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -179,12 +289,12 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
                     color: Colors.orange,
                   ),
                 ),
-                FutureBuilder<int>(
-0; // TODO: implementar pendingCount
+                FutureBuilder<Map<String, dynamic>>(
+                  future: Future.value(OfflineManager.instance.getOfflineStats()),
                   builder: (context, snapshot) {
-                    if (snapshot.hasData && snapshot.data! > 0) {
+                    if (snapshot.hasData && (snapshot.data!['pending_sync'] ?? 0) > 0) {
                       return Text(
-                        '${snapshot.data} sanciones pendientes de sincronizar',
+                        '${snapshot.data!['pending_sync']} sanciones pendientes de sincronizar',
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.orange,
@@ -215,11 +325,12 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
           const Text('Sistema de Sanciones - INSEVIG'),
           const SizedBox(width: 8),
           // 🔥 NUEVO: Indicador de conectividad en el AppBar
-          Icon(
-            _isOnline ? Icons.wifi : Icons.wifi_off,
-            size: 16,
-            color: _isOnline ? Colors.green : Colors.orange,
-          ),
+          if (!kIsWeb)
+            Icon(
+              _isOnline ? Icons.wifi : Icons.wifi_off,
+              size: 16,
+              color: _isOnline ? Colors.green : Colors.orange,
+            ),
         ],
       ),
       backgroundColor: const Color(0xFF1E3A8A),
@@ -227,25 +338,44 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
       elevation: 0,
       actions: [
         // 🔥 NUEVO: Botón para verificar conectividad
-        IconButton(
-          icon: Icon(
-            _isOnline ? Icons.cloud_done : Icons.cloud_off,
-            color: _isOnline ? Colors.green : Colors.orange,
-          ),
-          onPressed: () {
-            final connectivity = ConnectivityService.instance;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Conectividad: ${connectivity.isConnected ? "ONLINE ✅" : "OFFLINE ⚠️"}',
+        if (!kIsWeb)
+          IconButton(
+            icon: Icon(
+              _isOnline ? Icons.cloud_done : Icons.cloud_off,
+              color: _isOnline ? Colors.green : Colors.orange,
+            ),
+            onPressed: () {
+              final connectivity = ConnectivityService.instance;
+              final offline = OfflineManager.instance;
+              final stats = offline.getOfflineStats();
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Conectividad: ${connectivity.isConnected ? "ONLINE ✅" : "OFFLINE ⚠️"}',
+                      ),
+                      if (!connectivity.isConnected) ...[
+                        Text('Empleados en cache: ${stats['empleados_cached']}'),
+                        Text('Sanciones pendientes: ${stats['pending_sync']}'),
+                      ],
+                    ],
+                  ),
+                  backgroundColor:
+                      connectivity.isConnected ? Colors.green : Colors.orange,
+                  action: SnackBarAction(
+                    label: 'SYNC',
+                    textColor: Colors.white,
+                    onPressed: _syncPendingData,
+                  ),
                 ),
-                backgroundColor:
-                    connectivity.isConnected ? Colors.green : Colors.orange,
-              ),
-            );
-          },
-          tooltip: 'Estado de conexión',
-        ),
+              );
+            },
+            tooltip: 'Estado de conexión',
+          ),
         IconButton(
           icon: const Icon(Icons.refresh),
           onPressed: _loadData,
@@ -793,6 +923,52 @@ Future.delayed(Duration(seconds: 1)); // TODO: sync
       ),
     );
   }
+
+  // 🔥 NUEVO: Método para test offline
+  Future<void> _runOfflineTest() async {
+    print('\n🧪 TEST MODO OFFLINE:');
+    
+    // 1. Estado actual
+    final offline = OfflineManager.instance;
+    print('📊 Stats: ${offline.getOfflineStats()}');
+    
+    // 2. Verificar conectividad
+    final connectivity = ConnectivityService.instance;
+    print('📡 Conectividad: ${connectivity.isConnected}');
+    
+    // 3. Probar búsqueda
+    print('\n🔍 Probando búsqueda offline...');
+    try {
+      final empleados = await _empleadoRepository.searchEmpleados('a');
+      print('✅ Resultados: ${empleados.length} empleados');
+      if (empleados.isNotEmpty) {
+        print('   Primeros 3: ${empleados.take(3).map((e) => e.displayName).join(", ")}');
+      }
+    } catch (e) {
+      print('❌ Error en búsqueda: $e');
+    }
+    
+    // 4. Ver cache
+    final db = offline.database;
+    final cached = db.getEmpleados();
+    print('\n💾 En cache local:');
+    print('   - Total: ${cached.length}');
+    if (cached.isNotEmpty) {
+      print('   - Primeros 3: ${cached.take(3).map((e) => e.displayName).join(", ")}');
+    }
+    
+    // Mostrar resultado en UI
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Test Offline: ${cached.length} empleados en cache, '
+            'Modo: ${offline.isOfflineMode ? "OFFLINE" : "ONLINE"}',
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
 }
-
-

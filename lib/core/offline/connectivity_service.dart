@@ -37,9 +37,16 @@ class ConnectivityService {
     
     try {
       final connectivity = Connectivity();
-      final result = await connectivity.checkConnectivity();
-      _updateConnectionStatus(result);
-      connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
+      
+      // Verificar conexión inicial
+      final List<ConnectivityResult> results = await connectivity.checkConnectivity();
+      _updateConnectionStatus(results);
+      
+      // Escuchar cambios
+      connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+        _updateConnectionStatus(results);
+      });
+      
       _isInitialized = true;
       print('📡 ConnectivityService inicializado en móvil');
     } catch (e) {
@@ -48,14 +55,25 @@ class ConnectivityService {
     }
   }
 
-  void _updateConnectionStatus(ConnectivityResult result) {
+  void _updateConnectionStatus(List<ConnectivityResult> results) {
     if (kIsWeb) return;
     
     final wasConnected = _isConnected;
-    _isConnected = result != ConnectivityResult.none;
     
+    // 🔥 CORREGIDO: Verificar si hay alguna conexión disponible
+    _isConnected = results.any((result) => 
+      result == ConnectivityResult.wifi ||
+      result == ConnectivityResult.mobile ||
+      result == ConnectivityResult.ethernet ||
+      result == ConnectivityResult.vpn ||
+      result == ConnectivityResult.bluetooth ||
+      result == ConnectivityResult.other
+    );
+    
+    // Solo notificar si cambió el estado
     if (wasConnected != _isConnected) {
       print('📡 Conectividad cambió: ${_isConnected ? "🟢 ONLINE" : "🔴 OFFLINE"}');
+      print('   Tipos de conexión: ${results.map((r) => r.toString()).join(", ")}');
       _connectionController?.add(_isConnected);
     }
   }
@@ -65,11 +83,36 @@ class ConnectivityService {
     
     try {
       final connectivity = Connectivity();
-      final result = await connectivity.checkConnectivity();
-      return result != ConnectivityResult.none;
+      final List<ConnectivityResult> results = await connectivity.checkConnectivity();
+      
+      // 🔥 IMPORTANTE: Verificar cualquier tipo de conexión
+      final hasConnection = results.any((result) => 
+        result == ConnectivityResult.wifi ||
+        result == ConnectivityResult.mobile ||
+        result == ConnectivityResult.ethernet ||
+        result == ConnectivityResult.vpn ||
+        result == ConnectivityResult.bluetooth ||
+        result == ConnectivityResult.other
+      );
+      
+      print('📡 Conectividad real: ${results.map((r) => r.toString()).join(", ")} -> ${hasConnection ? "ONLINE" : "OFFLINE"}');
+      return hasConnection;
     } catch (e) {
       print('📡 Error verificando conexión real: $e');
       return false;
+    }
+  }
+
+  // 🆕 Método para forzar actualización del estado
+  Future<void> forceCheck() async {
+    if (kIsWeb) return;
+    
+    try {
+      final connectivity = Connectivity();
+      final results = await connectivity.checkConnectivity();
+      _updateConnectionStatus(results);
+    } catch (e) {
+      print('📡 Error en verificación forzada: $e');
     }
   }
 
