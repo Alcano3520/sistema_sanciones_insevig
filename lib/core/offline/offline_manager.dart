@@ -93,39 +93,123 @@ class OfflineManager {
       return await EmpleadoService().searchEmpleados(query);
     }
 
-    try {
-      // 🔥 CAMBIO: Agregar timeout corto para detectar conexión real
-      if (_connectivity.isConnected) {
-        print('🌐 Intentando búsqueda online con timeout...');
+    // 🔥 PRIMERO: Verificar si tenemos empleados en cache
+    final empleadosEnCache = _db.getEmpleados();
+    print(
+        '📱 [OFFLINE MANAGER] Cache disponible: ${empleadosEnCache.length} empleados');
 
-        // Intentar online con timeout de 5 segundos
+    try {
+      // Solo intentar online si detectamos conexión
+      if (_connectivity.isConnected) {
+        print(
+            '🌐 [OFFLINE MANAGER] Intentando búsqueda online con timeout de 3 segundos...');
+
+        // 🔥 TIMEOUT MÁS CORTO - 3 segundos máximo
         final empleadosOnline =
             await EmpleadoService().searchEmpleados(query).timeout(
-          const Duration(seconds: 5),
+          const Duration(seconds: 3),
           onTimeout: () {
-            print('⏱️ Timeout en búsqueda online, usando cache...');
-            throw TimeoutException('Conexión lenta o sin internet');
+            print('⏱️ [OFFLINE MANAGER] Timeout! Usando cache local...');
+            // Lanzar excepción para ir al catch
+            throw TimeoutException('Conexión lenta, usando cache');
           },
         );
 
-        // Si llegamos aquí, la búsqueda online funcionó
+        // Solo llegamos aquí si la búsqueda online fue exitosa
+        print(
+            '✅ [OFFLINE MANAGER] Búsqueda online exitosa: ${empleadosOnline.length} resultados');
+
+        // Actualizar cache con nuevos datos
         if (empleadosOnline.isNotEmpty) {
           _updateEmpleadosCache(empleadosOnline);
         }
 
         return empleadosOnline;
       } else {
-        // Modo offline directo
-        print('📱 Modo offline detectado, usando cache...');
-        return _searchEmpleadosOffline(query);
+        // Sin conexión detectada - usar cache directamente
+        print('📱 [OFFLINE MANAGER] Sin conexión - usando cache local');
+        return _buscarEnCacheLocal(query);
       }
     } catch (e) {
-      // 🔥 CUALQUIER error (timeout, socket, etc) = usar cache
-      print('❌ Error en búsqueda online: ${e.runtimeType}');
-      print('🔄 Fallback automático a cache local...');
+      // 🔥 CUALQUIER ERROR = USAR CACHE LOCAL
+      print(
+          '❌ [OFFLINE MANAGER] Error online (${e.runtimeType}): ${e.toString().split('\n').first}');
+      print(
+          '🔄 [OFFLINE MANAGER] Cambiando a búsqueda offline en cache local...');
 
-      return _searchEmpleadosOffline(query);
+      // Buscar en cache local
+      final resultadosOffline = _buscarEnCacheLocal(query);
+
+      // Si encontramos resultados, mostrarlos
+      if (resultadosOffline.isNotEmpty) {
+        print(
+            '✅ [OFFLINE MANAGER] Encontrados ${resultadosOffline.length} empleados en cache');
+        return resultadosOffline;
+      } else {
+        print(
+            '⚠️ [OFFLINE MANAGER] No se encontraron empleados para "$query" en cache');
+        // Intentar búsqueda parcial más amplia
+        if (query.length > 2) {
+          final busquedaAmplia = _buscarEnCacheLocal(query.substring(0, 2));
+          if (busquedaAmplia.isNotEmpty) {
+            print(
+                '💡 [OFFLINE MANAGER] Búsqueda amplia encontró ${busquedaAmplia.length} resultados');
+            return busquedaAmplia.take(20).toList();
+          }
+        }
+        return [];
+      }
     }
+  }
+
+  // 🆕 Método auxiliar mejorado para búsqueda en cache
+  List<EmpleadoModel> _buscarEnCacheLocal(String query) {
+    if (query.trim().isEmpty) {
+      return _db.getEmpleados().take(20).toList();
+    }
+
+    final queryLower = query.toLowerCase().trim();
+    final palabras = queryLower.split(' ').where((p) => p.isNotEmpty).toList();
+
+    print('🔍 [CACHE] Buscando: "$queryLower" (${palabras.length} palabras)');
+
+    // Obtener todos los empleados del cache
+    final todosEmpleados = _db.getEmpleados();
+    print('📦 [CACHE] Total en cache: ${todosEmpleados.length} empleados');
+
+    if (todosEmpleados.isEmpty) {
+      print('❌ [CACHE] Cache vacío!');
+      return [];
+    }
+
+    // Buscar coincidencias
+    final resultados = todosEmpleados.where((empleado) {
+      // Crear texto de búsqueda combinando todos los campos
+      final searchText = [
+        empleado.nombresCompletos,
+        empleado.nombres,
+        empleado.apellidos,
+        empleado.cedula,
+        empleado.nomcargo,
+        empleado.nomdep,
+        empleado.cod.toString(),
+      ].where((field) => field != null).join(' ').toLowerCase();
+
+      // Verificar que TODAS las palabras estén presentes
+      return palabras.every((palabra) => searchText.contains(palabra));
+    }).toList();
+
+    print('✅ [CACHE] Encontrados: ${resultados.length} empleados');
+
+    // Mostrar primeros 3 resultados para debug
+    if (resultados.isNotEmpty) {
+      print('📋 [CACHE] Primeros resultados:');
+      resultados.take(3).forEach((emp) {
+        print('   - ${emp.displayName} (${emp.cod})');
+      });
+    }
+
+    return resultados.take(50).toList(); // Limitar a 50 resultados
   }
 
 // 🆕 Método auxiliar para búsqueda offline
