@@ -21,15 +21,17 @@ def flutterVersionName = localProperties.getProperty('flutter.versionName')
 if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
+
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
+
 android {
     namespace = "com.insevig.sistema_sanciones_insevig"
-    compileSdk 35  // 🔥 SDK 35 REQUERIDO por los plugins modernos
-    ndkVersion "27.0.12077973"  // 🔥 NDK 27 REQUERIDO por los plugins
+    compileSdk 35
+    ndkVersion "27.0.12077973"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -53,11 +55,11 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
-        // 🔥 HABILITAR TODAS LAS ARQUITECTURAS (para emulador Y dispositivos reales)
-        ndk {
-            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-        }
+        //ndk {
+        //    abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        //   }
     }
+
     signingConfigs {
         release {
             keyAlias keystoreProperties['keyAlias']
@@ -69,31 +71,9 @@ android {
     
     buildTypes {
         release {
-            signingConfig signingConfigs.release  // 🔥 AGREGAR ESTA LÍNEA
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    buildFeatures {
-        buildConfig true
-    }
-
-    // 🆕 CONFIGURACIÓN DE EMPAQUETADO para evitar conflictos
-    packagingOptions {
-        pickFirst '**/libc++_shared.so'
-        pickFirst '**/libjsc.so'
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled true  // 🔥 HABILITADO para release optimizado
-            shrinkResources true  // 🔥 HABILITADO para reducir tamaño
-            
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         
@@ -103,6 +83,20 @@ android {
             shrinkResources false
         }
     }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+    }
 }
 
 flutter {
@@ -111,7 +105,7 @@ flutter {
 
 dependencies {
     implementation 'androidx.exifinterface:exifinterface:1.3.7'
-    implementation 'androidx.core:core-ktx:1.12.0'  // 🔥 VERSIÓN compatible con SDK 35
+    implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.activity:activity-ktx:1.9.0'  // 🔥 VERSIÓN compatible (no 1.10.1)
+    implementation 'androidx.activity:activity-ktx:1.9.0'
 }
