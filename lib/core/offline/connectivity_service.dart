@@ -1,8 +1,9 @@
-// connectivity_service.dart - VERSIÓN CORREGIDA
+// connectivity_service.dart - VERSIÓN PARA API ANTIGUA
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+/// 📡 Servicio de detectar conectividad SOLO para móvil
 class ConnectivityService {
   static ConnectivityService? _instance;
   static ConnectivityService get instance => _instance ??= ConnectivityService._();
@@ -37,13 +38,14 @@ class ConnectivityService {
     
     try {
       final connectivity = Connectivity();
-      // 🔥 CAMBIO: checkConnectivity ahora retorna List<ConnectivityResult>
-      final results = await connectivity.checkConnectivity();
-      _updateConnectionStatus(results);
       
-      // 🔥 CAMBIO: onConnectivityChanged ahora emite List<ConnectivityResult>
-      connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
-        _updateConnectionStatus(results);
+      // 🔥 API ANTIGUA: checkConnectivity retorna ConnectivityResult (no List)
+      final result = await connectivity.checkConnectivity();
+      _updateConnectionStatus(result);
+      
+      // 🔥 API ANTIGUA: onConnectivityChanged emite ConnectivityResult (no List)
+      connectivity.onConnectivityChanged.listen((ConnectivityResult result) {
+        _updateConnectionStatus(result);
       });
       
       _isInitialized = true;
@@ -54,28 +56,28 @@ class ConnectivityService {
     }
   }
 
-  // 🔥 CAMBIO: Actualizar para manejar List<ConnectivityResult>
-  void _updateConnectionStatus(List<ConnectivityResult> results) {
+  // 🔥 PARA API ANTIGUA: Manejar ConnectivityResult simple
+  void _updateConnectionStatus(ConnectivityResult result) {
     if (kIsWeb) return;
     
     final wasConnected = _isConnected;
     
-    // Verificar si hay alguna conexión activa
-    _isConnected = results.contains(ConnectivityResult.wifi) ||
-                   results.contains(ConnectivityResult.mobile) ||
-                   results.contains(ConnectivityResult.ethernet) ||
-                   results.contains(ConnectivityResult.vpn) ||
-                   results.contains(ConnectivityResult.bluetooth) ||
-                   results.contains(ConnectivityResult.other);
+    // Verificar el tipo de conexión
+    _isConnected = result == ConnectivityResult.wifi ||
+                   result == ConnectivityResult.mobile ||
+                   result == ConnectivityResult.ethernet ||
+                   result == ConnectivityResult.vpn ||
+                   result == ConnectivityResult.bluetooth ||
+                   result == ConnectivityResult.other;
     
-    // Solo está offline si contiene none
-    if (results.contains(ConnectivityResult.none)) {
+    // Solo está offline si es none
+    if (result == ConnectivityResult.none) {
       _isConnected = false;
     }
     
     if (wasConnected != _isConnected) {
       print('📡 Conectividad cambió: ${_isConnected ? "🟢 ONLINE" : "🔴 OFFLINE"}');
-      print('   Tipos de conexión: $results');
+      print('   Tipo de conexión: $result');
       _connectionController?.add(_isConnected);
     }
   }
@@ -85,15 +87,16 @@ class ConnectivityService {
     
     try {
       final connectivity = Connectivity();
-      // 🔥 CAMBIO: Manejar List<ConnectivityResult>
-      final results = await connectivity.checkConnectivity();
       
-      final hasConnection = !results.contains(ConnectivityResult.none) &&
-                           (results.contains(ConnectivityResult.wifi) ||
-                            results.contains(ConnectivityResult.mobile) ||
-                            results.contains(ConnectivityResult.ethernet));
+      // 🔥 API ANTIGUA: checkConnectivity retorna ConnectivityResult simple
+      final result = await connectivity.checkConnectivity();
       
-      print('📡 Verificación de conexión: $results -> ${hasConnection ? "ONLINE" : "OFFLINE"}');
+      final hasConnection = result != ConnectivityResult.none &&
+                           (result == ConnectivityResult.wifi ||
+                            result == ConnectivityResult.mobile ||
+                            result == ConnectivityResult.ethernet);
+      
+      print('📡 Verificación de conexión: $result -> ${hasConnection ? "ONLINE" : "OFFLINE"}');
       return hasConnection;
     } catch (e) {
       print('📡 Error verificando conexión real: $e');

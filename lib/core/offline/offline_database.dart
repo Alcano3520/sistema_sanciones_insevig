@@ -11,11 +11,11 @@ import '../models/sancion_model.dart';
 class OfflineDatabase {
   static OfflineDatabase? _instance;
   static OfflineDatabase get instance => _instance ??= OfflineDatabase._();
-  
+
   OfflineDatabase._();
 
   bool _isInitialized = false;
-  
+
   // Nombres de las cajas Hive
   static const String empleadosBoxName = 'empleados_offline';
   static const String sancionesBoxName = 'sanciones_offline';
@@ -32,7 +32,7 @@ class OfflineDatabase {
 
     try {
       print('💾 Inicializando Hive para móvil...');
-      
+
       // Obtener directorio de la app en móvil
       final directory = await getApplicationDocumentsDirectory();
       await Hive.initFlutter(directory.path);
@@ -50,10 +50,10 @@ class OfflineDatabase {
 
       _isInitialized = true;
       print('✅ Hive inicializado correctamente en móvil');
-      
+
       // Mostrar estadísticas iniciales
       await _printStats();
-      
+
       return true;
     } catch (e) {
       print('❌ Error inicializando Hive: $e');
@@ -121,14 +121,14 @@ class OfflineDatabase {
 
       // Limpiar y guardar todos los empleados
       await box.clear();
-      
+
       final empleadosMap = <String, EmpleadoModel>{};
       for (var empleado in empleados) {
         empleadosMap[empleado.cod.toString()] = empleado;
       }
-      
+
       await box.putAll(empleadosMap);
-      
+
       print('💾 ${empleados.length} empleados guardados en Hive');
       return true;
     } catch (e) {
@@ -144,7 +144,7 @@ class OfflineDatabase {
     try {
       final box = empleadosBox;
       if (box == null) return [];
-      
+
       return box.values.toList();
     } catch (e) {
       print('❌ Error obteniendo empleados: $e');
@@ -158,14 +158,35 @@ class OfflineDatabase {
 
     try {
       final empleados = getEmpleados();
-      final queryLower = query.toLowerCase();
-      
-      return empleados.where((empleado) {
-        return empleado.searchText.contains(queryLower) ||
-               empleado.cod.toString().contains(query);
-      }).toList();
+
+      if (query.trim().isEmpty) {
+        return empleados.take(20).toList(); // Mostrar algunos si no hay query
+      }
+
+      final queryLower = query.toLowerCase().trim();
+
+      // 🔥 Búsqueda más flexible
+      return empleados
+          .where((empleado) {
+            // Buscar en múltiples campos
+            final searchableText = [
+              empleado.nombresCompletos,
+              empleado.nombres,
+              empleado.apellidos,
+              empleado.cedula,
+              empleado.nomcargo,
+              empleado.nomdep,
+              empleado.cod.toString(),
+            ].where((field) => field != null).join(' ').toLowerCase();
+
+            // Buscar cada palabra del query
+            final queryWords = queryLower.split(' ');
+            return queryWords.every((word) => searchableText.contains(word));
+          })
+          .take(50)
+          .toList(); // Limitar resultados
     } catch (e) {
-      print('❌ Error buscando empleados: $e');
+      print('❌ Error buscando empleados en cache: $e');
       return [];
     }
   }
@@ -177,7 +198,7 @@ class OfflineDatabase {
     try {
       final box = empleadosBox;
       if (box == null) return null;
-      
+
       return box.get(cod.toString());
     } catch (e) {
       print('❌ Error obteniendo empleado $cod: $e');
@@ -210,7 +231,7 @@ class OfflineDatabase {
 
       await box.put(sancion.id, sancion);
       print('💾 Sanción ${sancion.id.substring(0, 8)} guardada en Hive');
-      
+
       return true;
     } catch (e) {
       print('❌ Error guardando sanción: $e');
@@ -225,7 +246,7 @@ class OfflineDatabase {
     try {
       final box = sancionesBox;
       if (box == null) return [];
-      
+
       return box.values.toList();
     } catch (e) {
       print('❌ Error obteniendo sanciones: $e');
@@ -256,7 +277,7 @@ class OfflineDatabase {
 
       await box.delete(sancionId);
       print('🗑️ Sanción $sancionId eliminada de Hive');
-      
+
       return true;
     } catch (e) {
       print('❌ Error eliminando sanción: $e');
@@ -280,7 +301,8 @@ class OfflineDatabase {
   }
 
   /// Agregar operación a la cola de sincronización
-  Future<bool> addToSyncQueue(String operation, Map<String, dynamic> data) async {
+  Future<bool> addToSyncQueue(
+      String operation, Map<String, dynamic> data) async {
     if (kIsWeb || !_isInitialized) return false;
 
     try {
@@ -296,7 +318,7 @@ class OfflineDatabase {
 
       await box.add(queueItem);
       print('📤 Operación "$operation" añadida a cola de sync');
-      
+
       return true;
     } catch (e) {
       print('❌ Error añadiendo a sync queue: $e');
@@ -311,7 +333,7 @@ class OfflineDatabase {
     try {
       final box = syncQueueBox;
       if (box == null) return [];
-      
+
       return box.values.cast<Map<String, dynamic>>().toList();
     } catch (e) {
       print('❌ Error obteniendo operaciones pendientes: $e');
@@ -329,7 +351,7 @@ class OfflineDatabase {
 
       await box.clear();
       print('🧹 Cola de sync limpiada');
-      
+
       return true;
     } catch (e) {
       print('❌ Error limpiando sync queue: $e');
@@ -395,7 +417,7 @@ class OfflineDatabase {
       await sancionesBox?.clear();
       await syncQueueBox?.clear();
       await Hive.box(metadataBoxName).clear();
-      
+
       print('🧹 Toda la base de datos offline limpiada');
       return true;
     } catch (e) {

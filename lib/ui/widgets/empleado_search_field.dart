@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/models/empleado_model.dart';
 import '../../core/offline/empleado_repository.dart'; // 🔥 CAMBIO: Repository en vez de Service
+import '../../core/offline/offline_manager.dart';
 
 /// Widget de búsqueda de empleados con autocompletado
 /// Replica la funcionalidad de búsqueda de tu app Kivy
@@ -307,7 +309,6 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
     });
 
     try {
-      // 🔥 CAMBIO: Usando repository en vez de service
       final resultados = await _empleadoRepository.searchEmpleados(query);
 
       if (mounted) {
@@ -315,6 +316,35 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
           _resultados = resultados;
           _isSearching = false;
         });
+
+        // 🆕 Mostrar fuente de datos
+        if (!kIsWeb) {
+          final offlineManager = OfflineManager.instance;
+          final isOffline = offlineManager.isOfflineMode;
+
+          // Solo mostrar si encontró resultados
+          if (resultados.isNotEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(
+                      isOffline ? Icons.cloud_off : Icons.cloud_done,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(isOffline
+                        ? '📱 Mostrando empleados guardados (sin conexión)'
+                        : '☁️ Mostrando empleados actualizados'),
+                  ],
+                ),
+                backgroundColor: isOffline ? Colors.orange : Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -323,29 +353,10 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
           _isSearching = false;
         });
 
-        // 🔥 NUEVO: Mostrar si estamos offline
-        final isOffline = e.toString().contains('offline') ||
-            e.toString().contains('SocketException');
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  isOffline ? Icons.wifi_off : Icons.error_outline,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isOffline
-                        ? 'Modo offline: mostrando resultados guardados'
-                        : 'Error buscando empleados: $e',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: isOffline ? Colors.orange : Colors.red,
+            content: Text('Error buscando empleados: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }

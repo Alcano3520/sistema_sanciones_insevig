@@ -24,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // 🔥 DECLARAR VARIABLES Y REPOSITORIES
   final SancionRepository _sancionRepository = SancionRepository.instance;
   final EmpleadoRepository _empleadoRepository = EmpleadoRepository.instance;
-  
+
   Map<String, dynamic> _stats = {};
   Map<String, int> _empleadoStats = {};
   bool _isLoading = true;
@@ -47,8 +47,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // 🔥 NUEVO: Escuchar cambios en la conectividad
   void _listenToConnectivity() {
     if (kIsWeb) return;
-    
-    _connectivitySubscription = ConnectivityService.instance.connectionStream.listen((isConnected) {
+
+    _connectivitySubscription =
+        ConnectivityService.instance.connectionStream.listen((isConnected) {
       if (mounted) {
         setState(() => _isOnline = isConnected);
 
@@ -92,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final success = await offlineManager.syncNow();
         if (success) {
           await _loadData(); // Recargar estadísticas
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -131,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('❌ Error cargando datos: $e');
 
       // 🔥 NUEVO: Si hay error, probablemente estamos offline
-      if (e.toString().contains('SocketException') || 
+      if (e.toString().contains('SocketException') ||
           e.toString().contains('Failed host lookup')) {
         setState(() => _isOnline = false);
       }
@@ -151,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           // 🔥 BANNER DE DEBUG (solo en modo desarrollo)
           if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
-          
+
           // Contenido principal
           Expanded(
             child: _isLoading
@@ -181,7 +182,86 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: _buildFloatingActionButton(),
+      // 🔥 AQUÍ VA EL BOTÓN DE DEBUG - Stack con FAB principal y debug
+      floatingActionButton: Stack(
+        children: [
+          // Botón principal existente
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: _buildFloatingActionButton(),
+          ),
+
+          // 🆕 BOTÓN DE DEBUG (arriba a la izquierda del principal)
+          if (!kIsWeb && kDebugMode)
+            Positioned(
+              bottom: 70,
+              right: 10,
+              child: FloatingActionButton(
+                mini: true,
+                heroTag: "debug_btn", // Importante para evitar conflictos
+                backgroundColor: Colors.orange,
+                onPressed: () async {
+                  // 🔧 CÓDIGO DE PRUEBA OFFLINE
+                  final offline = OfflineManager.instance;
+
+                  print('🔧 TEST MODO OFFLINE:');
+                  print(
+                      'Cache total: ${offline.database.getEmpleados().length}');
+
+                  // Buscar empleado de prueba
+                  final resultado =
+                      await EmpleadoRepository.instance.searchEmpleados('vera');
+
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('🧪 Test Offline'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              '📦 Cache: ${offline.database.getEmpleados().length} empleados'),
+                          Text(
+                              '🔍 Búsqueda "vera": ${resultado.length} resultados'),
+                          const Divider(),
+                          const Text('Primeros resultados:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          if (resultado.isEmpty)
+                            const Text('❌ No se encontraron resultados',
+                                style: TextStyle(color: Colors.red))
+                          else
+                            ...resultado.take(3).map((e) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text('• ${e.displayName} (${e.cod})',
+                                      style: const TextStyle(fontSize: 12)),
+                                )),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            // 🔥 AQUÍ VA EL CÓDIGO DEL PUNTO 5
+                            _verificarCacheDetallado();
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Ver más detalles'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cerrar'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: const Icon(Icons.bug_report, size: 20),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -195,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, snapshot) {
           final isOnline = snapshot.data ?? true;
           final stats = OfflineManager.instance.getOfflineStats();
-          
+
           return Column(
             children: [
               Row(
@@ -223,12 +303,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       'Modo: ${stats['mode']}',
-                      style: const TextStyle(color: Colors.orange, fontSize: 11),
+                      style:
+                          const TextStyle(color: Colors.orange, fontSize: 11),
                     ),
                     const Spacer(),
                     Text(
                       'Pendientes sync: ${stats['pending_sync']}',
-                      style: const TextStyle(color: Colors.orange, fontSize: 11),
+                      style:
+                          const TextStyle(color: Colors.orange, fontSize: 11),
                     ),
                   ],
                 ),
@@ -240,7 +322,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   TextButton(
                     onPressed: _runOfflineTest,
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       minimumSize: const Size(0, 0),
                     ),
                     child: const Text(
@@ -290,9 +373,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 FutureBuilder<Map<String, dynamic>>(
-                  future: Future.value(OfflineManager.instance.getOfflineStats()),
+                  future:
+                      Future.value(OfflineManager.instance.getOfflineStats()),
                   builder: (context, snapshot) {
-                    if (snapshot.hasData && (snapshot.data!['pending_sync'] ?? 0) > 0) {
+                    if (snapshot.hasData &&
+                        (snapshot.data!['pending_sync'] ?? 0) > 0) {
                       return Text(
                         '${snapshot.data!['pending_sync']} sanciones pendientes de sincronizar',
                         style: const TextStyle(
@@ -348,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final connectivity = ConnectivityService.instance;
               final offline = OfflineManager.instance;
               final stats = offline.getOfflineStats();
-              
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Column(
@@ -359,7 +444,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         'Conectividad: ${connectivity.isConnected ? "ONLINE ✅" : "OFFLINE ⚠️"}',
                       ),
                       if (!connectivity.isConnected) ...[
-                        Text('Empleados en cache: ${stats['empleados_cached']}'),
+                        Text(
+                            'Empleados en cache: ${stats['empleados_cached']}'),
                         Text('Sanciones pendientes: ${stats['pending_sync']}'),
                       ],
                     ],
@@ -927,36 +1013,38 @@ class _HomeScreenState extends State<HomeScreen> {
   // 🔥 NUEVO: Método para test offline
   Future<void> _runOfflineTest() async {
     print('\n🧪 TEST MODO OFFLINE:');
-    
+
     // 1. Estado actual
     final offline = OfflineManager.instance;
     print('📊 Stats: ${offline.getOfflineStats()}');
-    
+
     // 2. Verificar conectividad
     final connectivity = ConnectivityService.instance;
     print('📡 Conectividad: ${connectivity.isConnected}');
-    
+
     // 3. Probar búsqueda
     print('\n🔍 Probando búsqueda offline...');
     try {
       final empleados = await _empleadoRepository.searchEmpleados('a');
       print('✅ Resultados: ${empleados.length} empleados');
       if (empleados.isNotEmpty) {
-        print('   Primeros 3: ${empleados.take(3).map((e) => e.displayName).join(", ")}');
+        print(
+            '   Primeros 3: ${empleados.take(3).map((e) => e.displayName).join(", ")}');
       }
     } catch (e) {
       print('❌ Error en búsqueda: $e');
     }
-    
+
     // 4. Ver cache
     final db = offline.database;
     final cached = db.getEmpleados();
     print('\n💾 En cache local:');
     print('   - Total: ${cached.length}');
     if (cached.isNotEmpty) {
-      print('   - Primeros 3: ${cached.take(3).map((e) => e.displayName).join(", ")}');
+      print(
+          '   - Primeros 3: ${cached.take(3).map((e) => e.displayName).join(", ")}');
     }
-    
+
     // Mostrar resultado en UI
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -970,5 +1058,71 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+  }
+
+  // 🔥 NUEVO: Método de verificación detallada
+  void _verificarCacheDetallado() {
+    final offline = OfflineManager.instance;
+
+    print('\n📊 VERIFICACIÓN DETALLADA DEL CACHE:');
+    print('════════════════════════════════════════');
+
+    // Total en cache
+    final todosEmpleados = offline.database.getEmpleados();
+    print('📦 Total empleados en cache: ${todosEmpleados.length}');
+
+    // Primeros 5 empleados
+    print('\n👥 Primeros 5 empleados en cache:');
+    todosEmpleados.take(5).forEach((emp) {
+      print('   ${emp.cod} - ${emp.displayName} - ${emp.nomdep ?? "Sin dept"}');
+    });
+
+    // Buscar "vera" manualmente
+    print('\n🔍 Búsqueda manual de "vera":');
+    final testVera = offline.database.searchEmpleados('vera');
+    print('   Encontrados: ${testVera.length}');
+    if (testVera.isNotEmpty) {
+      testVera.take(3).forEach((emp) {
+        print(
+            '   ✓ ${emp.displayName} (${emp.cod}) - ${emp.nomcargo ?? "Sin cargo"}');
+      });
+    }
+
+    // Buscar "zambrano"
+    print('\n🔍 Búsqueda manual de "zambrano":');
+    final testZambrano = offline.database.searchEmpleados('zambrano');
+    print('   Encontrados: ${testZambrano.length}');
+    if (testZambrano.isNotEmpty) {
+      testZambrano.take(3).forEach((emp) {
+        print('   ✓ ${emp.displayName} (${emp.cod})');
+      });
+    }
+
+    // Estadísticas
+    print('\n📈 Estadísticas del cache:');
+    final stats = offline.getOfflineStats();
+    stats.forEach((key, value) {
+      print('   $key: $value');
+    });
+
+    print('════════════════════════════════════════\n');
+
+    // Mostrar snackbar con resumen
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Cache verificado: ${todosEmpleados.length} empleados\n'
+          'Búsqueda "vera": ${testVera.length} resultados\n'
+          'Ver consola para detalles completos',
+        ),
+        duration: const Duration(seconds: 4),
+        backgroundColor: Colors.blue,
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
   }
 }

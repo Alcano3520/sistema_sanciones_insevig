@@ -87,43 +87,61 @@ class OfflineManager {
   /// =============================================
 
   /// Buscar empleados (online first, offline fallback)
+  /// Buscar empleados (online first, offline fallback)
   Future<List<EmpleadoModel>> searchEmpleados(String query) async {
     if (kIsWeb) {
-      // 🌐 Web: usar servicio directo sin cambios
       return await EmpleadoService().searchEmpleados(query);
     }
 
     try {
+      // 🔥 CAMBIO: Agregar timeout corto para detectar conexión real
       if (_connectivity.isConnected) {
-        // 📱 Móvil ONLINE: obtener de Supabase y actualizar cache
-        print('🌐 Buscando empleados online: "$query"');
+        print('🌐 Intentando búsqueda online con timeout...');
 
-        final empleadosOnline = await EmpleadoService().searchEmpleados(query);
+        // Intentar online con timeout de 5 segundos
+        final empleadosOnline =
+            await EmpleadoService().searchEmpleados(query).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            print('⏱️ Timeout en búsqueda online, usando cache...');
+            throw TimeoutException('Conexión lenta o sin internet');
+          },
+        );
 
-        // Actualizar cache local con resultados (sin bloquear)
+        // Si llegamos aquí, la búsqueda online funcionó
         if (empleadosOnline.isNotEmpty) {
           _updateEmpleadosCache(empleadosOnline);
         }
 
         return empleadosOnline;
       } else {
-        // 📱 Móvil OFFLINE: buscar en cache local
-        print('📱 Buscando empleados offline: "$query"');
-
-        final empleadosOffline = _db.searchEmpleados(query);
-
-        if (empleadosOffline.isEmpty) {
-          print('⚠️ No hay empleados en cache local para: "$query"');
-        }
-
-        return empleadosOffline;
+        // Modo offline directo
+        print('📱 Modo offline detectado, usando cache...');
+        return _searchEmpleadosOffline(query);
       }
     } catch (e) {
-      print('❌ Error buscando empleados, fallback a offline: $e');
+      // 🔥 CUALQUIER error (timeout, socket, etc) = usar cache
+      print('❌ Error en búsqueda online: ${e.runtimeType}');
+      print('🔄 Fallback automático a cache local...');
 
-      // Fallback: intentar cache local si falla online
-      return _db.searchEmpleados(query);
+      return _searchEmpleadosOffline(query);
     }
+  }
+
+// 🆕 Método auxiliar para búsqueda offline
+  List<EmpleadoModel> _searchEmpleadosOffline(String query) {
+    final empleadosOffline = _db.searchEmpleados(query);
+
+    print('📱 Búsqueda offline completada:');
+    print('   - Query: "$query"');
+    print('   - Resultados: ${empleadosOffline.length}');
+    print('   - Total en cache: ${_db.getEmpleados().length}');
+
+    if (empleadosOffline.isEmpty && _db.getEmpleados().isNotEmpty) {
+      print('💡 No hay coincidencias para "$query" en cache');
+    }
+
+    return empleadosOffline;
   }
 
   /// Obtener empleado por código
