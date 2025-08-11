@@ -151,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           // 🔥 BANNER DE DEBUG (solo en modo desarrollo)
-          if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
+          //if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
 
           // Contenido principal
           Expanded(
@@ -193,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // 🆕 BOTÓN DE DEBUG (arriba a la izquierda del principal)
+          /*
           if (!kIsWeb && kDebugMode)
             Positioned(
               bottom: 70,
@@ -260,85 +261,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: const Icon(Icons.bug_report, size: 20),
               ),
             ),
+        */
         ],
       ),
     );
   }
 
   // 🔥 NUEVO: Banner de debug para ver estado del sistema offline
-  Widget _buildOfflineDebugBanner() {
-    return Container(
-      color: Colors.black87,
-      padding: const EdgeInsets.all(8),
-      child: StreamBuilder<bool>(
-        stream: ConnectivityService.instance.connectionStream,
-        builder: (context, snapshot) {
-          final isOnline = snapshot.data ?? true;
-          final stats = OfflineManager.instance.getOfflineStats();
-
-          return Column(
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    isOnline ? Icons.cloud_done : Icons.cloud_off,
-                    color: isOnline ? Colors.green : Colors.orange,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Conexión: ${isOnline ? "ONLINE" : "OFFLINE"}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Cache: ${stats['empleados_cached']} empleados',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  ),
-                ],
-              ),
-              if (!isOnline || stats['pending_sync'] > 0) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      'Modo: ${stats['mode']}',
-                      style:
-                          const TextStyle(color: Colors.orange, fontSize: 11),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Pendientes sync: ${stats['pending_sync']}',
-                      style:
-                          const TextStyle(color: Colors.orange, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ],
-              // Botón de test
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _runOfflineTest,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      minimumSize: const Size(0, 0),
-                    ),
-                    child: const Text(
-                      'TEST OFFLINE',
-                      style: TextStyle(fontSize: 10, color: Colors.white70),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
   // 🔥 NUEVO: Banner indicando modo offline (producción)
   Widget _buildOfflineBanner() {
@@ -403,110 +332,44 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // En home_screen.dart - método _buildAppBar()
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: Row(
-        children: [
-          const Text('Sistema de Sanciones - INSEVIG'),
-          const SizedBox(width: 8),
-          // 🔥 NUEVO: Indicador de conectividad en el AppBar
-          if (!kIsWeb)
-            Icon(
-              _isOnline ? Icons.wifi : Icons.wifi_off,
-              size: 16,
-              color: _isOnline ? Colors.green : Colors.orange,
-            ),
-        ],
+      // 🔥 SOLUCIÓN: Hacer el título más flexible
+      title: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: const Text('Sistema de Sanciones - INSEVIG'),
       ),
       backgroundColor: const Color(0xFF1E3A8A),
       foregroundColor: Colors.white,
       elevation: 0,
       actions: [
-        // 🔥 NUEVO: Botón para verificar conectividad
-        if (!kIsWeb)
-          IconButton(
-            icon: Icon(
-              _isOnline ? Icons.cloud_done : Icons.cloud_off,
-              color: _isOnline ? Colors.green : Colors.orange,
-            ),
-            onPressed: () {
-              final connectivity = ConnectivityService.instance;
-              final offline = OfflineManager.instance;
-              final stats = offline.getOfflineStats();
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Conectividad: ${connectivity.isConnected ? "ONLINE ✅" : "OFFLINE ⚠️"}',
-                      ),
-                      if (!connectivity.isConnected) ...[
-                        Text(
-                            'Empleados en cache: ${stats['empleados_cached']}'),
-                        Text('Sanciones pendientes: ${stats['pending_sync']}'),
-                      ],
-                    ],
-                  ),
-                  backgroundColor:
-                      connectivity.isConnected ? Colors.green : Colors.orange,
-                  action: SnackBarAction(
-                    label: 'SYNC',
-                    textColor: Colors.white,
-                    onPressed: _syncPendingData,
-                  ),
-                ),
-              );
-            },
-            tooltip: 'Estado de conexión',
-          ),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: _loadData,
-          tooltip: 'Actualizar datos',
-        ),
-        IconButton(
-          icon: const Icon(Icons.notifications_outlined),
-          onPressed: _showNotifications,
-          tooltip: 'Notificaciones',
-        ),
+        // Si tienes muchos iconos, usa un menú
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
           onSelected: _handleMenuSelection,
           itemBuilder: (context) => [
             const PopupMenuItem(
-              value: 'profile',
+              value: 'refresh',
               child: Row(
                 children: [
-                  Icon(Icons.person_outline),
+                  Icon(Icons.refresh),
                   SizedBox(width: 8),
-                  Text('Mi Perfil'),
+                  Text('Actualizar'),
                 ],
               ),
             ),
             const PopupMenuItem(
-              value: 'settings',
+              value: 'notifications',
               child: Row(
                 children: [
-                  Icon(Icons.settings_outlined),
+                  Icon(Icons.notifications),
                   SizedBox(width: 8),
-                  Text('Configuración'),
+                  Text('Notificaciones'),
                 ],
               ),
             ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(
-              value: 'logout',
-              child: Row(
-                children: [
-                  Icon(Icons.logout, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
+            // ... más opciones
           ],
         ),
       ],
