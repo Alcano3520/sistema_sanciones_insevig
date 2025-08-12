@@ -2,7 +2,7 @@
 import '../../core/services/pdf_service.dart';
 import 'package:printing/printing.dart';
 import 'dart:typed_data'; // 🆕 AGREGADO para Uint8List
-import 'package:flutter/foundation.dart' show kIsWeb; // 🆕 AGREGADO para web detection
+import 'package:flutter/foundation.dart' show kIsWeb; // 🔧 CORREGIDO - agregar show kIsWeb
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/sancion_model.dart';
@@ -969,6 +969,8 @@ ID: ${_sancion.id}
       case 'delete':
         _eliminarSancion();
         break;
+      default:
+        print('⚠️ Acción no reconocida: $action');
     }
   }
 
@@ -1071,7 +1073,13 @@ ID: ${_sancion.id}
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(mensaje),
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(mensaje)),
+            ],
+          ),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 4),
         ),
@@ -1112,111 +1120,199 @@ ID: ${_sancion.id}
     }
   }
 
-  /// **Mostrar opciones del PDF generado**
+  /// **🔧 MÉTODO CORREGIDO - SIN OVERFLOW - Mostrar opciones del PDF generado**
   void _showPDFOptionsDialog(Uint8List pdfBytes, String filename) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Título
-            Row(
-              children: [
-                const Icon(Icons.picture_as_pdf, color: Colors.red),
-                const SizedBox(width: 12),
-                const Text(
-                  'PDF Generado Exitosamente',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+      isScrollControlled: true,
+      // 🔧 SOLUCIÓN 1: Limitar altura máxima del modal
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
+      builder: (BuildContext dialogContext) => Container(
+        // 🔧 SOLUCIÓN 3: Reducir padding para evitar overflow
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(  // 🔧 SOLUCIÓN 2: Hacer contenido scrollable
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Título
+              Row(
+                children: [
+                  const Icon(Icons.picture_as_pdf, color: Colors.red),
+                  const SizedBox(width: 12),
+                  const Expanded(  // 🔧 MEJORAR: Envolver texto en Expanded
+                    child: Text(
+                      'PDF Generado Exitosamente',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 20),
-
-            // Información del archivo
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ],
               ),
+              
+              const SizedBox(height: 16),  // 🔧 Reducir espaciado
+
+              // Información del archivo
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Archivo: $filename',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                        fontSize: 14,  // 🔧 Reducir tamaño de fuente
+                      ),
+                      maxLines: 2,  // 🔧 Limitar líneas
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Empleado: ${_sancion.empleadoNombre}',
+                      style: const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Tamaño: ${(pdfBytes.length / 1024).toStringAsFixed(1)} KB',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Opciones - Vista Previa (solo en móvil)
+              if (!kIsWeb) ...[
+                _buildPDFOptionTile(
+                  icon: Icons.visibility,
+                  iconColor: const Color(0xFF1E3A8A),
+                  title: 'Vista Previa',
+                  subtitle: 'Ver antes de descargar',
+                  onTap: () async {
+                    Navigator.pop(dialogContext);
+                    await PDFService.instance.previewPDF(pdfBytes, filename);
+                  },
+                ),
+                const Divider(height: 8),
+              ],
+
+              // Opción - Guardar/Descargar
+              _buildPDFOptionTile(
+                icon: Icons.download,
+                iconColor: Colors.green,
+                title: kIsWeb ? 'Descargar' : 'Guardar en Dispositivo',
+                subtitle: kIsWeb 
+                    ? 'Descargar a tu computadora' 
+                    : 'Guardar en documentos',
+                onTap: () async {
+                  Navigator.pop(dialogContext);
+                  await _guardarPDF(pdfBytes, filename);
+                },
+              ),
+
+              const Divider(height: 8),
+
+              // Opción - Compartir
+              _buildPDFOptionTile(
+                icon: Icons.share,
+                iconColor: Colors.blue,
+                title: 'Compartir',
+                subtitle: 'Email, WhatsApp, etc.',
+                onTap: () async {
+                  Navigator.pop(dialogContext);
+                  await _compartirPDF(pdfBytes, filename);
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              // Botón cerrar
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Cerrar'),
+                ),
+              ),
+
+              // 🔧 Espacio adicional para el área segura en la parte inferior
+              SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+            ],
+          ),
+        ), // Cierre de SingleChildScrollView
+      ),
+    );
+  }
+
+  /// **🔧 MÉTODO AUXILIAR PARA CREAR OPCIONES DEL PDF DE MANERA CONSISTENTE**
+  Widget _buildPDFOptionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Archivo: $filename',
+                    title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
                     ),
                   ),
                   Text(
-                    'Empleado: ${_sancion.empleadoNombre}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  Text(
-                    'Tamaño: ${(pdfBytes.length / 1024).toStringAsFixed(1)} KB',
-                    style: const TextStyle(fontSize: 12),
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            // Opciones
-            if (!kIsWeb) ...[
-              ListTile(
-                leading: const Icon(Icons.visibility, color: Color(0xFF1E3A8A)),
-                title: const Text('Vista Previa'),
-                subtitle: const Text('Ver antes de descargar'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await PDFService.instance.previewPDF(pdfBytes, filename);
-                },
-              ),
-              const Divider(),
-            ],
-
-            ListTile(
-              leading: const Icon(Icons.download, color: Colors.green),
-              title: Text(kIsWeb ? 'Descargar' : 'Guardar en Dispositivo'),
-              subtitle: Text(kIsWeb 
-                  ? 'Descargar a tu computadora' 
-                  : 'Guardar en carpeta de documentos'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _guardarPDF(pdfBytes, filename);
-              },
-            ),
-
-            const Divider(),
-
-            ListTile(
-              leading: const Icon(Icons.share, color: Colors.blue),
-              title: const Text('Compartir'),
-              subtitle: const Text('Email, WhatsApp, etc.'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _compartirPDF(pdfBytes, filename);
-              },
-            ),
-
-            const SizedBox(height: 20),
-
-            // Botón cerrar
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Colors.grey.shade400,
             ),
           ],
         ),
