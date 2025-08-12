@@ -4,7 +4,7 @@ import '../config/supabase_config.dart';
 import '../models/user_model.dart';
 
 /// Provider para manejar autenticación y estado del usuario
-/// Similar al sistema de login de tu app Kivy pero más robusto
+/// Corregido para usar la tabla 'profiles' correctamente
 class AuthProvider with ChangeNotifier {
   final SupabaseClient _supabase = SupabaseConfig.client;
 
@@ -64,11 +64,14 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Cargar perfil del usuario desde la base de datos
+  /// Cargar perfil del usuario desde la tabla PROFILES (no usuarios)
   Future<void> _loadUserProfile(String userId) async {
     try {
+      print('🔍 Cargando perfil para usuario ID: $userId');
+      
+      // ✅ CORREGIDO: Usar 'profiles' en lugar de 'usuarios'
       final response = await _supabase
-          .from('profiles')
+          .from('profiles')  // ✅ Tabla correcta
           .select('*')
           .eq('id', userId)
           .single();
@@ -77,10 +80,9 @@ class AuthProvider with ChangeNotifier {
       _clearError();
       notifyListeners();
 
-      print(
-          '✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role})');
+      print('✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role})');
     } catch (e) {
-      print('❌ Error cargando perfil: $e');
+      print('❌ Error cargando perfil desde PROFILES: $e');
       _setError('Error cargando perfil del usuario');
     }
   }
@@ -93,12 +95,14 @@ class AuthProvider with ChangeNotifier {
 
       print('🔑 Intentando login con: $email');
 
+      // 1. Autenticar con Supabase Auth
       final response = await _supabase.auth.signInWithPassword(
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password: password,
       );
 
       if (response.user != null) {
+        // 2. ✅ CORREGIDO: Cargar datos desde 'profiles'
         await _loadUserProfile(response.user!.id);
         print('✅ Login exitoso para: ${_currentUser?.fullName}');
         return true;
@@ -107,9 +111,11 @@ class AuthProvider with ChangeNotifier {
         return false;
       }
     } on AuthException catch (e) {
+      print('❌ AuthException: ${e.message}');
       _setError(_getAuthErrorMessage(e.message));
       return false;
     } catch (e) {
+      print('❌ Error general en signIn: $e');
       _setError('Error de conexión: $e');
       return false;
     } finally {
@@ -131,32 +137,36 @@ class AuthProvider with ChangeNotifier {
 
       print('📝 Registrando usuario: $email');
 
-      // 1. Crear usuario en Auth
+      // 1. Crear usuario en Supabase Auth
       final response = await _supabase.auth.signUp(
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password: password,
       );
 
       if (response.user != null) {
-        // 2. Crear perfil en la tabla profiles
+        // 2. ✅ CORREGIDO: Crear perfil en la tabla 'profiles'
         await _supabase.from('profiles').insert({
           'id': response.user!.id,
-          'email': email.trim(),
+          'email': email.trim().toLowerCase(),
           'full_name': fullName.trim(),
           'role': role,
           'department': department?.trim(),
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
         });
 
-        print('✅ Usuario registrado exitosamente');
+        print('✅ Usuario registrado exitosamente en profiles');
         return true;
       } else {
         _setError('Error al registrar usuario');
         return false;
       }
     } on AuthException catch (e) {
+      print('❌ AuthException en signUp: ${e.message}');
       _setError(_getAuthErrorMessage(e.message));
       return false;
     } catch (e) {
+      print('❌ Error general en signUp: $e');
       _setError('Error registrando usuario: $e');
       return false;
     } finally {
@@ -173,13 +183,14 @@ class AuthProvider with ChangeNotifier {
       _clearError();
       print('👋 Sesión cerrada');
     } catch (e) {
+      print('❌ Error cerrando sesión: $e');
       _setError('Error cerrando sesión: $e');
     } finally {
       _setLoading(false);
     }
   }
 
-  /// Actualizar perfil del usuario
+  /// Actualizar perfil del usuario en la tabla PROFILES
   Future<bool> updateProfile({
     String? fullName,
     String? department,
@@ -198,17 +209,19 @@ class AuthProvider with ChangeNotifier {
       if (department != null) updateData['department'] = department.trim();
       if (avatarUrl != null) updateData['avatar_url'] = avatarUrl;
 
+      // ✅ CORREGIDO: Actualizar en 'profiles'
       await _supabase
-          .from('profiles')
+          .from('profiles')  // ✅ Tabla correcta
           .update(updateData)
           .eq('id', _currentUser!.id);
 
-      // Recargar perfil
+      // Recargar perfil actualizado
       await _loadUserProfile(_currentUser!.id);
 
-      print('✅ Perfil actualizado');
+      print('✅ Perfil actualizado en profiles');
       return true;
     } catch (e) {
+      print('❌ Error actualizando perfil: $e');
       _setError('Error actualizando perfil: $e');
       return false;
     } finally {
@@ -216,7 +229,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Cambiar contraseña
+  /// Cambiar contraseña del usuario actual
   Future<bool> changePassword(String newPassword) async {
     try {
       _setLoading(true);
@@ -226,12 +239,14 @@ class AuthProvider with ChangeNotifier {
         UserAttributes(password: newPassword),
       );
 
-      print('✅ Contraseña cambiada');
+      print('✅ Contraseña cambiada exitosamente');
       return true;
     } on AuthException catch (e) {
+      print('❌ AuthException cambiando contraseña: ${e.message}');
       _setError(_getAuthErrorMessage(e.message));
       return false;
     } catch (e) {
+      print('❌ Error cambiando contraseña: $e');
       _setError('Error cambiando contraseña: $e');
       return false;
     } finally {
@@ -239,24 +254,33 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Enviar email de recuperación
+  /// Enviar email de recuperación de contraseña
   Future<bool> sendPasswordReset(String email) async {
     try {
       _setLoading(true);
       _clearError();
 
-      await _supabase.auth.resetPasswordForEmail(email.trim());
+      await _supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
 
-      print('✅ Email de recuperación enviado');
+      print('✅ Email de recuperación enviado a: $email');
       return true;
     } on AuthException catch (e) {
+      print('❌ AuthException en password reset: ${e.message}');
       _setError(_getAuthErrorMessage(e.message));
       return false;
     } catch (e) {
+      print('❌ Error enviando email de recuperación: $e');
       _setError('Error enviando email: $e');
       return false;
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// Refrescar datos del usuario actual desde la base de datos
+  Future<void> refreshCurrentUser() async {
+    if (_currentUser != null) {
+      await _loadUserProfile(_currentUser!.id);
     }
   }
 
@@ -271,10 +295,20 @@ class AuthProvider with ChangeNotifier {
         return _currentUser!.canApprove;
       case 'view_all_sanciones':
         return _currentUser!.canViewAllSanciones;
+      case 'admin':
+        return _currentUser!.role == 'admin';
+      case 'supervisor':
+        return _currentUser!.role == 'supervisor' || _currentUser!.role == 'admin';
       default:
         return false;
     }
   }
+
+  /// Verificar si el usuario actual es administrador
+  bool get isAdmin => _currentUser?.role == 'admin';
+
+  /// Verificar si el usuario actual es supervisor
+  bool get isSupervisor => _currentUser?.role == 'supervisor' || isAdmin;
 
   /// Métodos privados para manejo de estado
   void _setLoading(bool loading) {
@@ -296,24 +330,36 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Convertir errores de Supabase a mensajes amigables
+  /// Convertir errores de Supabase a mensajes amigables en español
   String _getAuthErrorMessage(String error) {
-    switch (error.toLowerCase()) {
-      case 'invalid login credentials':
-        return 'Email o contraseña incorrectos';
-      case 'email not confirmed':
-        return 'Por favor confirma tu email';
-      case 'user not found':
-        return 'Usuario no encontrado';
-      case 'invalid email':
-        return 'Email inválido';
-      case 'password too short':
-        return 'La contraseña debe tener al menos 6 caracteres';
-      case 'email already registered':
-        return 'Este email ya está registrado';
-      default:
-        return 'Error de autenticación: $error';
+    final errorLower = error.toLowerCase();
+    
+    if (errorLower.contains('invalid login credentials')) {
+      return 'Email o contraseña incorrectos';
     }
+    if (errorLower.contains('email not confirmed')) {
+      return 'Por favor confirma tu email';
+    }
+    if (errorLower.contains('user not found')) {
+      return 'Usuario no encontrado';
+    }
+    if (errorLower.contains('invalid email')) {
+      return 'Email inválido';
+    }
+    if (errorLower.contains('password') && errorLower.contains('short')) {
+      return 'La contraseña debe tener al menos 6 caracteres';
+    }
+    if (errorLower.contains('email') && errorLower.contains('registered')) {
+      return 'Este email ya está registrado';
+    }
+    if (errorLower.contains('too many requests')) {
+      return 'Demasiados intentos. Intenta más tarde';
+    }
+    if (errorLower.contains('network')) {
+      return 'Error de conexión. Verifica tu internet';
+    }
+    
+    return 'Error de autenticación: $error';
   }
 
   /// Obtener datos para mostrar en UI
@@ -327,11 +373,25 @@ class AuthProvider with ChangeNotifier {
       'department': _currentUser!.department ?? 'N/A',
       'initials': _currentUser!.initials,
       'roleEmoji': _currentUser!.roleEmoji,
+      'canCreateSanciones': _currentUser!.canCreateSanciones,
+      'canApprove': _currentUser!.canApprove,
+      'canViewAll': _currentUser!.canViewAllSanciones,
     };
   }
 
   /// Limpiar errores manualmente
   void clearError() => _clearError();
+
+  /// Verificar conexión con la base de datos
+  Future<bool> testConnection() async {
+    try {
+      await _supabase.from('profiles').select('id').limit(1);
+      return true;
+    } catch (e) {
+      print('❌ Error de conexión: $e');
+      return false;
+    }
+  }
 
   @override
   void dispose() {
