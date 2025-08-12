@@ -8,17 +8,18 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http; // 🆕 AGREGADO para cargar logo desde URL
 
 import '../models/sancion_model.dart';
 import '../models/empleado_model.dart';
 
-/// 📄 **PDFService - Formato Comprobante Compacto INSEVIG**
+/// 📄 **PDFService - Con Logo INSEVIG Integrado - CORREGIDO**
 /// 
-/// **✅ Formato tipo ticket A6 (media página):**
-/// - Comprobante compacto como formato original
-/// - Checkboxes para tipos de sanción
-/// - Diseño minimalista
-/// - Tamaño A6 (105mm x 148mm)
+/// **✅ Funcionalidades:**
+/// - Logo desde assets (recomendado)
+/// - Logo desde URL (respaldo)
+/// - Formato comprobante compacto
+/// - Header profesional con logo
 class PDFService {
   static PDFService? _instance;
   static PDFService get instance => _instance ??= PDFService._();
@@ -27,139 +28,174 @@ class PDFService {
   // 🎨 Colores para el comprobante
   static const _borderColor = PdfColor.fromInt(0xFF000000); // Negro
   static const _lightGrey = PdfColor.fromInt(0xFFE5E7EB);
+  static const _inservigBlue = PdfColor.fromInt(0xFF1E3A8A); // Azul INSEVIG
 
-  /// **MÉTODO PRINCIPAL:** Generar PDF comprobante compacto
+  // 🖼️ Variables para cache del logo
+  pw.MemoryImage? _cachedLogo;
+
+  // ==========================================
+  // 🖼️ GESTIÓN DEL LOGO - CORREGIDA
+  // ==========================================
+
+  /// **🔥 MÉTODO 1: Cargar logo desde Assets (RECOMENDADO)**
+  /// 
+  /// **📁 PASOS PARA USAR ASSETS:**
+  /// 1. Descarga el logo: https://insevig.ec/wp-content/uploads/2018/12/logo-insevig-v1.png
+  /// 2. Guárdalo en: assets/images/logo_insevig.png
+  /// 3. Agrega en pubspec.yaml:
+  ///    flutter:
+  ///      assets:
+  ///        - assets/images/
+  Future<pw.MemoryImage?> _loadLogoFromAssets() async {
+    try {
+      final logoBytes = await rootBundle.load('assets/images/logo_insevig.png');
+      return pw.MemoryImage(logoBytes.buffer.asUint8List());
+    } catch (e) {
+      print('⚠️ Logo no encontrado en assets: $e');
+      return null;
+    }
+  }
+
+  /// **🔥 MÉTODO 2: Cargar logo desde URL (RESPALDO)**
+  Future<pw.MemoryImage?> _loadLogoFromUrl() async {
+    try {
+      print('📥 Descargando logo desde URL...');
+      final response = await http.get(
+        Uri.parse('https://insevig.ec/wp-content/uploads/2018/12/logo-insevig-v1.png'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; INSEVIG-App/1.0)',
+          'Accept': 'image/png,image/jpeg,image/*,*/*;q=0.8',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        print('✅ Logo descargado exitosamente (${response.bodyBytes.length} bytes)');
+        return pw.MemoryImage(response.bodyBytes);
+      } else {
+        print('❌ Error descargando logo: HTTP ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error cargando logo desde URL: $e');
+      return null;
+    }
+  }
+
+  /// **🔥 MÉTODO 3: Obtener logo (con cache)**
+  Future<pw.MemoryImage?> _getLogo() async {
+    // Usar cache si está disponible
+    if (_cachedLogo != null) {
+      return _cachedLogo;
+    }
+
+    // Intentar cargar desde assets primero
+    _cachedLogo = await _loadLogoFromAssets();
+    
+    // Si no funciona, intentar desde URL
+    _cachedLogo ??= await _loadLogoFromUrl();
+    
+    return _cachedLogo;
+  }
+
+  /// **🔥 MÉTODO 4: Logo de respaldo (texto)**
+  pw.Widget _buildFallbackLogo() {
+    return pw.Container(
+      width: 80,
+      height: 40,
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: _inservigBlue, width: 1.5),
+        borderRadius: pw.BorderRadius.circular(6),
+      ),
+      child: pw.Center(
+        child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          children: [
+            pw.Text(
+              'INSEVIG',
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: _inservigBlue,
+              ),
+            ),
+            pw.Text(
+              'CÍA. LTDA.',
+              style: pw.TextStyle(
+                fontSize: 8,
+                color: _inservigBlue,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 📄 MÉTODOS PRINCIPALES - CORREGIDOS
+  // ==========================================
+
+  /// **MÉTODO PRINCIPAL:** Generar PDF comprobante con logo
   Future<Uint8List> generateSancionPDF(SancionModel sancion) async {
+    // 🔥 CARGAR LOGO ANTES DE CREAR EL PDF
+    final logo = await _getLogo();
+    
     final pdf = pw.Document();
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a5, // 🔧 Cambio a A5 para mejor proporción en media hoja
-        margin: const pw.EdgeInsets.all(20), // Márgenes más amplios
-        build: (pw.Context context) => _buildComprobante(sancion),
+        pageFormat: PdfPageFormat.a5,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) => _buildComprobanteConLogo(sancion, logo),
       ),
     );
 
     return pdf.save();
   }
 
-  /// **Generar reporte PDF (mantiene formato anterior para reportes)**
+  /// **Generar reporte PDF con header profesional**
   Future<Uint8List> generateReportePDF(
     List<SancionModel> sanciones, {
     String? titulo,
     String? filtros,
     String? generadoPor,
   }) async {
+    // 🔥 CARGAR LOGO ANTES DE CREAR EL PDF
+    final logo = await _getLogo();
+    
     final pdf = pw.Document();
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) => _buildReporte(sanciones, titulo, filtros, generadoPor),
+        header: (context) => _buildReporteHeader(titulo ?? 'REPORTE DE SANCIONES', logo),
+        build: (context) => [
+          _buildReporte(sanciones, titulo, filtros, generadoPor),
+        ],
       ),
     );
 
     return pdf.save();
   }
 
-  /// **Preview PDF**
-  Future<void> previewPDF(Uint8List pdfBytes, String filename) async {
-    try {
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdfBytes,
-        name: filename,
-      );
-    } catch (e) {
-      print('❌ Error en preview: $e');
-      throw Exception('Error al mostrar vista previa: $e');
-    }
-  }
-
-  /// **Guardar PDF**
-  Future<String?> savePDF(Uint8List pdfBytes, String filename) async {
-    try {
-      if (kIsWeb) {
-        await Printing.sharePdf(bytes: pdfBytes, filename: filename);
-        return 'Descargado';
-      } else {
-        if (await _requestStoragePermission()) {
-          Directory? directory;
-          
-          try {
-            directory = Directory('/storage/emulated/0/Download');
-            if (!await directory.exists()) {
-              directory = await getApplicationDocumentsDirectory();
-            }
-          } catch (e) {
-            directory = await getApplicationDocumentsDirectory();
-          }
-
-          final filePath = '${directory.path}/$filename';
-          final file = File(filePath);
-          await file.writeAsBytes(pdfBytes);
-          
-          if (await file.exists()) {
-            final size = await file.length();
-            print('✅ Comprobante guardado: $filePath (${size} bytes)');
-            return filePath;
-          } else {
-            throw Exception('El archivo no se pudo crear');
-          }
-        } else {
-          throw Exception('Permisos de almacenamiento denegados');
-        }
-      }
-    } catch (e) {
-      print('❌ Error guardando PDF: $e');
-      return null;
-    }
-  }
-
-  /// **Solicitar permisos**
-  Future<bool> _requestStoragePermission() async {
-    try {
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.request();
-        if (status.isGranted) return true;
-        
-        final manageStatus = await Permission.manageExternalStorage.request();
-        return manageStatus.isGranted;
-      }
-      return true;
-    } catch (e) {
-      print('❌ Error solicitando permisos: $e');
-      return false;
-    }
-  }
-
-  /// **Compartir PDF**
-  Future<void> sharePDF(Uint8List pdfBytes, String filename) async {
-    try {
-      await Printing.sharePdf(bytes: pdfBytes, filename: filename);
-    } catch (e) {
-      print('❌ Error compartiendo PDF: $e');
-      throw Exception('Error al compartir: $e');
-    }
-  }
-
   // ==========================================
-  // 🎫 COMPROBANTE COMPACTO
+  // 🎫 COMPROBANTE CON LOGO - CORREGIDO
   // ==========================================
 
-  /// **🎫 Construir comprobante estilo ticket**
-  pw.Widget _buildComprobante(SancionModel sancion) {
+  /// **🎫 Construir comprobante con logo - SIN FutureBuilder**
+  pw.Widget _buildComprobanteConLogo(SancionModel sancion, pw.MemoryImage? logo) {
     return pw.Container(
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _borderColor, width: 1.5), // Borde más grueso
+        border: pw.Border.all(color: _borderColor, width: 1.5),
       ),
       child: pw.Padding(
-        padding: const pw.EdgeInsets.all(6), // Padding reducido
+        padding: const pw.EdgeInsets.all(6),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // 🏢 Header de la empresa
-            _buildComprobanteHeader(),
+            // 🏢 Header con logo
+            _buildComprobanteHeaderConLogo(logo),
             
             pw.SizedBox(height: 6),
             
@@ -196,24 +232,131 @@ class PDFService {
     );
   }
 
-  /// **🏢 Header compacto**
-  pw.Widget _buildComprobanteHeader() {
-    return pw.Center(
-      child: pw.Column(
-        children: [
-          pw.Text(
-            'INSEVIG Cia. LTDA.',
-            style: const pw.TextStyle(fontSize: 12, color: PdfColors.black), // Fuente más grande
+  /// **🔥 Header CORREGIDO con logo - SIN FutureBuilder**
+  pw.Widget _buildComprobanteHeaderConLogo(pw.MemoryImage? logo) {
+    return pw.Row(
+      children: [
+        // 🖼️ Logo (izquierda)
+        pw.Container(
+          width: 80,
+          height: 40,
+          child: logo != null
+              ? pw.Image(
+                  logo,
+                  fit: pw.BoxFit.contain,
+                )
+              : _buildFallbackLogo(),
+        ),
+        
+        // 📋 Información de la empresa (centro)
+        pw.Expanded(
+          child: pw.Column(
+            children: [
+              pw.Text(
+                'INSEVIG CÍA. LTDA.',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _inservigBlue,
+                ),
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'COMPAÑÍA DE SEGURIDAD INTEGRAL',
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  color: _inservigBlue,
+                ),
+              ),
+              pw.SizedBox(height: 1),
+              pw.Text(
+                'Pedro Moncayo N° 1005 y Vélez - Guayaquil',
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+              ),
+              pw.Text(
+                'Tel: 042326220 – 042510041',
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+              ),
+            ],
           ),
-          pw.SizedBox(height: 1),
-          pw.Text(
-            'COMPAÑÍA DE SEGURIDAD INTEGRAL',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.black), // Fuente más grande
+        ),
+      ],
+    );
+  }
+
+  /// **🔥 Header para reportes CORREGIDO - SIN FutureBuilder**
+  pw.Widget _buildReporteHeader(String titulo, pw.MemoryImage? logo) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(15),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.blue50,
+        border: pw.Border(
+          bottom: pw.BorderSide(color: _inservigBlue, width: 3),
+        ),
+      ),
+      child: pw.Row(
+        children: [
+          // Logo
+          pw.Container(
+            width: 100,
+            height: 50,
+            child: logo != null
+                ? pw.Image(logo, fit: pw.BoxFit.contain)
+                : _buildFallbackLogo(),
+          ),
+          
+          pw.SizedBox(width: 20),
+          
+          // Información
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'INSEVIG CÍA. LTDA.',
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _inservigBlue,
+                  ),
+                ),
+                pw.Text(
+                  'Compañía de Seguridad Integral',
+                  style: pw.TextStyle(fontSize: 12, color: _inservigBlue),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Pedro Moncayo N° 1005 y Vélez (esquina)\nEdificio Centenario 4to piso Of. N° 17\nGuayaquil - Ecuador',
+                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                ),
+              ],
+            ),
+          ),
+          
+          // Título del documento
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: _inservigBlue,
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Text(
+              titulo,
+              style: const pw.TextStyle(
+                fontSize: 14,
+                color: PdfColors.white,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
           ),
         ],
       ),
     );
   }
+
+  // ==========================================
+  // 📄 MÉTODOS EXISTENTES (sin cambios)
+  // ==========================================
 
   /// **📋 Título del comprobante**
   pw.Widget _buildComprobanteTitle() {
@@ -226,9 +369,10 @@ class PDFService {
           padding: const pw.EdgeInsets.only(bottom: 2),
           child: pw.Text(
             'COMPROBANTE DE MÉRITOS',
-            style: const pw.TextStyle(
-              fontSize: 11, // Fuente más grande y destacada
-              color: PdfColors.black,
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: _inservigBlue,
             ),
           ),
         ),
@@ -241,8 +385,8 @@ class PDFService {
     return pw.Align(
       alignment: pw.Alignment.centerRight,
       child: pw.Text(
-        sancion.id.substring(0, 8).toUpperCase(), // 🔧 Usa el ID real de la sanción
-        style: const pw.TextStyle(fontSize: 10, color: PdfColors.black), // Fuente más grande
+        'No. ${sancion.id.substring(0, 8).toUpperCase()}',
+        style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
       ),
     );
   }
@@ -254,7 +398,7 @@ class PDFService {
         // Fecha y Hora
         pw.Row(
           children: [
-            pw.Text('FECHA:', style: const pw.TextStyle(fontSize: 9)), // Fuente más grande
+            pw.Text('FECHA:', style: const pw.TextStyle(fontSize: 9)),
             pw.SizedBox(width: 3),
             pw.Expanded(
               child: pw.Container(
@@ -354,7 +498,6 @@ class PDFService {
           1: const pw.FlexColumnWidth(1),
         },
         children: [
-          // Crear filas de 2 columnas
           for (int i = 0; i < tiposSancion.length; i += 2)
             pw.TableRow(
               children: [
@@ -418,7 +561,7 @@ class PDFService {
                     ),
                   )
                 else
-                  pw.Container(), // Celda vacía si es impar
+                  pw.Container(),
               ],
             ),
         ],
@@ -431,14 +574,13 @@ class PDFService {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('OBSERVACIONES:', style: const pw.TextStyle(fontSize: 9)), // Fuente más grande
+        pw.Text('OBSERVACIONES:', style: const pw.TextStyle(fontSize: 9)),
         pw.SizedBox(height: 3),
         
-        // 3 líneas para observaciones
         for (int i = 0; i < 3; i++) ...[
           pw.Container(
             width: double.infinity,
-            height: 12, // Líneas más altas
+            height: 12,
             decoration: pw.BoxDecoration(
               border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.8)),
             ),
@@ -471,23 +613,23 @@ class PDFService {
         pw.Column(
           children: [
             pw.Container(
-              width: 80, // Líneas más largas
-              height: 1.2, // Líneas más gruesas
+              width: 80,
+              height: 1.2,
               color: _borderColor,
             ),
             pw.SizedBox(height: 3),
-            pw.Text('SUPERVISOR', style: const pw.TextStyle(fontSize: 8)), // Fuente más grande
+            pw.Text('SUPERVISOR', style: const pw.TextStyle(fontSize: 8)),
           ],
         ),
         pw.Column(
           children: [
             pw.Container(
-              width: 80, // Líneas más largas
-              height: 1.2, // Líneas más gruesas
+              width: 80,
+              height: 1.2,
               color: _borderColor,
             ),
             pw.SizedBox(height: 3),
-            pw.Text('SANCIONADO', style: const pw.TextStyle(fontSize: 8)), // Fuente más grande
+            pw.Text('SANCIONADO', style: const pw.TextStyle(fontSize: 8)),
           ],
         ),
       ],
@@ -495,18 +637,13 @@ class PDFService {
   }
 
   // ==========================================
-  // 📊 REPORTE (mantiene formato anterior)
+  // 📊 REPORTE
   // ==========================================
 
-  /// **📊 Reporte simple**
   pw.Widget _buildReporte(List<SancionModel> sanciones, String? titulo, String? filtros, String? generadoPor) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(
-          titulo ?? 'REPORTE DE SANCIONES INSEVIG',
-          style: const pw.TextStyle(fontSize: 16, color: PdfColors.black),
-        ),
         pw.SizedBox(height: 20),
         
         pw.Text('Total de sanciones: ${sanciones.length}'),
@@ -515,7 +652,6 @@ class PDFService {
         
         pw.SizedBox(height: 20),
         
-        // Tabla simple de sanciones
         pw.Table(
           border: pw.TableBorder.all(),
           children: [
@@ -542,15 +678,94 @@ class PDFService {
   }
 
   // ==========================================
-  // 🛠️ HELPERS
+  // 🛠️ MÉTODOS AUXILIARES
   // ==========================================
+
+  /// **Preview PDF**
+  Future<void> previewPDF(Uint8List pdfBytes, String filename) async {
+    try {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+        name: filename,
+      );
+    } catch (e) {
+      print('❌ Error en preview: $e');
+      throw Exception('Error al mostrar vista previa: $e');
+    }
+  }
+
+  /// **Guardar PDF**
+  Future<String?> savePDF(Uint8List pdfBytes, String filename) async {
+    try {
+      if (kIsWeb) {
+        await Printing.sharePdf(bytes: pdfBytes, filename: filename);
+        return 'Descargado';
+      } else {
+        if (await _requestStoragePermission()) {
+          Directory? directory;
+          
+          try {
+            directory = Directory('/storage/emulated/0/Download');
+            if (!await directory.exists()) {
+              directory = await getApplicationDocumentsDirectory();
+            }
+          } catch (e) {
+            directory = await getApplicationDocumentsDirectory();
+          }
+
+          final filePath = '${directory.path}/$filename';
+          final file = File(filePath);
+          await file.writeAsBytes(pdfBytes);
+          
+          if (await file.exists()) {
+            final size = await file.length();
+            print('✅ Comprobante guardado: $filePath (${size} bytes)');
+            return filePath;
+          } else {
+            throw Exception('El archivo no se pudo crear');
+          }
+        } else {
+          throw Exception('Permisos de almacenamiento denegados');
+        }
+      }
+    } catch (e) {
+      print('❌ Error guardando PDF: $e');
+      return null;
+    }
+  }
+
+  /// **Solicitar permisos**
+  Future<bool> _requestStoragePermission() async {
+    try {
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.request();
+        if (status.isGranted) return true;
+        
+        final manageStatus = await Permission.manageExternalStorage.request();
+        return manageStatus.isGranted;
+      }
+      return true;
+    } catch (e) {
+      print('❌ Error solicitando permisos: $e');
+      return false;
+    }
+  }
+
+  /// **Compartir PDF**
+  Future<void> sharePDF(Uint8List pdfBytes, String filename) async {
+    try {
+      await Printing.sharePdf(bytes: pdfBytes, filename: filename);
+    } catch (e) {
+      print('❌ Error compartiendo PDF: $e');
+      throw Exception('Error al compartir: $e');
+    }
+  }
 
   /// **Verificar si un tipo está seleccionado**
   bool _isTipoSelected(String tipo, SancionModel sancion) {
     final tipoSancion = sancion.tipoSancion.toLowerCase();
     final tipoCheck = tipo.toLowerCase();
     
-    // Mapeo de tipos
     if (tipoCheck.contains('falta') && tipoSancion.contains('falta')) return true;
     if (tipoCheck.contains('atraso') && tipoSancion.contains('atraso')) return true;
     if (tipoCheck.contains('permiso') && tipoSancion.contains('permiso')) return true;
