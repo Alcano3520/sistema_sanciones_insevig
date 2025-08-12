@@ -68,10 +68,10 @@ class AuthProvider with ChangeNotifier {
   Future<void> _loadUserProfile(String userId) async {
     try {
       print('🔍 Cargando perfil para usuario ID: $userId');
-      
+
       // ✅ CORREGIDO: Usar 'profiles' en lugar de 'usuarios'
       final response = await _supabase
-          .from('profiles')  // ✅ Tabla correcta
+          .from('profiles') // ✅ Tabla correcta
           .select('*')
           .eq('id', userId)
           .single();
@@ -80,7 +80,8 @@ class AuthProvider with ChangeNotifier {
       _clearError();
       notifyListeners();
 
-      print('✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role})');
+      print(
+          '✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role})');
     } catch (e) {
       print('❌ Error cargando perfil desde PROFILES: $e');
       _setError('Error cargando perfil del usuario');
@@ -95,27 +96,49 @@ class AuthProvider with ChangeNotifier {
 
       print('🔑 Intentando login con: $email');
 
-      // 1. Autenticar con Supabase Auth
-      final response = await _supabase.auth.signInWithPassword(
-        email: email.trim().toLowerCase(),
-        password: password,
-      );
+      // PASO 1: Solo intentar autenticación
+      try {
+        print('📍 PASO 1: Llamando a signInWithPassword...');
+        final response = await _supabase.auth.signInWithPassword(
+          email: email.trim().toLowerCase(),
+          password: password,
+        );
+        print('✅ PASO 1 EXITOSO: Usuario autenticado');
+        print('   User ID: ${response.user?.id}');
+        print('   Email: ${response.user?.email}');
+      } catch (e) {
+        print('❌ ERROR EN PASO 1 (signInWithPassword): $e');
+        rethrow;
+      }
 
-      if (response.user != null) {
-        // 2. ✅ CORREGIDO: Cargar datos desde 'profiles'
-        await _loadUserProfile(response.user!.id);
-        print('✅ Login exitoso para: ${_currentUser?.fullName}');
-        return true;
-      } else {
+      // PASO 2: Verificar el usuario
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        print('❌ No hay usuario después de login');
         _setError('Error en las credenciales');
         return false;
       }
+
+      // PASO 3: Intentar cargar perfil
+      try {
+        print('📍 PASO 2: Cargando perfil...');
+        await _loadUserProfile(user.id);
+        print('✅ PASO 2 EXITOSO: Perfil cargado');
+      } catch (e) {
+        print('❌ ERROR EN PASO 2 (loadUserProfile): $e');
+        // Por ahora, continuar sin perfil
+      }
+
+      print('✅ Login completado');
+      return true;
     } on AuthException catch (e) {
       print('❌ AuthException: ${e.message}');
+      print('   Código: ${e.statusCode}');
       _setError(_getAuthErrorMessage(e.message));
       return false;
     } catch (e) {
-      print('❌ Error general en signIn: $e');
+      print('❌ Error general: $e');
+      print('   Tipo: ${e.runtimeType}');
       _setError('Error de conexión: $e');
       return false;
     } finally {
@@ -211,7 +234,7 @@ class AuthProvider with ChangeNotifier {
 
       // ✅ CORREGIDO: Actualizar en 'profiles'
       await _supabase
-          .from('profiles')  // ✅ Tabla correcta
+          .from('profiles') // ✅ Tabla correcta
           .update(updateData)
           .eq('id', _currentUser!.id);
 
@@ -298,7 +321,8 @@ class AuthProvider with ChangeNotifier {
       case 'admin':
         return _currentUser!.role == 'admin';
       case 'supervisor':
-        return _currentUser!.role == 'supervisor' || _currentUser!.role == 'admin';
+        return _currentUser!.role == 'supervisor' ||
+            _currentUser!.role == 'admin';
       default:
         return false;
     }
@@ -333,7 +357,7 @@ class AuthProvider with ChangeNotifier {
   /// Convertir errores de Supabase a mensajes amigables en español
   String _getAuthErrorMessage(String error) {
     final errorLower = error.toLowerCase();
-    
+
     if (errorLower.contains('invalid login credentials')) {
       return 'Email o contraseña incorrectos';
     }
@@ -358,7 +382,7 @@ class AuthProvider with ChangeNotifier {
     if (errorLower.contains('network')) {
       return 'Error de conexión. Verifica tu internet';
     }
-    
+
     return 'Error de autenticación: $error';
   }
 

@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ AGREGADO para usar User
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Modelo de usuario del sistema
 /// Define quién puede usar la aplicación y sus permisos
@@ -25,7 +25,7 @@ class UserModel {
     required this.updatedAt,
   });
 
-  /// ✅ AGREGADO: Crear desde Supabase Auth + Profile data
+  /// Crear desde Supabase Auth + Profile data
   factory UserModel.fromSupabase(User user, Map<String, dynamic> profileData) {
     return UserModel(
       id: user.id,
@@ -74,8 +74,7 @@ class UserModel {
   static const String roleSupervisor = 'supervisor';
   static const String roleGerencia = 'gerencia';
   static const String roleRrhh = 'rrhh';
-  static const String roleAprobador =
-      'aprobador'; // 🆕 ROL ESPECÍFICO PARA APROBAR
+  static const String roleAprobador = 'aprobador';
 
   /// Verificadores de rol
   bool get isSupervisor => role == roleSupervisor;
@@ -83,16 +82,9 @@ class UserModel {
   bool get isRrhh => role == roleRrhh;
   bool get isAprobador => role == roleAprobador;
 
-  // 🔥 CAMBIO CRÍTICO: Solo aprobadores específicos pueden aprobar
   bool get canApprove => isAprobador || isGerencia || isRrhh;
-
-  // Supervisores solo pueden crear sanciones
   bool get canCreateSanciones => isSupervisor;
-
-  // Solo gerencia y RRHH pueden ver todas las sanciones
   bool get canViewAllSanciones => isGerencia || isRrhh;
-
-  // 🆕 Nuevo: Solo aprobadores pueden cambiar status
   bool get canChangeStatus => canApprove;
 
   /// Descripción del rol
