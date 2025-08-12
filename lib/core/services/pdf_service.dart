@@ -34,8 +34,8 @@ class PDFService {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a6, // 🔧 Tamaño A6 (media página)
-        margin: const pw.EdgeInsets.all(15), // Márgenes pequeños
+        pageFormat: PdfPageFormat.a5, // 🔧 Cambio a A5 para mejor proporción en media hoja
+        margin: const pw.EdgeInsets.all(20), // Márgenes más amplios
         build: (pw.Context context) => _buildComprobante(sancion),
       ),
     );
@@ -151,42 +151,42 @@ class PDFService {
   pw.Widget _buildComprobante(SancionModel sancion) {
     return pw.Container(
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _borderColor, width: 1),
+        border: pw.Border.all(color: _borderColor, width: 1.5), // Borde más grueso
       ),
       child: pw.Padding(
-        padding: const pw.EdgeInsets.all(8),
+        padding: const pw.EdgeInsets.all(6), // Padding reducido
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             // 🏢 Header de la empresa
             _buildComprobanteHeader(),
             
-            pw.SizedBox(height: 5),
+            pw.SizedBox(height: 6),
             
             // 📋 Título
             _buildComprobanteTitle(),
             
-            pw.SizedBox(height: 3),
+            pw.SizedBox(height: 4),
             
             // 🔢 Número de comprobante
             _buildComprobanteNumber(sancion),
             
-            pw.SizedBox(height: 5),
+            pw.SizedBox(height: 6),
             
             // 📝 Datos básicos
             _buildDatosBasicos(sancion),
             
-            pw.SizedBox(height: 5),
+            pw.SizedBox(height: 8),
             
             // ☑️ Tipos de sanción con checkboxes
             _buildTiposSancion(sancion),
             
-            pw.SizedBox(height: 5),
+            pw.SizedBox(height: 8),
             
             // 📝 Observaciones
             _buildObservacionesCompactas(sancion),
             
-            pw.Spacer(),
+            pw.SizedBox(height: 10),
             
             // ✍️ Firmas
             _buildFirmasCompactas(),
@@ -203,11 +203,12 @@ class PDFService {
         children: [
           pw.Text(
             'INSEVIG Cia. LTDA.',
-            style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+            style: const pw.TextStyle(fontSize: 12, color: PdfColors.black), // Fuente más grande
           ),
+          pw.SizedBox(height: 1),
           pw.Text(
             'COMPAÑÍA DE SEGURIDAD INTEGRAL',
-            style: const pw.TextStyle(fontSize: 8, color: PdfColors.black),
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.black), // Fuente más grande
           ),
         ],
       ),
@@ -218,11 +219,17 @@ class PDFService {
   pw.Widget _buildComprobanteTitle() {
     return pw.Center(
       child: pw.Container(
-        child: pw.Text(
-          'COMPROBANTE DE MÉRITOS',
-          style: const pw.TextStyle(
-            fontSize: 9,
-            color: PdfColors.black,
+        decoration: pw.BoxDecoration(
+          border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 1)),
+        ),
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 2),
+          child: pw.Text(
+            'COMPROBANTE DE MÉRITOS',
+            style: const pw.TextStyle(
+              fontSize: 11, // Fuente más grande y destacada
+              color: PdfColors.black,
+            ),
           ),
         ),
       ),
@@ -235,7 +242,7 @@ class PDFService {
       alignment: pw.Alignment.centerRight,
       child: pw.Text(
         sancion.id.substring(0, 8).toUpperCase(), // 🔧 Usa el ID real de la sanción
-        style: const pw.TextStyle(fontSize: 8, color: PdfColors.black),
+        style: const pw.TextStyle(fontSize: 10, color: PdfColors.black), // Fuente más grande
       ),
     );
   }
@@ -247,72 +254,72 @@ class PDFService {
         // Fecha y Hora
         pw.Row(
           children: [
-            pw.Text('FECHA:', style: const pw.TextStyle(fontSize: 8)),
-            pw.SizedBox(width: 2),
+            pw.Text('FECHA:', style: const pw.TextStyle(fontSize: 9)), // Fuente más grande
+            pw.SizedBox(width: 3),
             pw.Expanded(
               child: pw.Container(
                 decoration: pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.5)),
+                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.8)),
                 ),
                 child: pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 1),
-                  child: pw.Text(sancion.fechaFormateada, style: const pw.TextStyle(fontSize: 8)),
+                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  child: pw.Text(sancion.fechaFormateada, style: const pw.TextStyle(fontSize: 9)),
                 ),
               ),
             ),
-            pw.SizedBox(width: 10),
-            pw.Text('HORA:', style: const pw.TextStyle(fontSize: 8)),
-            pw.SizedBox(width: 2),
+            pw.SizedBox(width: 8),
+            pw.Text('HORA:', style: const pw.TextStyle(fontSize: 9)),
+            pw.SizedBox(width: 3),
             pw.Expanded(
               child: pw.Container(
                 decoration: pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.5)),
+                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.8)),
                 ),
                 child: pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 1),
-                  child: pw.Text(sancion.hora, style: const pw.TextStyle(fontSize: 8)),
+                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  child: pw.Text(sancion.hora, style: const pw.TextStyle(fontSize: 9)),
                 ),
               ),
             ),
           ],
         ),
         
-        pw.SizedBox(height: 3),
+        pw.SizedBox(height: 4),
         
         // Puesto
         pw.Row(
           children: [
-            pw.Text('PUESTO:', style: const pw.TextStyle(fontSize: 8)),
-            pw.SizedBox(width: 2),
+            pw.Text('PUESTO:', style: const pw.TextStyle(fontSize: 9)),
+            pw.SizedBox(width: 3),
             pw.Expanded(
               child: pw.Container(
                 decoration: pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.5)),
+                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.8)),
                 ),
                 child: pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 1),
-                  child: pw.Text(sancion.puesto, style: const pw.TextStyle(fontSize: 8)),
+                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  child: pw.Text(sancion.puesto, style: const pw.TextStyle(fontSize: 9)),
                 ),
               ),
             ),
           ],
         ),
         
-        pw.SizedBox(height: 3),
+        pw.SizedBox(height: 4),
         
         // Agente
         pw.Row(
           children: [
-            pw.Text('AGENTE:', style: const pw.TextStyle(fontSize: 8)),
-            pw.SizedBox(width: 2),
+            pw.Text('AGENTE:', style: const pw.TextStyle(fontSize: 9)),
+            pw.SizedBox(width: 3),
             pw.Expanded(
               child: pw.Container(
                 decoration: pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.5)),
+                  border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.8)),
                 ),
                 child: pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 1),
-                  child: pw.Text(sancion.empleadoNombre, style: const pw.TextStyle(fontSize: 8)),
+                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  child: pw.Text(sancion.empleadoNombre, style: const pw.TextStyle(fontSize: 9)),
                 ),
               ),
             ),
@@ -341,40 +348,80 @@ class PDFService {
     ];
 
     return pw.Container(
-      child: pw.Wrap(
-        spacing: 5,
-        runSpacing: 2,
-        children: tiposSancion.map((tipo) {
-          final isSelected = _isTipoSelected(tipo, sancion);
-          return pw.Container(
-            width: 90, // Ancho fijo para alineación
-            child: pw.Row(
+      child: pw.Table(
+        columnWidths: {
+          0: const pw.FlexColumnWidth(1),
+          1: const pw.FlexColumnWidth(1),
+        },
+        children: [
+          // Crear filas de 2 columnas
+          for (int i = 0; i < tiposSancion.length; i += 2)
+            pw.TableRow(
               children: [
-                pw.Container(
-                  width: 8,
-                  height: 8,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: _borderColor, width: 0.5),
+                // Columna izquierda
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 3),
+                  child: pw.Row(
+                    children: [
+                      pw.Container(
+                        width: 10,
+                        height: 10,
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: _borderColor, width: 0.8),
+                        ),
+                        child: _isTipoSelected(tiposSancion[i], sancion)
+                            ? pw.Center(
+                                child: pw.Text('X', style: const pw.TextStyle(fontSize: 8)),
+                              )
+                            : null,
+                      ),
+                      pw.SizedBox(width: 3),
+                      pw.Expanded(
+                        child: pw.Text(
+                          tiposSancion[i] + (tiposSancion[i] == 'HORAS EXTRAS' && sancion.horasExtras != null 
+                              ? ' (${sancion.horasExtras}H)' 
+                              : ''),
+                          style: const pw.TextStyle(fontSize: 8),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: isSelected
-                      ? pw.Center(
-                          child: pw.Text('X', style: const pw.TextStyle(fontSize: 6)),
-                        )
-                      : null,
                 ),
-                pw.SizedBox(width: 2),
-                pw.Expanded(
-                  child: pw.Text(
-                    tipo + (tipo == 'HORAS EXTRAS' && sancion.horasExtras != null 
-                        ? ' (${sancion.horasExtras}H)' 
-                        : ''),
-                    style: const pw.TextStyle(fontSize: 6),
-                  ),
-                ),
+                // Columna derecha
+                if (i + 1 < tiposSancion.length)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 3),
+                    child: pw.Row(
+                      children: [
+                        pw.Container(
+                          width: 10,
+                          height: 10,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: _borderColor, width: 0.8),
+                          ),
+                          child: _isTipoSelected(tiposSancion[i + 1], sancion)
+                              ? pw.Center(
+                                  child: pw.Text('X', style: const pw.TextStyle(fontSize: 8)),
+                                )
+                              : null,
+                        ),
+                        pw.SizedBox(width: 3),
+                        pw.Expanded(
+                          child: pw.Text(
+                            tiposSancion[i + 1] + (tiposSancion[i + 1] == 'HORAS EXTRAS' && sancion.horasExtras != null 
+                                ? ' (${sancion.horasExtras}H)' 
+                                : ''),
+                            style: const pw.TextStyle(fontSize: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  pw.Container(), // Celda vacía si es impar
               ],
             ),
-          );
-        }).toList(),
+        ],
       ),
     );
   }
@@ -384,30 +431,33 @@ class PDFService {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('OBSERVACIONES:', style: const pw.TextStyle(fontSize: 8)),
-        pw.SizedBox(height: 2),
+        pw.Text('OBSERVACIONES:', style: const pw.TextStyle(fontSize: 9)), // Fuente más grande
+        pw.SizedBox(height: 3),
         
         // 3 líneas para observaciones
         for (int i = 0; i < 3; i++) ...[
           pw.Container(
             width: double.infinity,
-            height: 8,
+            height: 12, // Líneas más altas
             decoration: pw.BoxDecoration(
-              border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.5)),
+              border: pw.Border(bottom: pw.BorderSide(color: _borderColor, width: 0.8)),
             ),
             child: i == 0 && sancion.observaciones != null
                 ? pw.Align(
                     alignment: pw.Alignment.centerLeft,
-                    child: pw.Text(
-                      sancion.observaciones!.length > 40 
-                          ? sancion.observaciones!.substring(0, 40)
-                          : sancion.observaciones!,
-                      style: const pw.TextStyle(fontSize: 7),
+                    child: pw.Padding(
+                      padding: const pw.EdgeInsets.only(bottom: 2),
+                      child: pw.Text(
+                        sancion.observaciones!.length > 50 
+                            ? sancion.observaciones!.substring(0, 50)
+                            : sancion.observaciones!,
+                        style: const pw.TextStyle(fontSize: 8),
+                      ),
                     ),
                   )
                 : null,
           ),
-          pw.SizedBox(height: 2),
+          pw.SizedBox(height: 3),
         ],
       ],
     );
@@ -421,23 +471,23 @@ class PDFService {
         pw.Column(
           children: [
             pw.Container(
-              width: 60,
-              height: 1,
+              width: 80, // Líneas más largas
+              height: 1.2, // Líneas más gruesas
               color: _borderColor,
             ),
-            pw.SizedBox(height: 2),
-            pw.Text('SUPERVISOR', style: const pw.TextStyle(fontSize: 7)),
+            pw.SizedBox(height: 3),
+            pw.Text('SUPERVISOR', style: const pw.TextStyle(fontSize: 8)), // Fuente más grande
           ],
         ),
         pw.Column(
           children: [
             pw.Container(
-              width: 60,
-              height: 1,
+              width: 80, // Líneas más largas
+              height: 1.2, // Líneas más gruesas
               color: _borderColor,
             ),
-            pw.SizedBox(height: 2),
-            pw.Text('SANCIONADO', style: const pw.TextStyle(fontSize: 7)),
+            pw.SizedBox(height: 3),
+            pw.Text('SANCIONADO', style: const pw.TextStyle(fontSize: 8)), // Fuente más grande
           ],
         ),
       ],
