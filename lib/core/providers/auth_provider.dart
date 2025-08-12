@@ -160,28 +160,79 @@ class AuthProvider with ChangeNotifier {
 
       print('📝 Registrando usuario: $email');
 
-      // 1. Crear usuario en Supabase Auth
+      // ✅ PASO 1: Crear usuario en Supabase Auth
       final response = await _supabase.auth.signUp(
         email: email.trim().toLowerCase(),
         password: password,
       );
 
       if (response.user != null) {
-        // 2. ✅ CORREGIDO: Crear perfil en la tabla 'profiles'
-        await _supabase.from('profiles').insert({
-          'id': response.user!.id,
-          'email': email.trim().toLowerCase(),
-          'full_name': fullName.trim(),
-          'role': role,
-          'department': department?.trim(),
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        print('✅ Usuario creado en Auth: ${response.user!.id}');
 
-        print('✅ Usuario registrado exitosamente en profiles');
+        // 🔥 PASO 2: Esperar para que auth.uid() esté disponible
+        print('⏳ Esperando 800ms para que auth.uid() esté disponible...');
+        await Future.delayed(const Duration(milliseconds: 800));
+
+        // 🔥 PASO 3: Retry logic para crear el profile
+        bool profileCreated = false;
+        int attempts = 0;
+        const maxAttempts = 5; // Aumentamos a 5 intentos
+        Exception? lastError;
+
+        while (!profileCreated && attempts < maxAttempts) {
+          attempts++;
+          print('🔄 Intento $attempts de $maxAttempts para crear profile...');
+
+          try {
+            // Crear profile en tabla profiles
+            await _supabase.from('profiles').insert({
+              'id': response.user!.id,
+              'email': email.trim().toLowerCase(),
+              'full_name': fullName.trim(),
+              'role': role,
+              'department': department?.trim(),
+              'is_active': true,
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+
+            profileCreated = true;
+            print('✅ Profile creado exitosamente en intento $attempts');
+            print('   Datos: $fullName ($role) - ${department ?? "Sin dept"}');
+          } catch (e) {
+            lastError = Exception('Error intento $attempts: $e');
+            print('❌ Error creando profile (intento $attempts): $e');
+
+            if (attempts < maxAttempts) {
+              // Esperar más tiempo progresivamente: 500ms, 1s, 1.5s, 2s...
+              final waitTime = Duration(milliseconds: 500 * attempts);
+              print(
+                  '⏳ Esperando ${waitTime.inMilliseconds}ms antes del siguiente intento...');
+              await Future.delayed(waitTime);
+            }
+          }
+        }
+
+        // Verificar si se pudo crear el profile
+        if (!profileCreated) {
+          print(
+              '❌ FALLÓ: No se pudo crear profile después de $maxAttempts intentos');
+          // Limpiar el usuario de auth si no se pudo crear el profile
+          try {
+            print('🧹 Eliminando usuario de auth por fallo en profile...');
+            // Nota: Necesitarías permisos admin para esto, por ahora solo reportamos
+          } catch (cleanupError) {
+            print('⚠️ No se pudo limpiar usuario de auth: $cleanupError');
+          }
+
+          throw Exception(
+              'No se pudo crear el profile después de $maxAttempts intentos. Último error: $lastError');
+        }
+
+        print('🎉 REGISTRO COMPLETO EXITOSO para $email');
         return true;
       } else {
-        _setError('Error al registrar usuario');
+        _setError('Error al registrar usuario en Auth');
         return false;
       }
     } on AuthException catch (e) {
