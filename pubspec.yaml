@@ -40,6 +40,13 @@ dependencies:
   hive_flutter: ^1.1.0       # Integración Flutter + paths automáticos
   connectivity_plus: ^5.0.2  # Detección conectividad multiplataforma
     # Rutas de almacenamiento móvil
+  # PDFs
+  pdf: ^3.10.7
+  printing: ^5.12.0
+  
+  # Ya las tienes, pero verificar versiones:
+  
+  share_plus: ^7.2.2  
 
 dev_dependencies:
   flutter_test:
