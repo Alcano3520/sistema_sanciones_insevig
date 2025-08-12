@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
     <!-- 🌐 Permisos necesarios para tu app -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -6,7 +7,11 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- 🆕 Para Android 11+ (API 30+): -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    
     <application
         android:label="Sistema Sanciones INSEVIG"
         android:name="${applicationName}"
@@ -66,5 +71,11 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="http" />
         </intent>
+        <!-- 🆕 Para compartir PDFs -->
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="application/pdf" />
+        </intent>
     </queries>
+    
 </manifest>

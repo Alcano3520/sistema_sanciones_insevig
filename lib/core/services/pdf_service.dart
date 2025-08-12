@@ -93,6 +93,7 @@ class PDFService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        // 🔧 SIN TEMA PERSONALIZADO - usar fuentes por defecto
         build: (pw.Context context) => [
           // Header
           _buildHeader(),
@@ -228,7 +229,7 @@ class PDFService {
   // 🏗️ MÉTODOS DE CONSTRUCCIÓN PDF
   // ==========================================
 
-  /// **🔧 Header SOLO INSEVIG (corregido)**
+  /// **🔧 Header SOLO INSEVIG - SIN fuentes problemáticas**
   pw.Widget _buildHeader() {
     return pw.Container(
       width: double.infinity,
@@ -245,18 +246,18 @@ class PDFService {
             children: [
               pw.Text(
                 'INSEVIG',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                   fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
+                  // 🔧 REMOVIDO: fontWeight que puede causar problemas
                   color: PdfColors.white,
                 ),
               ),
               // 🔧 REMOVIDO: texto largo institucional
               pw.Text(
                 'Sistema de Registro de Sanciones',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                   fontSize: 12,
-                  color: _lightGrey,
+                  color: PdfColors.white,
                 ),
               ),
             ],
@@ -273,10 +274,9 @@ class PDFService {
               child: pw.Text(
                 'LOGO\nINSEVIG',
                 textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                   fontSize: 10,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _primaryColor,
+                  color: PdfColors.black,
                 ),
               ),
             ),
@@ -286,7 +286,7 @@ class PDFService {
     );
   }
 
-  /// Título principal
+  /// **🔧 Título principal - fuentes básicas**
   pw.Widget _buildTitle(String titulo) {
     return pw.Container(
       width: double.infinity,
@@ -300,17 +300,17 @@ class PDFService {
       child: pw.Center(
         child: pw.Text(
           titulo,
-          style: pw.TextStyle(
+          style: const pw.TextStyle(
             fontSize: 18,
-            fontWeight: pw.FontWeight.bold,
-            color: _primaryColor,
+            // 🔧 REMOVIDO: fontWeight
+            color: PdfColors.black,
           ),
         ),
       ),
     );
   }
 
-  /// Información de la sanción
+  /// **🔧 Información de la sanción - LAYOUT SIMPLIFICADO**
   pw.Widget _buildSancionInfo(SancionModel sancion) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -323,43 +323,27 @@ class PDFService {
         children: [
           pw.Text(
             'INFORMACIÓN DE LA SANCIÓN',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-              color: _primaryColor,
+              color: PdfColors.black,
             ),
           ),
           pw.SizedBox(height: 12),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _buildInfoRow('ID Sanción:', sancion.id.substring(0, 8)),
-                  _buildInfoRow('Fecha:', sancion.fechaFormateada),
-                  _buildInfoRow('Hora:', sancion.hora),
-                  _buildInfoRow('Estado:', sancion.statusText),
-                ],
-              ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _buildInfoRow('Tipo:', sancion.tipoSancion),
-                  if (sancion.horasExtras != null)
-                    _buildInfoRow('Horas Extras:', '${sancion.horasExtras} hrs'),
-                  _buildInfoRow('Pendiente:', sancion.pendiente ? 'SÍ' : 'NO'),
-                  _buildInfoRow('Creada:', sancion.fechaFormateada),
-                ],
-              ),
-            ],
-          ),
+          // 🔧 LAYOUT VERTICAL SIMPLE - sin Row/Column complejos
+          _buildInfoRow('ID Sanción:', sancion.id.substring(0, 8)),
+          _buildInfoRow('Fecha:', sancion.fechaFormateada),
+          _buildInfoRow('Hora:', sancion.hora),
+          _buildInfoRow('Estado:', sancion.statusText),
+          _buildInfoRow('Tipo:', sancion.tipoSancion),
+          if (sancion.horasExtras != null)
+            _buildInfoRow('Horas Extras:', '${sancion.horasExtras} hrs'),
+          _buildInfoRow('Pendiente:', sancion.pendiente ? 'SÍ' : 'NO'),
         ],
       ),
     );
   }
 
-  /// Sección del empleado
+  /// **🔧 Sección del empleado - SIN Expanded problemático**
   pw.Widget _buildEmpleadoSection(SancionModel sancion) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -372,44 +356,23 @@ class PDFService {
         children: [
           pw.Text(
             'INFORMACIÓN DEL EMPLEADO',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-              color: _primaryColor,
+              color: PdfColors.black,
             ),
           ),
           pw.SizedBox(height: 12),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    _buildInfoRow('Nombre Completo:', sancion.empleadoNombre),
-                    _buildInfoRow('Código:', sancion.empleadoCod.toString()),
-                    _buildInfoRow('Puesto:', sancion.puesto),
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 20),
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    _buildInfoRow('Agente:', sancion.agente),
-                    pw.SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          // 🔧 LAYOUT SIMPLIFICADO sin Expanded
+          _buildInfoRow('Nombre Completo:', sancion.empleadoNombre),
+          _buildInfoRow('Código:', sancion.empleadoCod.toString()),
+          _buildInfoRow('Puesto:', sancion.puesto),
+          _buildInfoRow('Agente:', sancion.agente),
         ],
       ),
     );
   }
 
-  /// **🔧 Sección de observaciones - SOLO observaciones (no adicionales)**
+  /// **🔧 Sección de observaciones - SUPER SIMPLIFICADA**
   pw.Widget _buildObservacionesSection(SancionModel sancion) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -422,31 +385,29 @@ class PDFService {
         children: [
           pw.Text(
             'OBSERVACIONES',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-              color: _primaryColor,
+              color: PdfColors.black,
             ),
           ),
           pw.SizedBox(height: 12),
-          // 🔧 SOLO mostrar observaciones principales (NO adicionales)
-          if (sancion.observaciones != null && sancion.observaciones!.isNotEmpty) ...[
-            pw.Text(sancion.observaciones!),
-          ] else ...[
-            pw.Text(
-              'Sin observaciones registradas',
-              style: pw.TextStyle(
-                fontStyle: pw.FontStyle.italic,
-                color: PdfColors.grey600,
+          // 🔧 TEXTO DIRECTO sin widgets complejos
+          pw.Container(
+            width: double.infinity,
+            child: pw.Text(
+              sancion.observaciones ?? 'Sin observaciones registradas',
+              style: const pw.TextStyle(
+                fontSize: 11,
+                color: PdfColors.black,
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  /// Sección de firmas
+  /// **🔥 Sección de firmas - LAYOUT FIJO**
   pw.Widget _buildFirmasSection(SancionModel sancion) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -454,62 +415,57 @@ class PDFService {
         border: pw.Border.all(color: PdfColors.grey400),
         borderRadius: pw.BorderRadius.circular(8),
       ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+      child: pw.Column(
         children: [
-          // Firma del supervisor
-          pw.Expanded(
+          // 🔧 LAYOUT SIMPLIFICADO - sin Row/Expanded problemático
+          pw.Container(
+            width: double.infinity,
+            height: 80,
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400),
+            ),
             child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
-                pw.Container(
-                  width: double.infinity,
-                  height: 60,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey400),
-                  ),
-                  child: pw.Center(
-                    child: pw.Text(
-                      'Firma del Supervisor',
-                      style: pw.TextStyle(color: PdfColors.grey600),
-                    ),
-                  ),
+                pw.Text(
+                  'Firma del Supervisor',
+                  style: const pw.TextStyle(color: PdfColors.grey600, fontSize: 12),
                 ),
                 pw.SizedBox(height: 8),
                 pw.Text(
                   'Supervisor',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  style: const pw.TextStyle(fontSize: 10),
                 ),
               ],
             ),
           ),
-          pw.SizedBox(width: 20),
-          // Firma del sancionado
-          pw.Expanded(
+          
+          pw.SizedBox(height: 20),
+          
+          pw.Container(
+            width: double.infinity,
+            height: 80,
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400),
+            ),
             child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
-                pw.Container(
-                  width: double.infinity,
-                  height: 60,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey400),
-                  ),
-                  child: pw.Center(
-                    child: pw.Text(
-                      sancion.firmaPath != null 
-                          ? 'Firma Digital Registrada'
-                          : 'Sin Firma',
-                      style: pw.TextStyle(
-                        color: sancion.firmaPath != null 
-                            ? PdfColors.green 
-                            : PdfColors.grey600,
-                      ),
-                    ),
+                pw.Text(
+                  sancion.firmaPath != null 
+                      ? 'Firma Digital Registrada'
+                      : 'Sin Firma',
+                  style: pw.TextStyle(
+                    color: sancion.firmaPath != null 
+                        ? PdfColors.green 
+                        : PdfColors.grey600,
+                    fontSize: 12,
                   ),
                 ),
                 pw.SizedBox(height: 8),
                 pw.Text(
                   'Empleado Sancionado',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  style: const pw.TextStyle(fontSize: 10),
                 ),
               ],
             ),
@@ -519,7 +475,7 @@ class PDFService {
     );
   }
 
-  /// Footer
+  /// **🔧 Footer SIMPLIFICADO**
   pw.Widget _buildFooter() {
     final now = DateTime.now();
     return pw.Container(
@@ -530,23 +486,24 @@ class PDFService {
           top: pw.BorderSide(color: PdfColors.grey400),
         ),
       ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
           pw.Text(
             'Generado por: Sistema de Sanciones INSEVIG',
-            style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+            style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
           ),
+          pw.SizedBox(height: 4),
           pw.Text(
             'Fecha: ${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
-            style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+            style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
           ),
         ],
       ),
     );
   }
 
-  /// Información del reporte
+  /// **🔧 Información del reporte SIMPLIFICADA**
   pw.Widget _buildReporteInfo(int totalSanciones, String? filtros, String? generadoPor) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
@@ -559,10 +516,9 @@ class PDFService {
         children: [
           pw.Text(
             'INFORMACIÓN DEL REPORTE',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 12,
-              fontWeight: pw.FontWeight.bold,
-              color: _primaryColor,
+              color: PdfColors.black,
             ),
           ),
           pw.SizedBox(height: 8),
@@ -575,7 +531,7 @@ class PDFService {
     );
   }
 
-  /// Resumen estadístico
+  /// **🔧 Resumen estadístico SIMPLIFICADO**
   pw.Widget _buildResumenEstadistico(List<SancionModel> sanciones) {
     final stats = _calculateStats(sanciones);
     
@@ -590,23 +546,18 @@ class PDFService {
         children: [
           pw.Text(
             'RESUMEN ESTADÍSTICO',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-              color: _primaryColor,
+              color: PdfColors.black,
             ),
           ),
           pw.SizedBox(height: 12),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatColumn('Borradores', stats['borradores']!),
-              _buildStatColumn('Enviadas', stats['enviadas']!),
-              _buildStatColumn('Aprobadas', stats['aprobadas']!),
-              _buildStatColumn('Rechazadas', stats['rechazadas']!),
-              _buildStatColumn('Pendientes', stats['pendientes']!),
-            ],
-          ),
+          // 🔧 LAYOUT VERTICAL SIMPLE
+          pw.Text('Borradores: ${stats['borradores']}'),
+          pw.Text('Enviadas: ${stats['enviadas']}'),
+          pw.Text('Aprobadas: ${stats['aprobadas']}'),
+          pw.Text('Rechazadas: ${stats['rechazadas']}'),
+          pw.Text('Pendientes: ${stats['pendientes']}'),
         ],
       ),
     );
@@ -653,53 +604,43 @@ class PDFService {
   // 🔧 MÉTODOS AUXILIARES
   // ==========================================
 
+  /// **🔧 Info row SIMPLIFICADO - sin Expanded**
   pw.Widget _buildInfoRow(String label, String value) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 4),
-      child: pw.Row(
+      padding: const pw.EdgeInsets.only(bottom: 6),
+      child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.SizedBox(
-            width: 100,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          pw.Text(
+            label,
+            style: const pw.TextStyle(
+              fontSize: 10,
+              color: PdfColors.grey600,
             ),
           ),
-          pw.Expanded(
-            child: pw.Text(value),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            value,
+            style: const pw.TextStyle(
+              fontSize: 11,
+              color: PdfColors.black,
+            ),
           ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildStatColumn(String label, int value) {
-    return pw.Column(
-      children: [
-        pw.Text(
-          value.toString(),
-          style: pw.TextStyle(
-            fontSize: 20,
-            fontWeight: pw.FontWeight.bold,
-            color: _primaryColor,
-          ),
-        ),
-        pw.Text(
-          label,
-          style: pw.TextStyle(fontSize: 10),
-        ),
-      ],
-    );
-  }
 
+
+  /// **🔧 Header de tabla sin fontWeight**
   pw.Widget _buildTableHeader(String text) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(8),
       child: pw.Text(
         text,
-        style: pw.TextStyle(
-          fontWeight: pw.FontWeight.bold,
+        style: const pw.TextStyle(
+          // 🔧 REMOVIDO: fontWeight
           color: PdfColors.white,
           fontSize: 10,
         ),
