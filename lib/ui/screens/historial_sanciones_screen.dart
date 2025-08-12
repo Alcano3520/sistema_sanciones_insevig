@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+
+// 🔥 NUEVAS IMPORTACIONES PARA PDF
+import '../../core/services/pdf_service.dart';
+import 'package:printing/printing.dart';
+import 'dart:typed_data';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/offline/sancion_repository.dart';
-import '../widgets/sancion_card.dart'; // ← ESTA LÍNEA DEBE ESTAR
-import '../widgets/filtros_dialog.dart'; // ← ESTA LÍNEA DEBE ESTAR
-import 'detalle_sancion_screen.dart'; // ← ESTA LÍNEA DEBE ESTAR
+import '../widgets/sancion_card.dart';
+import '../widgets/filtros_dialog.dart';
+import 'detalle_sancion_screen.dart';
 
 /// Pantalla de historial de sanciones - Como tu PantallaHistorial de Kivy
 /// Incluye filtros, búsqueda y visualización completa de sanciones
+/// 🆕 AHORA CON GENERACIÓN DE REPORTES PDF
 class HistorialSancionesScreen extends StatefulWidget {
   const HistorialSancionesScreen({super.key});
 
@@ -73,6 +80,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     );
   }
 
+  // 🔥 APPBAR MEJORADO CON BOTÓN PDF
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       title: const Text('Historial de Sanciones'),
@@ -89,6 +97,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
           icon: const Icon(Icons.filter_list),
           onPressed: _showFiltrosDialog,
           tooltip: 'Filtros avanzados',
+        ),
+        // 🆕 BOTÓN PDF AGREGADO
+        IconButton(
+          icon: const Icon(Icons.picture_as_pdf),
+          onPressed: _showPDFOptionsMenu,
+          tooltip: 'Generar PDF',
         ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
@@ -381,6 +395,488 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     );
   }
 
+  // ==========================================
+  // 🔥 FUNCIONALIDADES PDF AGREGADAS
+  // ==========================================
+
+  /// **Mostrar menú de opciones PDF**
+  void _showPDFOptionsMenu() {
+    if (_sancionesFiltradas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.white),
+              SizedBox(width: 8),
+              Text('⚠️ No hay sanciones para generar PDF'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Título
+            Row(
+              children: [
+                const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
+                const SizedBox(width: 12),
+                const Text(
+                  'Generar Reporte PDF',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Información actual
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sanciones actuales: ${_sancionesFiltradas.length}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  if (_filtroStatus != 'todos')
+                    Text('Filtro estado: $_filtroStatus', style: const TextStyle(fontSize: 12)),
+                  if (_soloPendientes)
+                    const Text('Solo pendientes: SÍ', style: TextStyle(fontSize: 12)),
+                  if (_rangoFechas != null)
+                    Text(
+                      'Rango: ${_rangoFechas!.start.day}/${_rangoFechas!.start.month} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Opciones de reporte
+            ListTile(
+              leading: const Icon(Icons.list_alt, color: Color(0xFF1E3A8A)),
+              title: const Text('Reporte Completo'),
+              subtitle: Text('${_sancionesFiltradas.length} sanciones con filtros actuales'),
+              onTap: () {
+                Navigator.pop(context);
+                _generarReporteCompleto();
+              },
+            ),
+
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.today, color: Colors.green),
+              title: const Text('Reporte del Día'),
+              subtitle: Text('${_getSancionesHoy().length} sanciones de hoy'),
+              onTap: () {
+                Navigator.pop(context);
+                _generarReporteDelDia();
+              },
+            ),
+
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.date_range, color: Colors.orange),
+              title: const Text('Reporte Personalizado'),
+              subtitle: const Text('Seleccionar rango específico'),
+              onTap: () {
+                Navigator.pop(context);
+                _generarReportePersonalizado();
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // Botón cerrar
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// **Generar reporte PDF completo**
+  Future<void> _generarReporteCompleto() async {
+    await _generarReportePDF(
+      sanciones: _sancionesFiltradas,
+      titulo: 'REPORTE COMPLETO DE SANCIONES',
+      descripcion: _getDescripcionFiltros(),
+    );
+  }
+
+  /// **Generar reporte del día actual**
+  Future<void> _generarReporteDelDia() async {
+    final sancionesHoy = _getSancionesHoy();
+    
+    if (sancionesHoy.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📅 No hay sanciones registradas hoy'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _generarReportePDF(
+      sanciones: sancionesHoy,
+      titulo: 'REPORTE DIARIO DE SANCIONES',
+      descripcion: 'Sanciones del ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+    );
+  }
+
+  /// **Generar reporte personalizado con selección de fechas**
+  Future<void> _generarReportePersonalizado() async {
+    final dateRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF1E3A8A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (dateRange != null) {
+      final sancionesEnRango = _sanciones.where((sancion) {
+        return sancion.fecha.isAfter(dateRange.start.subtract(const Duration(days: 1))) &&
+               sancion.fecha.isBefore(dateRange.end.add(const Duration(days: 1)));
+      }).toList();
+
+      if (sancionesEnRango.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📅 No hay sanciones en el rango seleccionado'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      await _generarReportePDF(
+        sanciones: sancionesEnRango,
+        titulo: 'REPORTE PERSONALIZADO DE SANCIONES',
+        descripcion: 'Del ${dateRange.start.day}/${dateRange.start.month}/${dateRange.start.year} al ${dateRange.end.day}/${dateRange.end.month}/${dateRange.end.year}',
+      );
+    }
+  }
+
+  /// **Método principal para generar cualquier reporte PDF**
+  Future<void> _generarReportePDF({
+    required List<SancionModel> sanciones,
+    required String titulo,
+    required String descripcion,
+  }) async {
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Generando reporte PDF...',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Obtener usuario actual para el reporte
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final generadoPor = authProvider.currentUser?.fullName ?? 'Sistema';
+
+      // Generar PDF
+      final pdfService = PDFService.instance;
+      final pdfBytes = await pdfService.generateReportePDF(
+        sanciones,
+        titulo: titulo,
+        filtros: descripcion,
+        generadoPor: generadoPor,
+      );
+      final filename = pdfService.generateFileName(null, isReport: true);
+
+      // Cerrar indicador de carga
+      if (mounted) Navigator.pop(context);
+
+      // Mostrar opciones del PDF generado
+      _showReportePDFDialog(pdfBytes, filename, sanciones.length);
+
+    } catch (e) {
+      // Cerrar indicador si está abierto
+      if (mounted) Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error generando reporte PDF: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// **Mostrar opciones del reporte PDF generado**
+  void _showReportePDFDialog(Uint8List pdfBytes, String filename, int totalSanciones) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Título de éxito
+            Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                const SizedBox(width: 12),
+                const Text(
+                  'Reporte PDF Generado',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 20),
+
+            // Información del reporte
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Archivo: $filename',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                  Text(
+                    'Total sanciones: $totalSanciones',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    'Tamaño: ${(pdfBytes.length / 1024).toStringAsFixed(1)} KB',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    'Generado: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Opciones
+            if (!kIsWeb) ...[
+              ListTile(
+                leading: const Icon(Icons.visibility, color: Color(0xFF1E3A8A)),
+                title: const Text('Vista Previa'),
+                subtitle: const Text('Ver el reporte antes de descargar'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await PDFService.instance.previewPDF(pdfBytes, filename);
+                },
+              ),
+              const Divider(),
+            ],
+
+            ListTile(
+              leading: const Icon(Icons.download, color: Colors.green),
+              title: Text(kIsWeb ? 'Descargar' : 'Guardar'),
+              subtitle: Text(kIsWeb 
+                  ? 'Descargar a tu computadora' 
+                  : 'Guardar en dispositivo'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _guardarReportePDF(pdfBytes, filename);
+              },
+            ),
+
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.share, color: Colors.blue),
+              title: const Text('Compartir'),
+              subtitle: const Text('Email, WhatsApp, etc.'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _compartirReportePDF(pdfBytes, filename);
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // Botón cerrar
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// **Guardar reporte PDF**
+  Future<void> _guardarReportePDF(Uint8List pdfBytes, String filename) async {
+    try {
+      final savedPath = await PDFService.instance.savePDF(pdfBytes, filename);
+      
+      if (savedPath != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.download_done, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(kIsWeb 
+                      ? '📥 Reporte descargado: $filename'
+                      : '📥 Reporte guardado en Documentos'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error guardando reporte: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// **Compartir reporte PDF**
+  Future<void> _compartirReportePDF(Uint8List pdfBytes, String filename) async {
+    try {
+      await PDFService.instance.sharePDF(pdfBytes, filename);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.share, color: Colors.white),
+                SizedBox(width: 8),
+                Text('📤 Reporte listo para compartir'),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error compartiendo reporte: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ==========================================
+  // 🔧 MÉTODOS AUXILIARES PARA PDF
+  // ==========================================
+
+  /// **Obtener sanciones de hoy**
+  List<SancionModel> _getSancionesHoy() {
+    final hoy = DateTime.now();
+    return _sanciones.where((sancion) {
+      return sancion.fecha.year == hoy.year &&
+             sancion.fecha.month == hoy.month &&
+             sancion.fecha.day == hoy.day;
+    }).toList();
+  }
+
+  /// **Obtener descripción de los filtros actuales**
+  String _getDescripcionFiltros() {
+    final filtros = <String>[];
+    
+    if (_filtroStatus != 'todos') {
+      filtros.add('Estado: $_filtroStatus');
+    }
+    
+    if (_soloPendientes) {
+      filtros.add('Solo pendientes');
+    }
+    
+    if (_rangoFechas != null) {
+      filtros.add('Rango: ${_rangoFechas!.start.day}/${_rangoFechas!.start.month} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}');
+    }
+    
+    if (filtros.isEmpty) {
+      return 'Todas las sanciones';
+    }
+    
+    return filtros.join(' • ');
+  }
+
+  // ==========================================
+  // 🔧 FUNCIONES ORIGINALES DE CARGA Y FILTRADO
+  // ==========================================
+
   // Funciones de carga y filtrado
   Future<void> _loadSanciones() async {
     setState(() => _isLoading = true);
@@ -583,4 +1079,3 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     );
   }
 }
-

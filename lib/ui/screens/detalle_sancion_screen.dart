@@ -1,9 +1,14 @@
+// 🔥 IMPORTS ACTUALIZADOS - PDF SERVICE AGREGADO
+import '../../core/services/pdf_service.dart';
+import 'package:printing/printing.dart';
+import 'dart:typed_data'; // 🆕 AGREGADO para Uint8List
+import 'package:flutter/foundation.dart' show kIsWeb; // 🆕 AGREGADO para web detection
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/sancion_service.dart';
-import 'edit_sancion_screen.dart'; // 🆕 IMPORT AGREGADO
+import 'edit_sancion_screen.dart';
 
 /// Pantalla de detalle completo de una sanción
 /// Muestra toda la información como en tu app Kivy pero con diseño moderno
@@ -666,6 +671,7 @@ class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
     );
   }
 
+  // 🔥 MENÚ DE ACCIONES ACTUALIZADO - INCLUYE OPCIÓN PDF
   Widget _buildActionsMenu() {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
@@ -677,6 +683,18 @@ class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
           icon: const Icon(Icons.more_vert),
           onSelected: _handleMenuAction,
           itemBuilder: (context) => [
+            // 🆕 OPCIÓN PDF AGREGADA
+            const PopupMenuItem(
+              value: 'pdf',
+              child: Row(
+                children: [
+                  Icon(Icons.picture_as_pdf, color: Colors.red, size: 18),
+                  SizedBox(width: 8),
+                  Text('Generar PDF'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
             const PopupMenuItem(
               value: 'refresh',
               child: Row(
@@ -771,7 +789,6 @@ ID: ${_sancion.id}
     );
   }
 
-  // 🔥 FUNCIÓN DE EDITAR ACTUALIZADA - YA NO MUESTRA "PRÓXIMAMENTE"
   void _editarSancion() async {
     final result = await Navigator.push(
       context,
@@ -940,8 +957,12 @@ ID: ${_sancion.id}
     }
   }
 
+  // 🔥 MÉTODO HANDLEMENUCACTION ACTUALIZADO - INCLUYE PDF
   void _handleMenuAction(String action) {
     switch (action) {
+      case 'pdf':
+        _generarPDF(); // 🆕 NUEVA FUNCIÓN
+        break;
       case 'refresh':
         _recargarSancion();
         break;
@@ -1044,5 +1065,229 @@ ID: ${_sancion.id}
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _mostrarError(String mensaje) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensaje),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  // 🔥 🔥 🔥 NUEVOS MÉTODOS PARA FUNCIONALIDAD PDF 🔥 🔥 🔥
+
+  /// **Generar PDF de la sanción individual**
+  Future<void> _generarPDF() async {
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Generar PDF
+      final pdfService = PDFService.instance;
+      final pdfBytes = await pdfService.generateSancionPDF(_sancion);
+      final filename = pdfService.generateFileName(_sancion);
+
+      // Cerrar indicador de carga
+      if (mounted) Navigator.pop(context);
+
+      // Mostrar opciones
+      _showPDFOptionsDialog(pdfBytes, filename);
+
+    } catch (e) {
+      // Cerrar indicador si está abierto
+      if (mounted) Navigator.pop(context);
+      
+      _mostrarError('Error generando PDF: $e');
+    }
+  }
+
+  /// **Mostrar opciones del PDF generado**
+  void _showPDFOptionsDialog(Uint8List pdfBytes, String filename) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Título
+            Row(
+              children: [
+                const Icon(Icons.picture_as_pdf, color: Colors.red),
+                const SizedBox(width: 12),
+                const Text(
+                  'PDF Generado Exitosamente',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 20),
+
+            // Información del archivo
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Archivo: $filename',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                  Text(
+                    'Empleado: ${_sancion.empleadoNombre}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    'Tamaño: ${(pdfBytes.length / 1024).toStringAsFixed(1)} KB',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Opciones
+            if (!kIsWeb) ...[
+              ListTile(
+                leading: const Icon(Icons.visibility, color: Color(0xFF1E3A8A)),
+                title: const Text('Vista Previa'),
+                subtitle: const Text('Ver antes de descargar'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await PDFService.instance.previewPDF(pdfBytes, filename);
+                },
+              ),
+              const Divider(),
+            ],
+
+            ListTile(
+              leading: const Icon(Icons.download, color: Colors.green),
+              title: Text(kIsWeb ? 'Descargar' : 'Guardar en Dispositivo'),
+              subtitle: Text(kIsWeb 
+                  ? 'Descargar a tu computadora' 
+                  : 'Guardar en carpeta de documentos'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _guardarPDF(pdfBytes, filename);
+              },
+            ),
+
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.share, color: Colors.blue),
+              title: const Text('Compartir'),
+              subtitle: const Text('Email, WhatsApp, etc.'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _compartirPDF(pdfBytes, filename);
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // Botón cerrar
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// **Guardar PDF en el dispositivo**
+  Future<void> _guardarPDF(Uint8List pdfBytes, String filename) async {
+    try {
+      final savedPath = await PDFService.instance.savePDF(pdfBytes, filename);
+      
+      if (savedPath != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(kIsWeb 
+                      ? '✅ PDF descargado: $filename'
+                      : '✅ PDF guardado en: Documentos/$filename'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+            action: !kIsWeb ? SnackBarAction(
+              label: 'Ver',
+              textColor: Colors.white,
+              onPressed: () {
+                // Aquí podrías abrir el archivo o la carpeta
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Archivo guardado en carpeta Documentos'),
+                    backgroundColor: Colors.blue,
+                  ),
+                );
+              },
+            ) : null,
+          ),
+        );
+      }
+    } catch (e) {
+      _mostrarError('Error guardando PDF: $e');
+    }
+  }
+
+  /// **Compartir PDF**
+  Future<void> _compartirPDF(Uint8List pdfBytes, String filename) async {
+    try {
+      await PDFService.instance.sharePDF(pdfBytes, filename);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.share, color: Colors.white),
+                SizedBox(width: 8),
+                Text('📤 PDF listo para compartir'),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      _mostrarError('Error compartiendo PDF: $e');
+    }
   }
 }
