@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
+import 'package:uuid/uuid.dart'; // 🔥 Agregar importación para UUID
 
 import '../models/empleado_model.dart';
 import '../models/sancion_model.dart';
@@ -47,10 +48,17 @@ class OfflineManager {
         return false;
       }
 
-      // 2. Configurar listener de conectividad para auto-sync
+      // 2. Verificar estado inicial
+      print('🔍 Verificando estado inicial de persistencia:');
+      final stats = getOfflineStats();
+      print('   - Empleados en cache: ${stats['empleados_cached']}');
+      print('   - Sanciones en cache: ${stats['sanciones_cached']}');
+      print('   - Operaciones pendientes: ${stats['pending_sync']}');
+
+      // 3. Configurar listener de conectividad para auto-sync
       _setupConnectivityListener();
 
-      // 3. Intentar sincronización inicial si hay conexión
+      // 4. Intentar sincronización inicial si hay conexión
       if (_connectivity.isConnected) {
         _backgroundSync();
       }
@@ -86,7 +94,6 @@ class OfflineManager {
   /// 👥 EMPLEADOS CON FALLBACK OFFLINE
   /// =============================================
 
-  /// Buscar empleados (online first, offline fallback)
   /// Buscar empleados (online first, offline fallback)
   Future<List<EmpleadoModel>> searchEmpleados(String query) async {
     if (kIsWeb) {
@@ -212,22 +219,6 @@ class OfflineManager {
     return resultados.take(50).toList(); // Limitar a 50 resultados
   }
 
-// 🆕 Método auxiliar para búsqueda offline
-  List<EmpleadoModel> _searchEmpleadosOffline(String query) {
-    final empleadosOffline = _db.searchEmpleados(query);
-
-    print('📱 Búsqueda offline completada:');
-    print('   - Query: "$query"');
-    print('   - Resultados: ${empleadosOffline.length}');
-    print('   - Total en cache: ${_db.getEmpleados().length}');
-
-    if (empleadosOffline.isEmpty && _db.getEmpleados().isNotEmpty) {
-      print('💡 No hay coincidencias para "$query" en cache');
-    }
-
-    return empleadosOffline;
-  }
-
   /// Obtener empleado por código
   Future<EmpleadoModel?> getEmpleadoByCod(int cod) async {
     if (kIsWeb) {
@@ -272,6 +263,8 @@ class OfflineManager {
 
       // Guardar mapa actualizado
       await _db.saveEmpleados(existingMap.values.toList());
+      
+      print('✅ Cache de empleados actualizado con ${empleados.length} nuevos registros');
     } catch (e) {
       print('❌ Error actualizando cache empleados: $e');
     }
@@ -318,33 +311,48 @@ class OfflineManager {
         // 📱 Móvil OFFLINE: guardar localmente y marcar para sync
         print('📱 Creando sanción offline...');
 
+        // Generar ID único para la sanción
+        final sancionId = const Uuid().v4();
+        final sancionConId = sancion.copyWith(
+          id: sancionId,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
         // Guardar en base local
-        await _db.saveSancion(sancion);
+        await _db.saveSancion(sancionConId);
 
         // Agregar a cola de sincronización
         await _db.addToSyncQueue('create_sancion', {
-          'sancion_id': sancion.id,
-          'sancion_data': sancion.toMap(),
+          'sancion_id': sancionConId.id,
+          'sancion_data': sancionConId.toMap(),
           'has_foto': fotoFile != null,
           'has_firma': signatureController != null,
           // TODO: Manejar archivos offline (guardar rutas locales)
         });
 
         print('✅ Sanción guardada offline, se sincronizará al reconectar');
-        return sancion.id;
+        return sancionConId.id;
       }
     } catch (e) {
       print('❌ Error creando sanción, guardando offline: $e');
 
       // Fallback: guardar offline
-      await _db.saveSancion(sancion);
+      final sancionId = const Uuid().v4();
+      final sancionConId = sancion.copyWith(
+        id: sancionId,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await _db.saveSancion(sancionConId);
       await _db.addToSyncQueue('create_sancion', {
-        'sancion_id': sancion.id,
-        'sancion_data': sancion.toMap(),
+        'sancion_id': sancionConId.id,
+        'sancion_data': sancionConId.toMap(),
         'error_online': e.toString(),
       });
 
-      return sancion.id;
+      return sancionConId.id;
     }
   }
 
@@ -479,7 +487,8 @@ class OfflineManager {
     if (_isSyncing) return false;
 
     _isSyncing = true;
-    print('🔄 Iniciando sincronización...');
+    print('\n🔄 INICIANDO SINCRONIZACIÓN...');
+    print('═══════════════════════════════════');
 
     try {
       // 1. Sincronizar empleados (descargar últimos)
@@ -488,7 +497,8 @@ class OfflineManager {
       // 2. Procesar cola de operaciones pendientes
       await _processSyncQueue();
 
-      print('✅ Sincronización completada');
+      print('✅ SINCRONIZACIÓN COMPLETADA');
+      print('═══════════════════════════════════\n');
       return true;
     } catch (e) {
       print('❌ Error en sincronización: $e');
@@ -505,6 +515,9 @@ class OfflineManager {
 
       // Obtener timestamp de última sincronización
       final lastSync = _db.getMetadata<String>('last_empleados_sync');
+      if (lastSync != null) {
+        print('   Última sync: $lastSync');
+      }
 
       // Por ahora, obtener todos los empleados activos
       // TODO: Implementar sync incremental basado en timestamp
@@ -536,18 +549,22 @@ class OfflineManager {
       print(
           '🔄 Procesando ${pendingOperations.length} operaciones pendientes...');
 
+      int successCount = 0;
       for (var operation in pendingOperations) {
         try {
           await _processSingleOperation(operation);
+          successCount++;
         } catch (e) {
           print('❌ Error procesando operación: $e');
           // Continuar con la siguiente operación
         }
       }
 
-      // Si todo salió bien, limpiar cola
-      await _db.clearSyncQueue();
-      print('✅ Cola de sincronización procesada');
+      // Si al menos una operación fue exitosa, limpiar cola
+      if (successCount > 0) {
+        await _db.clearSyncQueue();
+        print('✅ $successCount operaciones sincronizadas exitosamente');
+      }
     } catch (e) {
       print('❌ Error procesando cola de sync: $e');
     }
@@ -582,7 +599,13 @@ class OfflineManager {
       final sancionId = await SancionService().createSancion(sancion: sancion);
 
       if (sancionId != null) {
-        // Actualizar sanción local con datos del servidor
+        // Actualizar sanción local con ID del servidor
+        final oldId = data['sancion_id'] as String;
+        
+        // Eliminar sanción con ID temporal
+        await _db.deleteSancion(oldId);
+        
+        // Guardar con nuevo ID del servidor
         final sancionConId = sancion.copyWith(id: sancionId);
         await _db.saveSancion(sancionConId);
 

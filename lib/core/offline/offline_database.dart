@@ -31,32 +31,34 @@ class OfflineDatabase {
     }
 
     try {
-      print('💾 Inicializando Hive para móvil...');
+      print('💾 Inicializando OfflineDatabase para móvil...');
 
-      // Obtener directorio de la app en móvil
-      final directory = await getApplicationDocumentsDirectory();
-      await Hive.initFlutter(directory.path);
+      // 🔥 NO inicializar Hive aquí - ya se hace en main.dart
+      // Solo registrar adapters y abrir boxes
 
       // Registrar adapters para los modelos
       if (!Hive.isAdapterRegistered(0)) {
         Hive.registerAdapter(EmpleadoModelAdapter());
+        print('✅ Adapter EmpleadoModel registrado');
       }
       if (!Hive.isAdapterRegistered(1)) {
         Hive.registerAdapter(SancionModelAdapter());
+        print('✅ Adapter SancionModel registrado');
       }
 
       // Abrir las cajas necesarias
       await _openBoxes();
 
       _isInitialized = true;
-      print('✅ Hive inicializado correctamente en móvil');
+      print('✅ OfflineDatabase inicializada correctamente');
 
       // Mostrar estadísticas iniciales
       await _printStats();
 
       return true;
     } catch (e) {
-      print('❌ Error inicializando Hive: $e');
+      print('❌ Error inicializando OfflineDatabase: $e');
+      print('Stacktrace: ${StackTrace.current}');
       return false;
     }
   }
@@ -66,27 +68,42 @@ class OfflineDatabase {
     if (kIsWeb) return;
 
     try {
+      // 🔥 VERIFICAR PATH
+      final directory = await getApplicationDocumentsDirectory();
+      print('📁 Directorio Hive: ${directory.path}');
+
       // Abrir caja de empleados
       if (!Hive.isBoxOpen(empleadosBoxName)) {
         await Hive.openBox<EmpleadoModel>(empleadosBoxName);
+        print('📦 Caja empleados abierta');
       }
 
       // Abrir caja de sanciones
       if (!Hive.isBoxOpen(sancionesBoxName)) {
         await Hive.openBox<SancionModel>(sancionesBoxName);
+        print('📦 Caja sanciones abierta');
       }
 
       // Abrir caja de cola de sincronización
       if (!Hive.isBoxOpen(syncQueueBoxName)) {
-        await Hive.openBox<Map<String, dynamic>>(syncQueueBoxName);
+        await Hive.openBox(syncQueueBoxName);
+        print('📦 Caja sync queue abierta');
       }
 
       // Abrir caja de metadata
       if (!Hive.isBoxOpen(metadataBoxName)) {
         await Hive.openBox<dynamic>(metadataBoxName);
+        print('📦 Caja metadata abierta');
       }
 
       print('📦 Todas las cajas Hive abiertas correctamente');
+      
+      // 🔥 VERIFICAR que las boxes existen
+      print('📦 Estado de las boxes:');
+      print('   - Empleados: ${empleadosBox?.isOpen ?? false} (${empleadosBox?.length ?? 0} items)');
+      print('   - Sanciones: ${sancionesBox?.isOpen ?? false} (${sancionesBox?.length ?? 0} items)');
+      print('   - SyncQueue: ${syncQueueBox?.isOpen ?? false} (${syncQueueBox?.length ?? 0} items)');
+      print('   - Metadata: ${Hive.box(metadataBoxName).isOpen} (${Hive.box(metadataBoxName).length} items)');
     } catch (e) {
       print('❌ Error abriendo cajas Hive: $e');
       rethrow;
@@ -128,8 +145,11 @@ class OfflineDatabase {
       }
 
       await box.putAll(empleadosMap);
+      
+      // 🔥 CRÍTICO: Forzar escritura a disco
+      await box.flush();
 
-      print('💾 ${empleados.length} empleados guardados en Hive');
+      print('💾 ${empleados.length} empleados guardados y persistidos en Hive');
       return true;
     } catch (e) {
       print('❌ Error guardando empleados: $e');
@@ -145,7 +165,9 @@ class OfflineDatabase {
       final box = empleadosBox;
       if (box == null) return [];
 
-      return box.values.toList();
+      final empleados = box.values.toList();
+      print('📖 Leyendo ${empleados.length} empleados de Hive');
+      return empleados;
     } catch (e) {
       print('❌ Error obteniendo empleados: $e');
       return [];
@@ -229,8 +251,12 @@ class OfflineDatabase {
       final box = sancionesBox;
       if (box == null) return false;
 
+      // 🔥 CRÍTICO: Usar await y flush
       await box.put(sancion.id, sancion);
-      print('💾 Sanción ${sancion.id.substring(0, 8)} guardada en Hive');
+      await box.flush(); // Forzar escritura a disco
+      
+      print('💾 Sanción ${sancion.id.substring(0, 8)} guardada y persistida en Hive');
+      print('   Total sanciones en cache: ${box.length}');
 
       return true;
     } catch (e) {
@@ -247,7 +273,9 @@ class OfflineDatabase {
       final box = sancionesBox;
       if (box == null) return [];
 
-      return box.values.toList();
+      final sanciones = box.values.toList();
+      print('📖 Leyendo ${sanciones.length} sanciones de Hive');
+      return sanciones;
     } catch (e) {
       print('❌ Error obteniendo sanciones: $e');
       return [];
@@ -260,7 +288,9 @@ class OfflineDatabase {
 
     try {
       final sanciones = getSanciones();
-      return sanciones.where((s) => s.supervisorId == supervisorId).toList();
+      final filtered = sanciones.where((s) => s.supervisorId == supervisorId).toList();
+      print('📖 Encontradas ${filtered.length} sanciones del supervisor $supervisorId');
+      return filtered;
     } catch (e) {
       print('❌ Error obteniendo sanciones del supervisor: $e');
       return [];
@@ -276,6 +306,8 @@ class OfflineDatabase {
       if (box == null) return false;
 
       await box.delete(sancionId);
+      await box.flush(); // 🔥 Forzar escritura
+      
       print('🗑️ Sanción $sancionId eliminada de Hive');
 
       return true;
@@ -290,10 +322,10 @@ class OfflineDatabase {
   /// =============================================
 
   /// Obtener caja de sync queue
-  Box<Map<String, dynamic>>? get syncQueueBox {
+  Box? get syncQueueBox {
     if (kIsWeb || !_isInitialized) return null;
     try {
-      return Hive.box<Map<String, dynamic>>(syncQueueBoxName);
+      return Hive.box(syncQueueBoxName);
     } catch (e) {
       print('❌ Error obteniendo caja sync queue: $e');
       return null;
@@ -301,8 +333,7 @@ class OfflineDatabase {
   }
 
   /// Agregar operación a la cola de sincronización
-  Future<bool> addToSyncQueue(
-      String operation, Map<String, dynamic> data) async {
+  Future<bool> addToSyncQueue(String operation, Map<String, dynamic> data) async {
     if (kIsWeb || !_isInitialized) return false;
 
     try {
@@ -316,8 +347,14 @@ class OfflineDatabase {
         'attempts': 0,
       };
 
-      await box.add(queueItem);
+      // 🔥 Generar key única basada en timestamp
+      final key = 'sync_${DateTime.now().millisecondsSinceEpoch}_${operation}';
+      await box.put(key, queueItem);
+      await box.flush(); // 🔥 Forzar escritura
+      
       print('📤 Operación "$operation" añadida a cola de sync');
+      print('   Key: $key');
+      print('   Total en cola: ${box.length}');
 
       return true;
     } catch (e) {
@@ -334,7 +371,17 @@ class OfflineDatabase {
       final box = syncQueueBox;
       if (box == null) return [];
 
-      return box.values.cast<Map<String, dynamic>>().toList();
+      final operations = <Map<String, dynamic>>[];
+      
+      for (var value in box.values) {
+        if (value is Map) {
+          // Convertir a Map<String, dynamic>
+          operations.add(Map<String, dynamic>.from(value));
+        }
+      }
+      
+      print('📋 ${operations.length} operaciones pendientes de sync');
+      return operations;
     } catch (e) {
       print('❌ Error obteniendo operaciones pendientes: $e');
       return [];
@@ -350,6 +397,8 @@ class OfflineDatabase {
       if (box == null) return false;
 
       await box.clear();
+      await box.flush(); // 🔥 Forzar escritura
+      
       print('🧹 Cola de sync limpiada');
 
       return true;
@@ -370,6 +419,9 @@ class OfflineDatabase {
     try {
       final box = Hive.box(metadataBoxName);
       await box.put(key, value);
+      await box.flush(); // 🔥 Forzar escritura
+      
+      print('💾 Metadata "$key" guardada: $value');
       return true;
     } catch (e) {
       print('❌ Error guardando metadata: $e');
@@ -383,7 +435,9 @@ class OfflineDatabase {
 
     try {
       final box = Hive.box(metadataBoxName);
-      return box.get(key, defaultValue: defaultValue);
+      final value = box.get(key, defaultValue: defaultValue);
+      print('📖 Metadata "$key": $value');
+      return value;
     } catch (e) {
       print('❌ Error obteniendo metadata: $e');
       return defaultValue;
@@ -399,10 +453,12 @@ class OfflineDatabase {
       final sancionesCount = getSanciones().length;
       final pendingSyncCount = getPendingSyncOperations().length;
 
-      print('📊 ESTADÍSTICAS HIVE:');
+      print('\n📊 ESTADÍSTICAS HIVE:');
       print('   👥 Empleados: $empleadosCount');
       print('   📋 Sanciones: $sancionesCount');
       print('   ⏳ Sync pendiente: $pendingSyncCount');
+      print('   📁 Path: ${(await getApplicationDocumentsDirectory()).path}');
+      print('');
     } catch (e) {
       print('❌ Error obteniendo estadísticas: $e');
     }
@@ -414,9 +470,16 @@ class OfflineDatabase {
 
     try {
       await empleadosBox?.clear();
+      await empleadosBox?.flush();
+      
       await sancionesBox?.clear();
+      await sancionesBox?.flush();
+      
       await syncQueueBox?.clear();
+      await syncQueueBox?.flush();
+      
       await Hive.box(metadataBoxName).clear();
+      await Hive.box(metadataBoxName).flush();
 
       print('🧹 Toda la base de datos offline limpiada');
       return true;
@@ -431,11 +494,11 @@ class OfflineDatabase {
     if (kIsWeb) return;
 
     try {
-      await Hive.close();
+      // NO cerrar Hive completamente, solo las referencias
       _isInitialized = false;
-      print('💾 Hive cerrado correctamente');
+      print('💾 OfflineDatabase disposed (Hive permanece abierto)');
     } catch (e) {
-      print('❌ Error cerrando Hive: $e');
+      print('❌ Error en dispose: $e');
     }
   }
 }
@@ -451,7 +514,8 @@ class EmpleadoModelAdapter extends TypeAdapter<EmpleadoModel> {
 
   @override
   EmpleadoModel read(BinaryReader reader) {
-    return EmpleadoModel.fromMap(Map<String, dynamic>.from(reader.readMap()));
+    final map = Map<String, dynamic>.from(reader.readMap());
+    return EmpleadoModel.fromMap(map);
   }
 
   @override
@@ -467,7 +531,8 @@ class SancionModelAdapter extends TypeAdapter<SancionModel> {
 
   @override
   SancionModel read(BinaryReader reader) {
-    return SancionModel.fromMap(Map<String, dynamic>.from(reader.readMap()));
+    final map = Map<String, dynamic>.from(reader.readMap());
+    return SancionModel.fromMap(map);
   }
 
   @override

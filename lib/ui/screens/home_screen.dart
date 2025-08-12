@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // 🔥 Importar Hive
 import '../../core/providers/auth_provider.dart';
 import '../../core/offline/sancion_repository.dart';
 import '../../core/offline/empleado_repository.dart';
@@ -31,17 +32,37 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isOnline = true;
   StreamSubscription<bool>? _connectivitySubscription;
 
+  // 🔥 NUEVO: Variable para test de persistencia
+  String? _lastTestValue;
+
   @override
   void initState() {
     super.initState();
     _loadData();
     _listenToConnectivity();
+    _loadTestValue(); // 🔥 Cargar valor de test anterior
   }
 
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
     super.dispose();
+  }
+
+  // 🔥 NUEVO: Cargar valor de test anterior
+  Future<void> _loadTestValue() async {
+    if (kIsWeb) return;
+    
+    try {
+      final box = await Hive.openBox('test_persistence');
+      final value = box.get('test_key');
+      if (value != null && mounted) {
+        setState(() => _lastTestValue = value);
+        print('🔍 Valor de test anterior encontrado: $value');
+      }
+    } catch (e) {
+      print('❌ Error cargando valor de test: $e');
+    }
   }
 
   // 🔥 NUEVO: Escuchar cambios en la conectividad
@@ -151,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           // 🔥 BANNER DE DEBUG (solo en modo desarrollo)
-          //if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
+          if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
 
           // Contenido principal
           Expanded(
@@ -192,82 +213,145 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _buildFloatingActionButton(),
           ),
 
-          // 🆕 BOTÓN DE DEBUG (arriba a la izquierda del principal)
-          /*
+          // 🆕 BOTÓN DE TEST DE PERSISTENCIA (solo en debug)
           if (!kIsWeb && kDebugMode)
             Positioned(
               bottom: 70,
               right: 10,
               child: FloatingActionButton(
                 mini: true,
-                heroTag: "debug_btn", // Importante para evitar conflictos
+                heroTag: "test_persistence_btn",
                 backgroundColor: Colors.orange,
-                onPressed: () async {
-                  // 🔧 CÓDIGO DE PRUEBA OFFLINE
-                  final offline = OfflineManager.instance;
-
-                  print('🔧 TEST MODO OFFLINE:');
-                  print(
-                      'Cache total: ${offline.database.getEmpleados().length}');
-
-                  // Buscar empleado de prueba
-                  final resultado =
-                      await EmpleadoRepository.instance.searchEmpleados('vera');
-
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('🧪 Test Offline'),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                              '📦 Cache: ${offline.database.getEmpleados().length} empleados'),
-                          Text(
-                              '🔍 Búsqueda "vera": ${resultado.length} resultados'),
-                          const Divider(),
-                          const Text('Primeros resultados:',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          if (resultado.isEmpty)
-                            const Text('❌ No se encontraron resultados',
-                                style: TextStyle(color: Colors.red))
-                          else
-                            ...resultado.take(3).map((e) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Text('• ${e.displayName} (${e.cod})',
-                                      style: const TextStyle(fontSize: 12)),
-                                )),
-                        ],
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            // 🔥 AQUÍ VA EL CÓDIGO DEL PUNTO 5
-                            _verificarCacheDetallado();
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Ver más detalles'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cerrar'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                child: const Icon(Icons.bug_report, size: 20),
+                onPressed: _testPersistence,
+                child: const Icon(Icons.save, size: 20),
+                tooltip: 'Test Persistencia',
               ),
             ),
-        */
+            
+          // 🆕 BOTÓN DE DEBUG OFFLINE (arriba del de persistencia)
+          if (!kIsWeb && kDebugMode)
+            Positioned(
+              bottom: 120,
+              right: 10,
+              child: FloatingActionButton(
+                mini: true,
+                heroTag: "debug_btn",
+                backgroundColor: Colors.purple,
+                onPressed: _runOfflineTest,
+                child: const Icon(Icons.bug_report, size: 20),
+                tooltip: 'Debug Offline',
+              ),
+            ),
         ],
       ),
     );
   }
 
+  // 🔥 NUEVO: Test de persistencia
+  Future<void> _testPersistence() async {
+    if (kIsWeb) return;
+    
+    try {
+      // Test de persistencia
+      final testId = 'test_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Guardar dato de prueba
+      final box = await Hive.openBox('test_persistence');
+      await box.put('test_key', testId);
+      await box.flush(); // 🔥 Forzar escritura
+      
+      print('✅ Guardado: $testId');
+      
+      // Verificar inmediatamente
+      final saved = box.get('test_key');
+      print('📖 Leído inmediatamente: $saved');
+      
+      setState(() => _lastTestValue = testId);
+      
+      // Mostrar diálogo con información
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('🧪 Test de Persistencia'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Prueba de persistencia Hive:', 
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('💾 Nuevo valor guardado:\n$testId'),
+              const SizedBox(height: 8),
+              if (_lastTestValue != null && _lastTestValue != testId)
+                Text('📖 Valor anterior:\n$_lastTestValue',
+                    style: const TextStyle(color: Colors.green)),
+              const SizedBox(height: 16),
+              const Text(
+                '🔄 Cierra completamente la app y vuelve a abrir para verificar que el valor persiste.',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                // Limpiar test
+                await box.delete('test_key');
+                await box.flush();
+                setState(() => _lastTestValue = null);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🧹 Valor de test eliminado'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              },
+              child: const Text('Limpiar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('❌ Error en test de persistencia: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   // 🔥 NUEVO: Banner de debug para ver estado del sistema offline
+  Widget _buildOfflineDebugBanner() {
+    final offlineStats = OfflineManager.instance.getOfflineStats();
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      color: Colors.grey.shade800,
+      child: Row(
+        children: [
+          const Icon(Icons.developer_mode, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'DEBUG: ${offlineStats['mode']} | '
+              'Cache: ${offlineStats['empleados_cached']} emp | '
+              'Pending: ${offlineStats['pending_sync']} | '
+              'Last Value: ${_lastTestValue ?? 'none'}',
+              style: const TextStyle(color: Colors.white, fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // 🔥 NUEVO: Banner indicando modo offline (producción)
   Widget _buildOfflineBanner() {
@@ -344,7 +428,14 @@ class _HomeScreenState extends State<HomeScreen> {
       foregroundColor: Colors.white,
       elevation: 0,
       actions: [
-        // Si tienes muchos iconos, usa un menú
+        // Icono de sincronización manual
+        if (!kIsWeb)
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: _syncPendingData,
+            tooltip: 'Sincronizar ahora',
+          ),
+        // Menú con más opciones
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
           onSelected: _handleMenuSelection,
@@ -353,23 +444,43 @@ class _HomeScreenState extends State<HomeScreen> {
               value: 'refresh',
               child: Row(
                 children: [
-                  Icon(Icons.refresh),
+                  Icon(Icons.refresh, size: 20),
                   SizedBox(width: 8),
                   Text('Actualizar'),
                 ],
               ),
             ),
             const PopupMenuItem(
-              value: 'notifications',
+              value: 'profile',
               child: Row(
                 children: [
-                  Icon(Icons.notifications),
+                  Icon(Icons.person, size: 20),
                   SizedBox(width: 8),
-                  Text('Notificaciones'),
+                  Text('Mi Perfil'),
                 ],
               ),
             ),
-            // ... más opciones
+            const PopupMenuItem(
+              value: 'settings',
+              child: Row(
+                children: [
+                  Icon(Icons.settings, size: 20),
+                  SizedBox(width: 8),
+                  Text('Configuración'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: 'logout',
+              child: Row(
+                children: [
+                  Icon(Icons.logout, size: 20),
+                  SizedBox(width: 8),
+                  Text('Cerrar Sesión'),
+                ],
+              ),
+            ),
           ],
         ),
       ],
@@ -799,6 +910,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleMenuSelection(String value) {
     switch (value) {
+      case 'refresh':
+        _loadData();
+        break;
       case 'profile':
         _showProfile();
         break;
@@ -908,16 +1022,45 @@ class _HomeScreenState extends State<HomeScreen> {
           '   - Primeros 3: ${cached.take(3).map((e) => e.displayName).join(", ")}');
     }
 
-    // Mostrar resultado en UI
+    // Mostrar diálogo con resultados
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Test Offline: ${cached.length} empleados en cache, '
-            'Modo: ${offline.isOfflineMode ? "OFFLINE" : "ONLINE"}',
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('🧪 Test Offline'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('📦 Cache: ${cached.length} empleados'),
+                Text('🔍 Búsqueda "a": ${cached.where((e) => e.displayName.toLowerCase().contains('a')).length} resultados'),
+                Text('📡 Conectividad: ${connectivity.isConnected ? "ONLINE" : "OFFLINE"}'),
+                const Divider(),
+                const Text('Estadísticas completas:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...offline.getOfflineStats().entries.map((e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('${e.key}: ${e.value}',
+                          style: const TextStyle(fontSize: 12)),
+                    )),
+              ],
+            ),
           ),
-          backgroundColor: Colors.blue,
-          duration: const Duration(seconds: 3),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _verificarCacheDetallado();
+                Navigator.pop(context);
+              },
+              child: const Text('Ver más detalles'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
         ),
       );
     }
