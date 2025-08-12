@@ -7,19 +7,18 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
+import 'package:permission_handler/permission_handler.dart'; // 🆕 AGREGADO
 
 import '../models/sancion_model.dart';
 import '../models/empleado_model.dart';
 
 /// 📄 **PDFService - Generador de PDFs para Sanciones INSEVIG**
 /// 
-/// **Funcionalidades:**
-/// - PDF de sanción individual con todos los detalles
-/// - Reportes PDF con múltiples sanciones
-/// - Templates profesionales con logo INSEVIG
-/// - Compatible Web + Android/iOS
-/// - Preview antes de descargar
-/// - Compartir por email/WhatsApp
+/// **✅ VERSIÓN ANDROID COMPATIBLE:**
+/// - Sin emojis problemáticos
+/// - Fuentes compatibles
+/// - Guardado real en Android
+/// - Permisos de almacenamiento
 class PDFService {
   static PDFService? _instance;
   static PDFService get instance => _instance ??= PDFService._();
@@ -29,9 +28,7 @@ class PDFService {
   static const _primaryColor = PdfColor.fromInt(0xFF1E3A8A);
   static const _secondaryColor = PdfColor.fromInt(0xFF3B82F6);
   static const _accentColor = PdfColor.fromInt(0xFF60A5FA);
-  
-  // 🔧 COLORES CORREGIDOS - Definimos colores personalizados
-  static const _lightGrey = PdfColor.fromInt(0xFFE5E7EB); // Equivalente a white70
+  static const _lightGrey = PdfColor.fromInt(0xFFE5E7EB);
   static const _mediumGrey = PdfColor.fromInt(0xFF9CA3AF);
 
   /// **MÉTODO PRINCIPAL:** Generar PDF de sanción individual
@@ -43,7 +40,7 @@ class PDFService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) => [
-          // Header con logo
+          // Header con logo (SIN EMOJI)
           _buildHeader(),
           
           pw.SizedBox(height: 20),
@@ -63,8 +60,8 @@ class PDFService {
           
           pw.SizedBox(height: 20),
           
-          // Observaciones
-          if (sancion.observaciones != null || sancion.observacionesAdicionales != null)
+          // Observaciones - 🔧 SOLO si hay observaciones principales
+          if (sancion.observaciones != null && sancion.observaciones!.isNotEmpty)
             _buildObservacionesSection(sancion),
           
           pw.SizedBox(height: 30),
@@ -131,15 +128,20 @@ class PDFService {
     return pdf.save();
   }
 
-  /// **Preview PDF antes de descargar (solo móvil)**
+  /// **🔧 PREVIEW PDF MEJORADO**
   Future<void> previewPDF(Uint8List pdfBytes, String filename) async {
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdfBytes,
-      name: filename,
-    );
+    try {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+        name: filename,
+      );
+    } catch (e) {
+      print('❌ Error en preview: $e');
+      throw Exception('Error al mostrar vista previa: $e');
+    }
   }
 
-  /// **Guardar PDF en el dispositivo**
+  /// **🔧 GUARDAR PDF CORREGIDO PARA ANDROID**
   Future<String?> savePDF(Uint8List pdfBytes, String filename) async {
     try {
       if (kIsWeb) {
@@ -147,12 +149,42 @@ class PDFService {
         await Printing.sharePdf(bytes: pdfBytes, filename: filename);
         return 'Descargado';
       } else {
-        // En móvil, guardar en directorio de documentos
-        final directory = await getApplicationDocumentsDirectory();
-        final filePath = '${directory.path}/$filename';
-        final file = File(filePath);
-        await file.writeAsBytes(pdfBytes);
-        return filePath;
+        // 🆕 ANDROID: Verificar y solicitar permisos
+        if (await _requestStoragePermission()) {
+          
+          // 🆕 MÉTODO MEJORADO: Usar Downloads en lugar de Documents
+          Directory? directory;
+          
+          try {
+            // Intentar carpeta Downloads (más accesible)
+            directory = Directory('/storage/emulated/0/Download');
+            if (!await directory.exists()) {
+              // Fallback a Documents
+              directory = await getApplicationDocumentsDirectory();
+            }
+          } catch (e) {
+            // Fallback final
+            directory = await getApplicationDocumentsDirectory();
+          }
+
+          final filePath = '${directory.path}/$filename';
+          final file = File(filePath);
+          
+          // 🆕 VERIFICAR ESCRITURA
+          await file.writeAsBytes(pdfBytes);
+          
+          // 🆕 VERIFICAR QUE SE GUARDÓ
+          if (await file.exists()) {
+            final size = await file.length();
+            print('✅ PDF guardado correctamente: $filePath (${size} bytes)');
+            return filePath;
+          } else {
+            throw Exception('El archivo no se pudo crear');
+          }
+          
+        } else {
+          throw Exception('Permisos de almacenamiento denegados');
+        }
       }
     } catch (e) {
       print('❌ Error guardando PDF: $e');
@@ -160,16 +192,43 @@ class PDFService {
     }
   }
 
-  /// **Compartir PDF**
+  /// **🆕 SOLICITAR PERMISOS DE ALMACENAMIENTO**
+  Future<bool> _requestStoragePermission() async {
+    try {
+      // Android 13+ usa permisos diferentes
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.request();
+        if (status.isGranted) {
+          return true;
+        }
+        
+        // Intentar con manageExternalStorage para Android 11+
+        final manageStatus = await Permission.manageExternalStorage.request();
+        return manageStatus.isGranted;
+      }
+      
+      return true; // iOS no necesita estos permisos
+    } catch (e) {
+      print('❌ Error solicitando permisos: $e');
+      return false;
+    }
+  }
+
+  /// **COMPARTIR PDF**
   Future<void> sharePDF(Uint8List pdfBytes, String filename) async {
-    await Printing.sharePdf(bytes: pdfBytes, filename: filename);
+    try {
+      await Printing.sharePdf(bytes: pdfBytes, filename: filename);
+    } catch (e) {
+      print('❌ Error compartiendo PDF: $e');
+      throw Exception('Error al compartir: $e');
+    }
   }
 
   // ==========================================
   // 🏗️ MÉTODOS DE CONSTRUCCIÓN PDF
   // ==========================================
 
-  /// Header con logo INSEVIG
+  /// **🔧 Header SOLO INSEVIG (corregido)**
   pw.Widget _buildHeader() {
     return pw.Container(
       width: double.infinity,
@@ -192,33 +251,33 @@ class PDFService {
                   color: PdfColors.white,
                 ),
               ),
-              pw.Text(
-                'Instituto de Seguridad Integral de Venezuela',
-                style: pw.TextStyle(
-                  fontSize: 12,
-                  color: PdfColors.white,
-                ),
-              ),
+              // 🔧 REMOVIDO: texto largo institucional
               pw.Text(
                 'Sistema de Registro de Sanciones',
                 style: pw.TextStyle(
-                  fontSize: 10,
-                  color: _lightGrey, // 🔧 CORREGIDO: Usar color personalizado
+                  fontSize: 12,
+                  color: _lightGrey,
                 ),
               ),
             ],
           ),
+          // 🔧 LOGO TEXTO en lugar de emoji
           pw.Container(
-            width: 60,
+            width: 80,
             height: 60,
             decoration: pw.BoxDecoration(
               color: PdfColors.white,
-              borderRadius: pw.BorderRadius.circular(30),
+              borderRadius: pw.BorderRadius.circular(8),
             ),
             child: pw.Center(
               child: pw.Text(
-                '🛡️',
-                style: const pw.TextStyle(fontSize: 30),
+                'LOGO\nINSEVIG',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _primaryColor,
+                ),
               ),
             ),
           ),
@@ -323,21 +382,25 @@ class PDFService {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _buildInfoRow('Nombre Completo:', sancion.empleadoNombre),
-                  _buildInfoRow('Código:', sancion.empleadoCod.toString()),
-                  _buildInfoRow('Puesto:', sancion.puesto),
-                ],
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoRow('Nombre Completo:', sancion.empleadoNombre),
+                    _buildInfoRow('Código:', sancion.empleadoCod.toString()),
+                    _buildInfoRow('Puesto:', sancion.puesto),
+                  ],
+                ),
               ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _buildInfoRow('Agente:', sancion.agente),
-                  pw.SizedBox(height: 8),
-                  // Aquí podrías agregar más campos si tienes el empleado completo
-                ],
+              pw.SizedBox(width: 20),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoRow('Agente:', sancion.agente),
+                    pw.SizedBox(height: 8),
+                  ],
+                ),
               ),
             ],
           ),
@@ -346,7 +409,7 @@ class PDFService {
     );
   }
 
-  /// Sección de observaciones
+  /// **🔧 Sección de observaciones - SOLO observaciones (no adicionales)**
   pw.Widget _buildObservacionesSection(SancionModel sancion) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -366,22 +429,17 @@ class PDFService {
             ),
           ),
           pw.SizedBox(height: 12),
-          if (sancion.observaciones != null) ...[
-            pw.Text(
-              'Observaciones:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 4),
+          // 🔧 SOLO mostrar observaciones principales (NO adicionales)
+          if (sancion.observaciones != null && sancion.observaciones!.isNotEmpty) ...[
             pw.Text(sancion.observaciones!),
-            pw.SizedBox(height: 8),
-          ],
-          if (sancion.observacionesAdicionales != null) ...[
+          ] else ...[
             pw.Text(
-              'Observaciones Adicionales:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              'Sin observaciones registradas',
+              style: pw.TextStyle(
+                fontStyle: pw.FontStyle.italic,
+                color: PdfColors.grey600,
+              ),
             ),
-            pw.SizedBox(height: 4),
-            pw.Text(sancion.observacionesAdicionales!),
           ],
         ],
       ),
@@ -400,56 +458,61 @@ class PDFService {
         mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
         children: [
           // Firma del supervisor
-          pw.Column(
-            children: [
-              pw.Container(
-                width: 200,
-                height: 60,
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey400),
-                ),
-                child: pw.Center(
-                  child: pw.Text(
-                    'Firma del Supervisor',
-                    style: pw.TextStyle(color: PdfColors.grey600),
+          pw.Expanded(
+            child: pw.Column(
+              children: [
+                pw.Container(
+                  width: double.infinity,
+                  height: 60,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey400),
                   ),
-                ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Supervisor',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              ),
-            ],
-          ),
-          // Firma del sancionado
-          pw.Column(
-            children: [
-              pw.Container(
-                width: 200,
-                height: 60,
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey400),
-                ),
-                child: pw.Center(
-                  child: pw.Text(
-                    sancion.firmaPath != null 
-                        ? 'Firma Digital Registrada'
-                        : 'Sin Firma',
-                    style: pw.TextStyle(
-                      color: sancion.firmaPath != null 
-                          ? PdfColors.green 
-                          : PdfColors.grey600,
+                  child: pw.Center(
+                    child: pw.Text(
+                      'Firma del Supervisor',
+                      style: pw.TextStyle(color: PdfColors.grey600),
                     ),
                   ),
                 ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Empleado Sancionado',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              ),
-            ],
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Supervisor',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(width: 20),
+          // Firma del sancionado
+          pw.Expanded(
+            child: pw.Column(
+              children: [
+                pw.Container(
+                  width: double.infinity,
+                  height: 60,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey400),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      sancion.firmaPath != null 
+                          ? 'Firma Digital Registrada'
+                          : 'Sin Firma',
+                      style: pw.TextStyle(
+                        color: sancion.firmaPath != null 
+                            ? PdfColors.green 
+                            : PdfColors.grey600,
+                      ),
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Empleado Sancionado',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -594,6 +657,7 @@ class PDFService {
     return pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 4),
       child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
             width: 100,
@@ -602,7 +666,9 @@ class PDFService {
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
           ),
-          pw.Text(value),
+          pw.Expanded(
+            child: pw.Text(value),
+          ),
         ],
       ),
     );
