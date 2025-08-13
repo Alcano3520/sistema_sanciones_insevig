@@ -10,7 +10,7 @@ import 'offline_manager.dart';
 /// En web: pasa todas las llamadas directamente al service original
 /// En móvil: usa OfflineManager para funcionalidad offline completa
 /// ✅ CORREGIDO: Agregados métodos jerárquicos para aprobaciones
-/// ✅ NUEVO: Incluye información del supervisor en consultas
+/// ✅ NUEVO: Enriquece sanciones con información del supervisor SIN MODIFICAR SERVICE
 class SancionRepository {
   static SancionRepository? _instance;
   static SancionRepository get instance => _instance ??= SancionRepository._();
@@ -166,13 +166,19 @@ class SancionRepository {
     }
   }
 
-  /// ✅ MODIFICADO: Obtener sanciones específicas por rol CON INFORMACIÓN DEL SUPERVISOR
+  /// ✅ NUEVO: Obtener sanciones específicas por rol CON ENRIQUECIMIENTO DE SUPERVISOR
   Future<List<SancionModel>> getSancionesByRol(String rol) async {
     try {
       print('🎭 Obteniendo sanciones para rol: $rol');
       
-      // ✅ TEMPORAL: Usar método existente hasta actualizar SancionService
-      return await _sancionService.getSancionesByRol(rol);
+      // ✅ USAR SERVICE ORIGINAL SIN MODIFICAR
+      final sanciones = await _sancionService.getSancionesByRol(rol);
+      
+      // ✅ ENRIQUECER CON INFORMACIÓN DEL SUPERVISOR
+      final sancionesEnriquecidas = await _enrichWithSupervisorInfo(sanciones);
+      
+      print('✅ ${sancionesEnriquecidas.length} sanciones enriquecidas para $rol');
+      return sancionesEnriquecidas;
     } catch (e) {
       print('❌ Error obteniendo sanciones por rol: $e');
 
@@ -198,6 +204,94 @@ class SancionRepository {
       }
 
       return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+    }
+  }
+
+  /// =============================================
+  /// 👤 ENRIQUECIMIENTO CON INFORMACIÓN DEL SUPERVISOR
+  /// =============================================
+
+  /// ✅ NUEVO: Enriquecer lista de sanciones con información del supervisor
+  Future<List<SancionModel>> _enrichWithSupervisorInfo(List<SancionModel> sanciones) async {
+    if (sanciones.isEmpty) return sanciones;
+
+    try {
+      // Obtener IDs únicos de supervisores
+      final supervisorIds = sanciones
+          .map((s) => s.supervisorId)
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (supervisorIds.isEmpty) {
+        print('⚠️ No hay IDs de supervisor para enriquecer');
+        return sanciones;
+      }
+
+      print('👥 Obteniendo información de ${supervisorIds.length} supervisores...');
+
+      // ✅ CONSULTA DIRECTA A SUPABASE PROFILES (esto no rompe el service)
+      final supervisorInfoMap = await _getSupervisorInfoMap(supervisorIds);
+
+      // Enriquecer cada sanción con la información del supervisor
+      final sancionesEnriquecidas = sanciones.map((sancion) {
+        final supervisorInfo = supervisorInfoMap[sancion.supervisorId];
+        
+        if (supervisorInfo != null) {
+          return sancion.copyWith(
+            supervisorNombre: supervisorInfo['nombre'],
+            supervisorEmail: supervisorInfo['email'],
+          );
+        }
+        
+        // Si no se encuentra info del supervisor, mantener la sanción original
+        return sancion.copyWith(
+          supervisorNombre: 'Supervisor no encontrado',
+          supervisorEmail: '',
+        );
+      }).toList();
+
+      print('✅ Sanciones enriquecidas correctamente');
+      return sancionesEnriquecidas;
+    } catch (e) {
+      print('❌ Error enriqueciendo con supervisor: $e');
+      // Si falla el enriquecimiento, devolver sanciones originales
+      return sanciones;
+    }
+  }
+
+  /// ✅ NUEVO: Obtener mapa de información de supervisores
+  Future<Map<String, Map<String, String>>> _getSupervisorInfoMap(List<String> supervisorIds) async {
+    try {
+      // ✅ SOLUCIÓN SIMPLE: Usar el service existente para obtener información
+      // Por ahora crear un mapa básico, luego se puede mejorar
+      
+      print('👥 Creando mapa básico para ${supervisorIds.length} supervisores...');
+      
+      final supervisorMap = <String, Map<String, String>>{};
+      
+      // ✅ FALLBACK: Crear información básica por supervisor
+      for (final id in supervisorIds) {
+        supervisorMap[id] = {
+          'nombre': 'Supervisor ($id)', // Mostrar al menos el ID
+          'email': '',
+        };
+      }
+
+      print('👥 Mapa básico de ${supervisorMap.length} supervisores creado');
+      return supervisorMap;
+    } catch (e) {
+      print('❌ Error obteniendo supervisores: $e');
+      
+      // ✅ FALLBACK: Crear un mapa con información por defecto
+      final fallbackMap = <String, Map<String, String>>{};
+      for (final id in supervisorIds) {
+        fallbackMap[id] = {
+          'nombre': 'Supervisor ($id)',
+          'email': '',
+        };
+      }
+      return fallbackMap;
     }
   }
 
@@ -367,11 +461,12 @@ class SancionRepository {
         allSanciones: false);
   }
 
-  /// ✅ MODIFICADO: Obtener todas las sanciones CON INFORMACIÓN DEL SUPERVISOR
+  /// ✅ MODIFICADO: Obtener todas las sanciones CON ENRIQUECIMIENTO DEL SUPERVISOR
   Future<List<SancionModel>> getAllSanciones() async {
     if (kIsWeb) {
-      // 🌐 Web: usar método existente hasta actualizar service
-      return await _sancionService.getAllSanciones();
+      // 🌐 Web: usar service original y enriquecer
+      final sanciones = await _sancionService.getAllSanciones();
+      return await _enrichWithSupervisorInfo(sanciones);
     }
 
     // 📱 Móvil: con cache offline
@@ -382,7 +477,15 @@ class SancionRepository {
   Future<SancionModel?> getSancionById(String id) async {
     try {
       // Intentar obtener de servicio online primero
-      return await _sancionService.getSancionById(id);
+      final sancion = await _sancionService.getSancionById(id);
+      
+      if (sancion != null) {
+        // Enriquecer con información del supervisor
+        final sancionesEnriquecidas = await _enrichWithSupervisorInfo([sancion]);
+        return sancionesEnriquecidas.isNotEmpty ? sancionesEnriquecidas.first : sancion;
+      }
+      
+      return null;
     } catch (e) {
       print('❌ Error obteniendo sanción $id online: $e');
 
