@@ -27,12 +27,12 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
 
   /// Códigos de descuento predefinidos para Gerencia
   static const Map<String, String> codigosDescuento = {
-    'D00%': 'Sin descuento (sanción completa)',
-    'D05%': 'Descuento 5% (falta menor)',
-    'D10%': 'Descuento 10% (circunstancias atenuantes)',
-    'D15%': 'Descuento 15% (buen historial laboral)',
-    'D20%': 'Descuento 20% (caso especial)',
-    'LIBRE': 'Comentario libre sin código',
+    'D00%': 'Sin descuento',
+    'D05%': 'Descuento 5%',
+    'D10%': 'Descuento 10%',
+    'D15%': 'Descuento 15%',
+    'D20%': 'Descuento 20%',
+    'LIBRE': 'Comentario libre', // ✅ TEXTO MÁS CORTO
   };
 
   @override
@@ -49,10 +49,11 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
           const Text('Aprobación Gerencia'),
         ],
       ),
-      content: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(), // ✅ AGREGADO
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.75, // ✅ REDUCIDO de 0.9 a 0.75
+      content: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7, // ✅ ALTURA MÁXIMA FIJA
+        width: MediaQuery.of(context).size.width * 0.75,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(), // ✅ AGREGADO
           child: Column(
             mainAxisSize: MainAxisSize.min, // ✅ AGREGADO
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,7 +61,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
               // Resumen de sanción
               _buildResumenSancion(),
 
-              const SizedBox(height: 12), // ✅ REDUCIDO de 20 a 12
+              const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
 
               // Toggle Aprobar/Rechazar
               const Text(
@@ -70,7 +71,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                   fontSize: 16,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6), // ✅ REDUCIDO de 8 a 6
               SegmentedButton<bool>(
                 segments: const [
                   ButtonSegment(
@@ -96,7 +97,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                 ),
               ),
 
-              const SizedBox(height: 12), // ✅ REDUCIDO de 20 a 12
+              const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
 
               // Si aprueba: selector de código descuento
               if (_aprobar) ...[
@@ -107,7 +108,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                     fontSize: 16,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6), // ✅ REDUCIDO de 8 a 6
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
@@ -122,11 +123,14 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                     items: codigosDescuento.entries.map((entry) =>
                         DropdownMenuItem(
                           value: entry.key,
-                          child: Text( // ✅ SIMPLIFICADO: eliminado Column, solo Text
-                            '${entry.key} - ${entry.value}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF1E3A8A),
+                          child: Flexible( // ✅ ENVUELTO EN FLEXIBLE
+                            child: Text(
+                              '${entry.key} - ${entry.value}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF1E3A8A),
+                              ),
+                              overflow: TextOverflow.ellipsis, // ✅ AGREGADO OVERFLOW
                             ),
                           ),
                         )).toList(),
@@ -134,86 +138,105 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                   ),
                 ),
 
-                const SizedBox(height: 12), // ✅ REDUCIDO de 16 a 12
+                const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
 
                 // Vista previa del código seleccionado
                 Container(
-                  padding: const EdgeInsets.all(8), // ✅ REDUCIDO de 12 a 8
+                  padding: const EdgeInsets.all(6), // ✅ REDUCIDO de 8 a 6
                   decoration: BoxDecoration(
                     color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6), // ✅ REDUCIDO de 8 a 6
                     border: Border.all(color: Colors.blue.withOpacity(0.3)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min, // ✅ AGREGADO
                     children: [
-                      const Text(
-                        'Código seleccionado:',
-                        style: TextStyle(
+                      Text(
+                        _codigoSeleccionado == 'LIBRE' 
+                            ? 'Modalidad seleccionada:' // ✅ TEXTO DIFERENTE PARA LIBRE
+                            : 'Código seleccionado:',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: 11, // ✅ REDUCIDO de 12 a 11
                           color: Colors.blue,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        codigosDescuento[_codigoSeleccionado]!,
-                        style: const TextStyle(fontSize: 14),
+                      const SizedBox(height: 2), // ✅ REDUCIDO de 4 a 2
+                      Flexible( // ✅ ENVUELTO EN FLEXIBLE
+                        child: Text(
+                          codigosDescuento[_codigoSeleccionado]!,
+                          style: const TextStyle(fontSize: 12), // ✅ REDUCIDO de 14 a 12
+                          maxLines: 1, // ✅ REDUCIDO de 2 a 1
+                          overflow: TextOverflow.ellipsis, // ✅ AGREGADO
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 12), // ✅ REDUCIDO de 16 a 12
+                const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
               ],
 
               // Campo comentarios
               Text(
-                _aprobar ? 'Comentarios adicionales:' : 'Motivo del rechazo (obligatorio):',
+                _aprobar 
+                    ? (_codigoSeleccionado == 'LIBRE' 
+                        ? 'Comentarios (opcional):' // ✅ NUEVO: específico para modo libre
+                        : 'Comentarios adicionales:')
+                    : 'Motivo del rechazo (obligatorio):',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 14, // ✅ REDUCIDO de 16 a 14
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6), // ✅ REDUCIDO de 8 a 6
               TextField(
                 controller: _comentarioController,
-                maxLines: 3,
+                maxLines: 2, // ✅ REDUCIDO de 3 a 2
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   hintText: _aprobar
-                      ? 'Justificación del código seleccionado...'
+                      ? (_codigoSeleccionado == 'LIBRE' 
+                          ? 'Comentario libre (opcional)...' // ✅ NUEVO: específico para modo libre
+                          : 'Justificación del código seleccionado...')
                       : 'Explique por qué se rechaza...',
                   hintStyle: TextStyle(color: Colors.grey.shade500),
+                  contentPadding: const EdgeInsets.all(8), // ✅ AGREGADO PADDING REDUCIDO
                 ),
               ),
 
               if (_aprobar) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
                 Container(
-                  padding: const EdgeInsets.all(8), // ✅ REDUCIDO de 12 a 8
+                  padding: const EdgeInsets.all(6), // ✅ REDUCIDO de 8 a 6
                   decoration: BoxDecoration(
                     color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6), // ✅ REDUCIDO de 8 a 6
                     border: Border.all(color: Colors.green.withOpacity(0.3)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min, // ✅ AGREGADO PARA EVITAR OVERFLOW
                     children: [
                       const Text(
                         'Formato final:',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: 11, // ✅ REDUCIDO de 12 a 11
                           color: Colors.green,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getFormatoFinal(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'monospace',
+                      const SizedBox(height: 2), // ✅ REDUCIDO de 4 a 2
+                      Flexible( // ✅ ENVUELTO EN FLEXIBLE
+                        child: Text(
+                          _getFormatoFinal(),
+                          style: const TextStyle(
+                            fontSize: 11, // ✅ REDUCIDO de 12 a 11
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 2, // ✅ REDUCIDO de 3 a 2
+                          overflow: TextOverflow.ellipsis, // ✅ AGREGADO OVERFLOW
                         ),
                       ),
                     ],
@@ -231,15 +254,14 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
           child: const Text('Cancelar'),
         ),
         const SizedBox(width: 8),
-        ElevatedButton.icon(
+        ElevatedButton( // ✅ CAMBIADO: eliminado .icon
           onPressed: _procesarAprobacion,
-          icon: Icon(_aprobar ? Icons.check_circle : Icons.cancel),
-          label: Text(_aprobar ? 'Aprobar' : 'Rechazar'),
           style: ElevatedButton.styleFrom(
             backgroundColor: _aprobar ? Colors.green : Colors.red,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // ✅ REDUCIDO PADDING
           ),
+          child: Text(_aprobar ? 'Aprobar' : 'Rechazar'),
         ),
       ],
     );
@@ -248,10 +270,10 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
   /// Construir resumen visual de la sanción
   Widget _buildResumenSancion() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12), // ✅ REDUCIDO de 16 a 12
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8), // ✅ REDUCIDO de 12 a 8
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
@@ -260,17 +282,17 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6), // ✅ REDUCIDO de 8 a 6
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E3A8A).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6), // ✅ REDUCIDO de 8 a 6
                 ),
                 child: Text(
                   widget.sancion.tipoSancionEmoji,
-                  style: const TextStyle(fontSize: 20),
+                  style: const TextStyle(fontSize: 18), // ✅ REDUCIDO de 20 a 18
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8), // ✅ REDUCIDO de 12 a 8
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,14 +301,14 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                       widget.sancion.tipoSancion,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontSize: 14, // ✅ REDUCIDO de 16 a 14
                       ),
                     ),
                     Text(
                       widget.sancion.empleadoNombre,
                       style: TextStyle(
                         color: Colors.grey.shade700,
-                        fontSize: 14,
+                        fontSize: 12, // ✅ REDUCIDO de 14 a 12
                       ),
                     ),
                   ],
@@ -295,25 +317,12 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
             ],
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
 
-          // Detalles de la sanción
+          // Detalles de la sanción (solo los esenciales)
           _buildDetalleItem(Icons.person, 'Empleado', widget.sancion.empleadoNombre),
-          _buildDetalleItem(Icons.badge, 'Código', '#${widget.sancion.empleadoCod}'),
-          _buildDetalleItem(Icons.work, 'Puesto', widget.sancion.puesto),
           _buildDetalleItem(Icons.calendar_today, 'Fecha', widget.sancion.fechaFormateada),
           _buildDetalleItem(Icons.access_time, 'Hora', widget.sancion.hora),
-          _buildDetalleItem(Icons.security, 'Agente', widget.sancion.agente),
-
-          if (widget.sancion.observaciones != null && widget.sancion.observaciones!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _buildDetalleItem(Icons.note, 'Observaciones', widget.sancion.observaciones!),
-          ],
-
-          if (widget.sancion.horasExtras != null) ...[
-            const SizedBox(height: 8),
-            _buildDetalleItem(Icons.schedule, 'Horas Extras', '${widget.sancion.horasExtras} hrs'),
-          ],
         ],
       ),
     );
@@ -363,8 +372,8 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
 
     if (_codigoSeleccionado == 'LIBRE') {
       return _comentarioController.text.isEmpty 
-          ? '[escriba su comentario libre]' 
-          : _comentarioController.text;
+          ? '(sin comentarios)' // ✅ CAMBIADO: mensaje más claro para modo libre vacío
+          : _comentarioController.text; // ✅ Solo el comentario, sin "LIBRE -"
     }
 
     final comentario = _comentarioController.text.isEmpty 
@@ -392,22 +401,8 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
       return;
     }
 
-    // ✅ NUEVA VALIDACIÓN PARA MODO LIBRE
-    if (_aprobar && _codigoSeleccionado == 'LIBRE' && _comentarioController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.warning, color: Colors.white),
-              SizedBox(width: 8),
-              Text('En modo libre, los comentarios son obligatorios'),
-            ],
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+    // ✅ ELIMINADA: Validación de comentarios obligatorios para modo LIBRE
+    // Ahora el modo LIBRE permite guardar sin comentarios
 
     // Validar comentarios para códigos específicos (opcional pero recomendado)
     if (_aprobar && _codigoSeleccionado != 'LIBRE' && _comentarioController.text.trim().isEmpty) {
