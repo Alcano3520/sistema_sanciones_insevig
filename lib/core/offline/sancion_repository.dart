@@ -229,29 +229,33 @@ class SancionRepository {
       }
 
       print('👥 Obteniendo información de ${supervisorIds.length} supervisores...');
+      print('🔍 IDs a consultar: ${supervisorIds.join(', ')}');
 
-      // ✅ CONSULTA DIRECTA A SUPABASE PROFILES (esto no rompe el service)
-      final supervisorInfoMap = await _getSupervisorInfoMap(supervisorIds);
+      // ✅ USAR EL MÉTODO CORREGIDO DEL SERVICE
+      final displayNames = await _sancionService.getSupervisorDisplayNames(supervisorIds);
+      
+      print('📝 Respuesta del service: $displayNames');
 
       // Enriquecer cada sanción con la información del supervisor
       final sancionesEnriquecidas = sanciones.map((sancion) {
-        final supervisorInfo = supervisorInfoMap[sancion.supervisorId];
+        final supervisorName = displayNames[sancion.supervisorId];
         
-        if (supervisorInfo != null) {
+        if (supervisorName != null && supervisorName.isNotEmpty) {
           return sancion.copyWith(
-            supervisorNombre: supervisorInfo['nombre'],
-            supervisorEmail: supervisorInfo['email'],
+            supervisorNombre: supervisorName,
+            supervisorEmail: '', // Por ahora sin email específico
           );
         }
         
-        // Si no se encuentra info del supervisor, mantener la sanción original
+        // Si no se encuentra info del supervisor, mostrar mensaje más específico
+        print('⚠️ Supervisor no encontrado para ID: ${sancion.supervisorId}');
         return sancion.copyWith(
-          supervisorNombre: 'Supervisor no encontrado',
+          supervisorNombre: 'Supervisor no encontrado (${sancion.supervisorId})',
           supervisorEmail: '',
         );
       }).toList();
 
-      print('✅ Sanciones enriquecidas correctamente');
+      print('✅ ${sancionesEnriquecidas.length} sanciones enriquecidas correctamente');
       return sancionesEnriquecidas;
     } catch (e) {
       print('❌ Error enriqueciendo con supervisor: $e');
@@ -260,40 +264,7 @@ class SancionRepository {
     }
   }
 
-  /// ✅ NUEVO: Obtener mapa de información de supervisores
-  Future<Map<String, Map<String, String>>> _getSupervisorInfoMap(List<String> supervisorIds) async {
-    try {
-      // ✅ SOLUCIÓN SIMPLE: Usar el service existente para obtener información
-      // Por ahora crear un mapa básico, luego se puede mejorar
-      
-      print('👥 Creando mapa básico para ${supervisorIds.length} supervisores...');
-      
-      final supervisorMap = <String, Map<String, String>>{};
-      
-      // ✅ FALLBACK: Crear información básica por supervisor
-      for (final id in supervisorIds) {
-        supervisorMap[id] = {
-          'nombre': 'Supervisor ($id)', // Mostrar al menos el ID
-          'email': '',
-        };
-      }
 
-      print('👥 Mapa básico de ${supervisorMap.length} supervisores creado');
-      return supervisorMap;
-    } catch (e) {
-      print('❌ Error obteniendo supervisores: $e');
-      
-      // ✅ FALLBACK: Crear un mapa con información por defecto
-      final fallbackMap = <String, Map<String, String>>{};
-      for (final id in supervisorIds) {
-        fallbackMap[id] = {
-          'nombre': 'Supervisor ($id)',
-          'email': '',
-        };
-      }
-      return fallbackMap;
-    }
-  }
 
   /// =============================================
   /// 🔧 MÉTODOS AUXILIARES PARA ACTUALIZACIONES LOCALES

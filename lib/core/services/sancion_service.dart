@@ -357,9 +357,9 @@ class SancionService {
     }
   }
 
-  /// ============================================= 
+  /// =============================================
   /// ✅ NUEVOS MÉTODOS PARA SISTEMA JERÁRQUICO
-  /// ============================================= 
+  /// =============================================
 
   /// ✅ NUEVO: Aprobar sanción por gerencia con código de descuento
   Future<bool> aprobarConCodigoGerencia(
@@ -370,11 +370,10 @@ class SancionService {
   ) async {
     try {
       print('👔 Aprobando sanción $sancionId con código $codigo...');
-      
-      final comentarioFinal = codigo == 'LIBRE' 
-        ? comentarios
-        : '$codigo - $comentarios';
-        
+
+      final comentarioFinal =
+          codigo == 'LIBRE' ? comentarios : '$codigo - $comentarios';
+
       return await changeStatus(
         sancionId,
         'aprobado',
@@ -397,7 +396,7 @@ class SancionService {
   }) async {
     try {
       print('🧑‍💼 Revisión RRHH para sanción $sancionId - Acción: $accion');
-      
+
       final updateData = <String, dynamic>{
         'comentarios_rrhh': comentariosRrhh,
         'reviewed_by': reviewedBy,
@@ -423,10 +422,7 @@ class SancionService {
           break;
       }
 
-      await _supabase
-          .from('sanciones')
-          .update(updateData)
-          .eq('id', sancionId);
+      await _supabase.from('sanciones').update(updateData).eq('id', sancionId);
 
       print('✅ Revisión RRHH completada exitosamente');
       return true;
@@ -440,7 +436,7 @@ class SancionService {
   Future<List<SancionModel>> getSancionesByRol(String rol) async {
     try {
       print('🔍 Consultando sanciones para rol: $rol');
-      
+
       switch (rol) {
         case 'gerencia':
           // Solo sanciones enviadas esperando gerencia
@@ -450,7 +446,8 @@ class SancionService {
         case 'rrhh':
           // Sanciones aprobadas por gerencia esperando RRHH
           final sanciones = await _getSancionesAprobadaGerencia();
-          print('🧑‍💼 Sanciones para RRHH (aprobadas por gerencia): ${sanciones.length}');
+          print(
+              '🧑‍💼 Sanciones para RRHH (aprobadas por gerencia): ${sanciones.length}');
           return sanciones;
         default:
           final sanciones = await getAllSanciones();
@@ -470,8 +467,10 @@ class SancionService {
         .select('*')
         .eq('status', status)
         .order('created_at', ascending: true);
-        
-    return response.map<SancionModel>((json) => SancionModel.fromMap(json)).toList();
+
+    return response
+        .map<SancionModel>((json) => SancionModel.fromMap(json))
+        .toList();
   }
 
   /// ✅ NUEVO: Obtener sanciones aprobadas por gerencia (esperando RRHH)
@@ -482,15 +481,15 @@ class SancionService {
         .select('*')
         .eq('status', 'aprobado')
         .order('created_at', ascending: true);
-    
+
     // Filtrar en código Dart para evitar problemas con NULL checking en SQL
     final sancionesAprobadas = response
         .map<SancionModel>((json) => SancionModel.fromMap(json))
-        .where((sancion) => 
-            sancion.comentariosGerencia != null && 
+        .where((sancion) =>
+            sancion.comentariosGerencia != null &&
             sancion.comentariosRrhh == null)
         .toList();
-        
+
     return sancionesAprobadas;
   }
 
@@ -508,7 +507,7 @@ class SancionService {
           final sancionesEnviadas = await _getSancionesByStatus('enviado');
           contadores['pendientes_gerencia'] = sancionesEnviadas.length;
           break;
-          
+
         case 'rrhh':
           final sancionesAprobadas = await _getSancionesAprobadaGerencia();
           contadores['pendientes_rrhh'] = sancionesAprobadas.length;
@@ -800,6 +799,48 @@ class SancionService {
     } catch (e) {
       print('❌ Error obteniendo sanción $id: $e');
       return null;
+    }
+  }
+
+  Future<Map<String, String>> getSupervisorDisplayNames(
+      List<String> supervisorIds) async {
+    try {
+      if (supervisorIds.isEmpty) return {};
+
+      print(
+          '👥 Consultando nombres de ${supervisorIds.length} supervisores...');
+
+      final response = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .inFilter('id', supervisorIds); // ← CAMBIO AQUÍ
+
+      final displayNames = <String, String>{};
+
+      for (final profile in response) {
+        final id = profile['id'] as String;
+        final fullName = profile['full_name'] as String? ?? '';
+        final email = profile['email'] as String? ?? '';
+
+        // Usar full_name o email como fallback
+        String displayName;
+        if (fullName.isNotEmpty) {
+          displayName = fullName;
+        } else if (email.isNotEmpty) {
+          displayName = email;
+        } else {
+          displayName = 'Supervisor';
+        }
+
+        displayNames[id] = displayName;
+      }
+
+      print('✅ Nombres obtenidos: ${displayNames.length} supervisores');
+      print('📋 Supervisores: ${displayNames.values.join(', ')}');
+      return displayNames;
+    } catch (e) {
+      print('❌ Error obteniendo nombres de supervisores: $e');
+      return {};
     }
   }
 }
