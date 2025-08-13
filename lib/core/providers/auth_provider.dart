@@ -1,579 +1,70 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/sancion_model.dart';
+import '../config/supabase_config.dart';
+import '../models/user_model.dart';
 
-/// 👤 Modelo de usuario con sistema de roles y permisos extendido
-/// 🆕 SISTEMA DE APROBACIONES Y CÓDIGOS DE DESCUENTO INTEGRADO
-class UserModel {
-  final String id;
-  final String email;
-  final String fullName;
-  final String role;
-  final String? department;
-  final String? position;
-  final bool isActive;
-  final DateTime? lastLogin;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+/// Provider para manejar autenticación y estado del usuario
+/// Corregido para usar la tabla 'profiles' correctamente
+/// ✅ AÑADIDO: Getters para roles específicos (isSupervisor, isGerencia, etc.)
+class AuthProvider with ChangeNotifier {
+  final SupabaseClient _supabase = SupabaseConfig.client;
 
-  const UserModel({
-    required this.id,
-    required this.email,
-    required this.fullName,
-    required this.role,
-    this.department,
-    this.position,
-    required this.isActive,
-    this.lastLogin,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  /// =============================================
-  /// 🏭 FACTORY CONSTRUCTORS
-  /// =============================================
-
-  factory UserModel.fromMap(Map<String, dynamic> map) {
-    return UserModel(
-      id: map['id'] ?? '',
-      email: map['email'] ?? '',
-      fullName: map['full_name'] ?? '',
-      role: map['role'] ?? 'supervisor',
-      department: map['department'],
-      position: map['position'],
-      isActive: map['is_active'] ?? true,
-      lastLogin: map['last_login'] != null 
-          ? DateTime.parse(map['last_login']) 
-          : null,
-      createdAt: map['created_at'] != null 
-          ? DateTime.parse(map['created_at']) 
-          : DateTime.now(),
-      updatedAt: map['updated_at'] != null 
-          ? DateTime.parse(map['updated_at']) 
-          : DateTime.now(),
-    );
-  }
-
-  /// =============================================
-  /// 📤 SERIALIZACIÓN
-  /// =============================================
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'email': email,
-      'full_name': fullName,
-      'role': role,
-      'department': department,
-      'position': position,
-      'is_active': isActive,
-      'last_login': lastLogin?.toIso8601String(),
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-    };
-  }
-
-  /// =============================================
-  /// 🔄 COPYSWITH
-  /// =============================================
-
-  UserModel copyWith({
-    String? id,
-    String? email,
-    String? fullName,
-    String? role,
-    String? department,
-    String? position,
-    bool? isActive,
-    DateTime? lastLogin,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return UserModel(
-      id: id ?? this.id,
-      email: email ?? this.email,
-      fullName: fullName ?? this.fullName,
-      role: role ?? this.role,
-      department: department ?? this.department,
-      position: position ?? this.position,
-      isActive: isActive ?? this.isActive,
-      lastLogin: lastLogin ?? this.lastLogin,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
-  }
-
-  /// =============================================
-  /// 📊 GETTERS BÁSICOS (ORIGINALES)
-  /// =============================================
-
-  /// Verificar si puede crear sanciones
-  bool get canCreateSanciones {
-    return ['supervisor', 'gerencia', 'aprobador'].contains(role) && isActive;
-  }
-
-  /// Verificar si puede aprobar sanciones (método original)
-  bool get canApprove {
-    return ['gerencia', 'rrhh', 'aprobador'].contains(role) && isActive;
-  }
-
-  /// Verificar si puede ver todas las sanciones
-  bool get canViewAllSanciones {
-    return ['gerencia', 'rrhh', 'aprobador'].contains(role) && isActive;
-  }
-
-  /// Verificar si puede generar reportes
-  bool get canGenerateReports {
-    return isActive; // Todos los usuarios activos pueden generar reportes básicos
-  }
-
-  /// Verificar si puede exportar datos
-  bool get canExportData {
-    return ['gerencia', 'rrhh', 'aprobador'].contains(role) && isActive;
-  }
-
-  /// =============================================
-  /// 🆕 GETTERS PARA SISTEMA DE APROBACIONES
-  /// =============================================
-
-  /// Verificar si puede aprobar con códigos de descuento (Gerencia/Aprobador)
-  bool get canApproveWithCodes {
-    return ['gerencia', 'aprobador'].contains(role) && isActive;
-  }
-
-  /// Verificar si puede procesar decisiones de gerencia (RRHH)
-  bool get canProcessGerenciaDecisions {
-    return role == 'rrhh' && isActive;
-  }
-
-  /// Verificar si puede ver panel de aprobaciones
-  bool get canViewApprovalPanel {
-    return canApproveWithCodes || canProcessGerenciaDecisions;
-  }
-
-  /// Verificar si puede modificar códigos de descuento
-  bool get canModifyDiscountCodes {
-    return role == 'rrhh' && isActive;
-  }
-
-  /// Verificar si puede anular decisiones de gerencia
-  bool get canOverrideGerenciaDecisions {
-    return role == 'rrhh' && isActive;
-  }
-
-  /// Verificar si puede acceder al panel administrativo
-  bool get canAccessAdminPanel {
-    return role == 'rrhh' && isActive;
-  }
-
-  /// Verificar si puede ver estadísticas avanzadas
-  bool get canViewAdvancedStats {
-    return ['gerencia', 'rrhh', 'aprobador'].contains(role) && isActive;
-  }
-
-  /// =============================================
-  /// 🎨 GETTERS DE PRESENTACIÓN
-  /// =============================================
-
-  /// Obtener texto descriptivo del rol para UI
-  String get roleDescription {
-    switch (role) {
-      case 'supervisor':
-        return 'Supervisor';
-      case 'gerencia':
-        return 'Gerencia';
-      case 'rrhh':
-        return 'Recursos Humanos';
-      case 'aprobador':
-        return 'Aprobador';
-      default:
-        return role.toUpperCase();
-    }
-  }
-
-  /// Obtener icono representativo del rol
-  String get roleIcon {
-    switch (role) {
-      case 'supervisor':
-        return '👨‍💼';
-      case 'gerencia':
-        return '🏢';
-      case 'rrhh':
-        return '👥';
-      case 'aprobador':
-        return '✅';
-      default:
-        return '👤';
-    }
-  }
-
-  /// Obtener color representativo del rol
-  String get roleColor {
-    switch (role) {
-      case 'supervisor':
-        return 'blue';
-      case 'gerencia':
-        return 'purple';
-      case 'rrhh':
-        return 'teal';
-      case 'aprobador':
-        return 'green';
-      default:
-        return 'grey';
-    }
-  }
-
-  /// Obtener descripción completa del usuario
-  String get fullDescription {
-    final buffer = StringBuffer();
-    buffer.write('$roleIcon $fullName');
-    
-    if (department != null) {
-      buffer.write(' - $department');
-    }
-    
-    if (position != null) {
-      buffer.write(' ($position)');
-    }
-    
-    return buffer.toString();
-  }
-
-  /// =============================================
-  /// 🔐 SISTEMA DE PERMISOS
-  /// =============================================
-
-  /// Obtener permisos específicos del rol
-  Map<String, bool> get rolePermissions {
-    switch (role) {
-      case 'supervisor':
-        return {
-          'create_sanciones': true,
-          'edit_own_sanciones': true,
-          'view_own_sanciones': true,
-          'delete_own_borradores': true,
-          'approve_sanciones': false,
-          'approve_with_codes': false,
-          'process_gerencia_decisions': false,
-          'view_all_sanciones': false,
-          'generate_reports': true,
-          'export_data': false,
-          'view_advanced_stats': false,
-          'access_admin_panel': false,
-        };
-      
-      case 'gerencia':
-        return {
-          'create_sanciones': true,
-          'edit_own_sanciones': true,
-          'view_own_sanciones': true,
-          'view_all_sanciones': true,
-          'delete_own_borradores': true,
-          'approve_sanciones': true,
-          'approve_with_codes': true,
-          'process_gerencia_decisions': false,
-          'generate_reports': true,
-          'export_data': true,
-          'view_advanced_stats': true,
-          'access_admin_panel': false,
-          'manage_discount_codes': true,
-        };
-      
-      case 'aprobador':
-        return {
-          'create_sanciones': true,
-          'edit_own_sanciones': true,
-          'view_own_sanciones': true,
-          'view_all_sanciones': true,
-          'delete_own_borradores': true,
-          'approve_sanciones': true,
-          'approve_with_codes': true,
-          'process_gerencia_decisions': false,
-          'generate_reports': true,
-          'export_data': true,
-          'view_advanced_stats': true,
-          'access_admin_panel': false,
-          'manage_discount_codes': true,
-        };
-      
-      case 'rrhh':
-        return {
-          'create_sanciones': false,
-          'edit_own_sanciones': false,
-          'view_own_sanciones': false,
-          'view_all_sanciones': true,
-          'delete_own_borradores': false,
-          'approve_sanciones': false,
-          'approve_with_codes': false,
-          'process_gerencia_decisions': true,
-          'modify_discount_codes': true,
-          'override_gerencia_decisions': true,
-          'generate_reports': true,
-          'export_data': true,
-          'view_advanced_stats': true,
-          'access_admin_panel': true,
-          'manage_users': true,
-          'view_system_logs': true,
-        };
-      
-      default:
-        return {
-          'create_sanciones': false,
-          'edit_own_sanciones': false,
-          'view_own_sanciones': false,
-          'view_all_sanciones': false,
-          'delete_own_borradores': false,
-          'approve_sanciones': false,
-          'approve_with_codes': false,
-          'process_gerencia_decisions': false,
-          'generate_reports': false,
-          'export_data': false,
-          'view_advanced_stats': false,
-          'access_admin_panel': false,
-        };
-    }
-  }
-
-  /// Verificar permiso específico
-  bool hasPermission(String permission) {
-    if (!isActive) return false;
-    return rolePermissions[permission] ?? false;
-  }
-
-  /// Obtener lista de acciones disponibles para este rol
-  List<String> get availableActions {
-    final actions = <String>[];
-    final permissions = rolePermissions;
-    
-    if (permissions['create_sanciones'] == true) {
-      actions.add('Crear sanciones');
-    }
-    
-    if (permissions['approve_with_codes'] == true) {
-      actions.add('Aprobar con códigos de descuento');
-    }
-    
-    if (permissions['process_gerencia_decisions'] == true) {
-      actions.add('Procesar decisiones de gerencia');
-    }
-    
-    if (permissions['view_all_sanciones'] == true) {
-      actions.add('Ver todas las sanciones');
-    }
-    
-    if (permissions['generate_reports'] == true) {
-      actions.add('Generar reportes');
-    }
-    
-    if (permissions['export_data'] == true) {
-      actions.add('Exportar datos');
-    }
-    
-    if (permissions['access_admin_panel'] == true) {
-      actions.add('Acceder panel administrativo');
-    }
-    
-    return actions;
-  }
-
-  /// Verificar si puede realizar una acción específica en una sanción
-  bool canPerformActionOnSancion(String action, SancionModel sancion) {
-    if (!isActive) return false;
-
-    switch (action) {
-      case 'edit':
-        return hasPermission('edit_own_sanciones') && 
-               id == sancion.supervisorId && 
-               sancion.status == 'borrador';
-      
-      case 'delete':
-        return hasPermission('delete_own_borradores') && 
-               id == sancion.supervisorId && 
-               sancion.status == 'borrador';
-      
-      case 'approve_with_code':
-        return hasPermission('approve_with_codes') && 
-               sancion.status == 'enviado';
-      
-      case 'process_rrhh':
-        return hasPermission('process_gerencia_decisions') && 
-               sancion.status == 'aprobado' &&
-               sancion.comentariosGerencia != null &&
-               sancion.comentariosRrhh == null;
-      
-      case 'view_details':
-        if (hasPermission('view_all_sanciones')) return true;
-        if (hasPermission('view_own_sanciones') && id == sancion.supervisorId) return true;
-        return false;
-      
-      case 'toggle_pendiente':
-        return hasPermission('approve_sanciones') || 
-               hasPermission('process_gerencia_decisions');
-      
-      default:
-        return false;
-    }
-  }
-
-  /// Obtener mensaje de restricción para acción no permitida
-  String getRestrictionMessage(String action) {
-    if (!isActive) {
-      return 'Tu cuenta está inactiva. Contacta al administrador.';
-    }
-
-    switch (action) {
-      case 'approve_with_code':
-        return 'Solo gerencia y aprobadores pueden aprobar con códigos de descuento';
-      case 'process_rrhh':
-        return 'Solo RRHH puede procesar decisiones de gerencia';
-      case 'view_all_sanciones':
-        return 'No tienes permisos para ver todas las sanciones';
-      case 'create_sanciones':
-        return 'No tienes permisos para crear sanciones';
-      case 'export_data':
-        return 'No tienes permisos para exportar datos';
-      case 'access_admin_panel':
-        return 'No tienes permisos para acceder al panel administrativo';
-      default:
-        return 'No tienes permisos para realizar esta acción';
-    }
-  }
-
-  /// =============================================
-  /// 🎯 MÉTODOS DE VALIDACIÓN ESPECÍFICOS
-  /// =============================================
-
-  /// Verificar si puede ver tabs específicos del historial
-  bool canViewHistorialTab(String tabType) {
-    switch (tabType) {
-      case 'gerencia_pendientes':
-        return canApproveWithCodes;
-      case 'gerencia_aprobadas':
-        return canApproveWithCodes;
-      case 'rrhh_pendientes':
-        return canProcessGerenciaDecisions;
-      case 'rrhh_procesadas':
-        return canProcessGerenciaDecisions;
-      default:
-        return true;
-    }
-  }
-
-  /// Verificar si puede usar filtros avanzados
-  bool get canUseAdvancedFilters {
-    return canViewAllSanciones;
-  }
-
-  /// Verificar si puede generar reportes PDF
-  bool get canGeneratePDFReports {
-    return canGenerateReports;
-  }
-
-  /// Verificar si puede ver estadísticas específicas
-  bool canViewStatistic(String statisticType) {
-    switch (statisticType) {
-      case 'discount_codes':
-        return canApproveWithCodes || canProcessGerenciaDecisions;
-      case 'processing_times':
-        return canViewAdvancedStats;
-      case 'user_performance':
-        return role == 'rrhh';
-      case 'approval_rates':
-        return canViewAdvancedStats;
-      default:
-        return canGenerateReports;
-    }
-  }
-
-  /// =============================================
-  /// 🛠️ MÉTODOS DE UTILIDAD
-  /// =============================================
-
-  /// Comparar con otro usuario
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is UserModel && other.id == id;
-  }
-
-  @override
-  int get hashCode => id.hashCode;
-
-  /// Representación en string para debug
-  @override
-  String toString() {
-    return 'UserModel(id: $id, fullName: $fullName, role: $role, isActive: $isActive)';
-  }
-
-  /// Verificar si el usuario es válido
-  bool get isValid {
-    return id.isNotEmpty && 
-           email.isNotEmpty && 
-           fullName.isNotEmpty && 
-           role.isNotEmpty &&
-           isActive;
-  }
-
-  /// Obtener tiempo desde último login
-  String get timeSinceLastLogin {
-    if (lastLogin == null) return 'Nunca';
-    
-    final now = DateTime.now();
-    final difference = now.difference(lastLogin!);
-    
-    if (difference.inDays > 0) {
-      return 'Hace ${difference.inDays} día${difference.inDays > 1 ? 's' : ''}';
-    } else if (difference.inHours > 0) {
-      return 'Hace ${difference.inHours} hora${difference.inHours > 1 ? 's' : ''}';
-    } else if (difference.inMinutes > 0) {
-      return 'Hace ${difference.inMinutes} minuto${difference.inMinutes > 1 ? 's' : ''}';
-    } else {
-      return 'Ahora mismo';
-    }
-  }
-
-  /// Crear copia con último login actualizado
-  UserModel withLastLogin() {
-    return copyWith(
-      lastLogin: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-}
-
-/// 🔐 Provider de autenticación con gestión de usuarios y roles
-/// 🆕 EXTENDIDO CON SISTEMA DE PERMISOS GRANULAR
-class AuthProvider extends ChangeNotifier {
-  static final SupabaseClient _supabase = Supabase.instance.client;
-  
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isInitialized = false;
 
-  /// =============================================
-  /// 📊 GETTERS
-  /// =============================================
-
+  // Getters básicos
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  bool get isLoggedIn => _currentUser != null && _currentUser!.isActive;
-  bool get isActive => _currentUser?.isActive ?? false;
+  bool get isAuthenticated => _currentUser != null;
+  bool get isInitialized => _isInitialized;
 
-  /// =============================================
-  /// 🔑 AUTENTICACIÓN
-  /// =============================================
+  // ✅ NUEVOS GETTERS PARA ROLES (requeridos por el sistema jerárquico)
+  bool get isSupervisor => _currentUser?.role == 'supervisor' || isAdmin;
+  bool get isGerencia => _currentUser?.role == 'gerencia' || isAdmin;
+  bool get isRrhh => _currentUser?.role == 'rrhh' || isAdmin;
+  bool get isAprobador => _currentUser?.role == 'aprobador' || isAdmin;
+  bool get isAdmin => _currentUser?.role == 'admin';
 
-  /// Inicializar provider
-  Future<void> initialize() async {
+  AuthProvider() {
+    _initialize();
+  }
+
+  /// Inicializar el provider verificando sesión existente
+  Future<void> _initialize() async {
     try {
       _setLoading(true);
-      _clearError();
 
+      // Verificar si hay sesión activa
       final session = _supabase.auth.currentSession;
-      if (session?.user != null) {
-        await _loadUserProfile(session!.user.id);
+
+      if (session != null) {
+        await _loadUserProfile(session.user.id);
       }
+
+      // Escuchar cambios de autenticación
+      _supabase.auth.onAuthStateChange.listen((data) {
+        final event = data.event;
+        final session = data.session;
+
+        switch (event) {
+          case AuthChangeEvent.signedIn:
+            if (session?.user != null) {
+              _loadUserProfile(session!.user.id);
+            }
+            break;
+          case AuthChangeEvent.signedOut:
+            _currentUser = null;
+            notifyListeners();
+            break;
+          default:
+            break;
+        }
+      });
+
+      _isInitialized = true;
     } catch (e) {
       _setError('Error inicializando autenticación: $e');
     } finally {
@@ -581,29 +72,184 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Iniciar sesión
+  /// Cargar perfil del usuario desde la tabla PROFILES (no usuarios)
+  Future<void> _loadUserProfile(String userId) async {
+    try {
+      print('🔍 Cargando perfil para usuario ID: $userId');
+
+      // ✅ CORREGIDO: Usar 'profiles' en lugar de 'usuarios'
+      final response = await _supabase
+          .from('profiles') // ✅ Tabla correcta
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+      _currentUser = UserModel.fromMap(response);
+      _clearError();
+      notifyListeners();
+
+      print(
+          '✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role})');
+    } catch (e) {
+      print('❌ Error cargando perfil desde PROFILES: $e');
+      _setError('Error cargando perfil del usuario');
+    }
+  }
+
+  /// Iniciar sesión con email y contraseña
   Future<bool> signIn(String email, String password) async {
     try {
       _setLoading(true);
       _clearError();
 
-      final response = await _supabase.auth.signInWithPassword(
-        email: email,
+      print('🔐 Intentando login con: $email');
+
+      // PASO 1: Solo intentar autenticación
+      try {
+        print('🔍 PASO 1: Llamando a signInWithPassword...');
+        final response = await _supabase.auth.signInWithPassword(
+          email: email.trim().toLowerCase(),
+          password: password,
+        );
+        print('✅ PASO 1 EXITOSO: Usuario autenticado');
+        print('   User ID: ${response.user?.id}');
+        print('   Email: ${response.user?.email}');
+      } catch (e) {
+        print('❌ ERROR EN PASO 1 (signInWithPassword): $e');
+        rethrow;
+      }
+
+      // PASO 2: Verificar el usuario
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        print('❌ No hay usuario después de login');
+        _setError('Error en las credenciales');
+        return false;
+      }
+
+      // PASO 3: Intentar cargar perfil
+      try {
+        print('🔍 PASO 2: Cargando perfil...');
+        await _loadUserProfile(user.id);
+        print('✅ PASO 2 EXITOSO: Perfil cargado');
+      } catch (e) {
+        print('❌ ERROR EN PASO 2 (loadUserProfile): $e');
+        // Por ahora, continuar sin perfil
+      }
+
+      print('✅ Login completado');
+      return true;
+    } on AuthException catch (e) {
+      print('❌ AuthException: ${e.message}');
+      print('   Código: ${e.statusCode}');
+      _setError(_getAuthErrorMessage(e.message));
+      return false;
+    } catch (e) {
+      print('❌ Error general: $e');
+      print('   Tipo: ${e.runtimeType}');
+      _setError('Error de conexión: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Registrar nuevo usuario (para administradores)
+  Future<bool> signUp({
+    required String email,
+    required String password,
+    required String fullName,
+    required String role,
+    String? department,
+  }) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      print('🔍 Registrando usuario: $email');
+
+      // ✅ PASO 1: Crear usuario en Supabase Auth
+      final response = await _supabase.auth.signUp(
+        email: email.trim().toLowerCase(),
         password: password,
       );
 
       if (response.user != null) {
-        await _loadUserProfile(response.user!.id);
-        await _updateLastLogin();
-        return true;
-      }
+        print('✅ Usuario creado en Auth: ${response.user!.id}');
 
-      return false;
+        // 🔥 PASO 2: Esperar para que auth.uid() esté disponible
+        print('⏳ Esperando 800ms para que auth.uid() esté disponible...');
+        await Future.delayed(const Duration(milliseconds: 800));
+
+        // 🔥 PASO 3: Retry logic para crear el profile
+        bool profileCreated = false;
+        int attempts = 0;
+        const maxAttempts = 5; // Aumentamos a 5 intentos
+        Exception? lastError;
+
+        while (!profileCreated && attempts < maxAttempts) {
+          attempts++;
+          print('🔄 Intento $attempts de $maxAttempts para crear profile...');
+
+          try {
+            // Crear profile en tabla profiles
+            await _supabase.from('profiles').insert({
+              'id': response.user!.id,
+              'email': email.trim().toLowerCase(),
+              'full_name': fullName.trim(),
+              'role': role,
+              'department': department?.trim(),
+              'is_active': true,
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+
+            profileCreated = true;
+            print('✅ Profile creado exitosamente en intento $attempts');
+            print('   Datos: $fullName ($role) - ${department ?? "Sin dept"}');
+          } catch (e) {
+            lastError = Exception('Error intento $attempts: $e');
+            print('❌ Error creando profile (intento $attempts): $e');
+
+            if (attempts < maxAttempts) {
+              // Esperar más tiempo progresivamente: 500ms, 1s, 1.5s, 2s...
+              final waitTime = Duration(milliseconds: 500 * attempts);
+              print(
+                  '⏳ Esperando ${waitTime.inMilliseconds}ms antes del siguiente intento...');
+              await Future.delayed(waitTime);
+            }
+          }
+        }
+
+        // Verificar si se pudo crear el profile
+        if (!profileCreated) {
+          print(
+              '❌ FALLÓ: No se pudo crear profile después de $maxAttempts intentos');
+          // Limpiar el usuario de auth si no se pudo crear el profile
+          try {
+            print('🧹 Eliminando usuario de auth por fallo en profile...');
+            // Nota: Necesitarías permisos admin para esto, por ahora solo reportamos
+          } catch (cleanupError) {
+            print('⚠️ No se pudo limpiar usuario de auth: $cleanupError');
+          }
+
+          throw Exception(
+              'No se pudo crear el profile después de $maxAttempts intentos. Último error: $lastError');
+        }
+
+        print('🎉 REGISTRO COMPLETO EXITOSO para $email');
+        return true;
+      } else {
+        _setError('Error al registrar usuario en Auth');
+        return false;
+      }
     } on AuthException catch (e) {
+      print('❌ AuthException en signUp: ${e.message}');
       _setError(_getAuthErrorMessage(e.message));
       return false;
     } catch (e) {
-      _setError('Error inesperado: $e');
+      print('❌ Error general en signUp: $e');
+      _setError('Error registrando usuario: $e');
       return false;
     } finally {
       _setLoading(false);
@@ -617,253 +263,215 @@ class AuthProvider extends ChangeNotifier {
       await _supabase.auth.signOut();
       _currentUser = null;
       _clearError();
+      print('👋 Sesión cerrada');
     } catch (e) {
+      print('❌ Error cerrando sesión: $e');
       _setError('Error cerrando sesión: $e');
     } finally {
       _setLoading(false);
     }
   }
 
-  /// Cargar perfil de usuario
-  Future<void> _loadUserProfile(String userId) async {
-    try {
-      final response = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
-
-      _currentUser = UserModel.fromMap(response);
-      print('✅ Usuario cargado: ${_currentUser!.fullName} (${_currentUser!.role})');
-    } catch (e) {
-      throw Exception('Error cargando perfil de usuario: $e');
-    }
-  }
-
-  /// Actualizar último login
-  Future<void> _updateLastLogin() async {
-    if (_currentUser == null) return;
+  /// Actualizar perfil del usuario en la tabla PROFILES
+  Future<bool> updateProfile({
+    String? fullName,
+    String? department,
+    String? avatarUrl,
+  }) async {
+    if (_currentUser == null) return false;
 
     try {
+      _setLoading(true);
+
+      final updateData = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (fullName != null) updateData['full_name'] = fullName.trim();
+      if (department != null) updateData['department'] = department.trim();
+      if (avatarUrl != null) updateData['avatar_url'] = avatarUrl;
+
+      // ✅ CORREGIDO: Actualizar en 'profiles'
       await _supabase
-          .from('profiles')
-          .update({
-            'last_login': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          })
+          .from('profiles') // ✅ Tabla correcta
+          .update(updateData)
           .eq('id', _currentUser!.id);
 
-      _currentUser = _currentUser!.withLastLogin();
-    } catch (e) {
-      print('⚠️ Error actualizando último login: $e');
-    }
-  }
+      // Recargar perfil actualizado
+      await _loadUserProfile(_currentUser!.id);
 
-  /// =============================================
-  /// 👥 GESTIÓN DE USUARIOS (SOLO RRHH)
-  /// =============================================
-
-  /// Obtener todos los usuarios (solo RRHH)
-  Future<List<UserModel>> getAllUsers() async {
-    if (!(_currentUser?.hasPermission('manage_users') ?? false)) {
-      throw Exception('No tienes permisos para gestionar usuarios');
-    }
-
-    try {
-      final response = await _supabase
-          .from('profiles')
-          .select()
-          .order('full_name', ascending: true);
-
-      return (response as List)
-          .map((data) => UserModel.fromMap(data))
-          .toList();
-    } catch (e) {
-      throw Exception('Error obteniendo usuarios: $e');
-    }
-  }
-
-  /// Actualizar rol de usuario (solo RRHH)
-  Future<bool> updateUserRole(String userId, String newRole) async {
-    if (!(_currentUser?.hasPermission('manage_users') ?? false)) {
-      throw Exception('No tienes permisos para gestionar usuarios');
-    }
-
-    try {
-      await _supabase
-          .from('profiles')
-          .update({
-            'role': newRole,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userId);
-
-      print('✅ Rol actualizado para usuario $userId: $newRole');
+      print('✅ Perfil actualizado en profiles');
       return true;
     } catch (e) {
-      throw Exception('Error actualizando rol: $e');
+      print('❌ Error actualizando perfil: $e');
+      _setError('Error actualizando perfil: $e');
+      return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  /// Activar/desactivar usuario (solo RRHH)
-  Future<bool> toggleUserStatus(String userId, bool isActive) async {
-    if (!(_currentUser?.hasPermission('manage_users') ?? false)) {
-      throw Exception('No tienes permisos para gestionar usuarios');
-    }
-
+  /// Cambiar contraseña del usuario actual
+  Future<bool> changePassword(String newPassword) async {
     try {
-      await _supabase
-          .from('profiles')
-          .update({
-            'is_active': isActive,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userId);
+      _setLoading(true);
+      _clearError();
 
-      print('✅ Estado actualizado para usuario $userId: ${isActive ? 'activo' : 'inactivo'}');
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+
+      print('✅ Contraseña cambiada exitosamente');
       return true;
+    } on AuthException catch (e) {
+      print('❌ AuthException cambiando contraseña: ${e.message}');
+      _setError(_getAuthErrorMessage(e.message));
+      return false;
     } catch (e) {
-      throw Exception('Error actualizando estado: $e');
+      print('❌ Error cambiando contraseña: $e');
+      _setError('Error cambiando contraseña: $e');
+      return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  /// =============================================
-  /// 🎯 MÉTODOS DE CONVENIENCIA PARA PERMISOS
-  /// =============================================
+  /// Enviar email de recuperación de contraseña
+  Future<bool> sendPasswordReset(String email) async {
+    try {
+      _setLoading(true);
+      _clearError();
 
-  /// Verificar si el usuario actual puede realizar una acción
-  bool canPerformAction(String action) {
-    return _currentUser?.hasPermission(action) ?? false;
+      await _supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+
+      print('✅ Email de recuperación enviado a: $email');
+      return true;
+    } on AuthException catch (e) {
+      print('❌ AuthException en password reset: ${e.message}');
+      _setError(_getAuthErrorMessage(e.message));
+      return false;
+    } catch (e) {
+      print('❌ Error enviando email de recuperación: $e');
+      _setError('Error enviando email: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
   }
 
-  /// Verificar si puede realizar acción en sanción específica
-  bool canPerformActionOnSancion(String action, SancionModel sancion) {
-    return _currentUser?.canPerformActionOnSancion(action, sancion) ?? false;
+  /// Refrescar datos del usuario actual desde la base de datos
+  Future<void> refreshCurrentUser() async {
+    if (_currentUser != null) {
+      await _loadUserProfile(_currentUser!.id);
+    }
   }
 
-  /// Obtener mensaje de restricción
-  String getRestrictionMessage(String action) {
-    return _currentUser?.getRestrictionMessage(action) ?? 'Usuario no autenticado';
-  }
+  /// Verificar permisos del usuario actual
+  bool hasPermission(String permission) {
+    if (_currentUser == null) return false;
 
-  /// Verificar si puede acceder a una ruta específica
-  bool canAccessRoute(String route) {
-    if (_currentUser == null || !_currentUser!.isActive) return false;
-
-    switch (route) {
-      case '/admin':
-        return _currentUser!.canAccessAdminPanel;
-      case '/approval_panel':
-        return _currentUser!.canViewApprovalPanel;
-      case '/advanced_stats':
-        return _currentUser!.canViewAdvancedStats;
-      case '/user_management':
-        return _currentUser!.hasPermission('manage_users');
+    switch (permission) {
+      case 'create_sanciones':
+        return _currentUser!.canCreateSanciones;
+      case 'approve_sanciones':
+        return _currentUser!.canApprove;
+      case 'view_all_sanciones':
+        return _currentUser!.canViewAllSanciones;
+      case 'admin':
+        return _currentUser!.role == 'admin';
+      case 'supervisor':
+        return _currentUser!.role == 'supervisor' ||
+            _currentUser!.role == 'admin';
       default:
-        return true; // Rutas públicas
+        return false;
     }
   }
 
-  /// =============================================
-  /// 📊 INFORMACIÓN DEL SISTEMA
-  /// =============================================
-
-  /// Obtener información del proveedor
-  Map<String, dynamic> getProviderInfo() {
-    return {
-      'provider_name': 'AuthProvider',
-      'current_user': _currentUser?.toMap(),
-      'is_authenticated': isLoggedIn,
-      'user_role': _currentUser?.role,
-      'user_permissions': _currentUser?.rolePermissions,
-      'available_actions': _currentUser?.availableActions,
-      'version': '2.0.0', // 🆕 Actualizada
-    };
-  }
-
-  /// =============================================
-  /// 🛠️ MÉTODOS PRIVADOS
-  /// =============================================
-
-  /// Establecer estado de carga
+  /// Métodos privados para manejo de estado
   void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
+    if (_isLoading != loading) {
+      _isLoading = loading;
+      notifyListeners();
+    }
   }
 
-  /// Establecer error
   void _setError(String error) {
     _errorMessage = error;
     notifyListeners();
   }
 
-  /// Limpiar error
   void _clearError() {
-    _errorMessage = null;
-    notifyListeners();
-  }
-
-  /// Obtener mensaje de error amigable
-  String _getAuthErrorMessage(String errorMessage) {
-    if (errorMessage.contains('Invalid login credentials')) {
-      return 'Credenciales incorrectas. Verifica tu email y contraseña.';
-    }
-    if (errorMessage.contains('Email not confirmed')) {
-      return 'Debes confirmar tu email antes de iniciar sesión.';
-    }
-    if (errorMessage.contains('Too many requests')) {
-      return 'Demasiados intentos. Espera unos minutos antes de intentar nuevamente.';
-    }
-    
-    return 'Error de autenticación: $errorMessage';
-  }
-
-  /// =============================================
-  /// 🎮 MÉTODOS PARA TESTING Y DEBUG
-  /// =============================================
-
-  /// Simular usuario para testing (solo en debug)
-  void setMockUser(UserModel mockUser) {
-    if (kDebugMode) {
-      _currentUser = mockUser;
+    if (_errorMessage != null) {
+      _errorMessage = null;
       notifyListeners();
-      print('🎭 Usuario simulado establecido: ${mockUser.fullName} (${mockUser.role})');
     }
   }
 
-  /// Limpiar usuario simulado
-  void clearMockUser() {
-    if (kDebugMode) {
-      _currentUser = null;
-      notifyListeners();
-      print('🎭 Usuario simulado limpiado');
+  /// Convertir errores de Supabase a mensajes amigables en español
+  String _getAuthErrorMessage(String error) {
+    final errorLower = error.toLowerCase();
+
+    if (errorLower.contains('invalid login credentials')) {
+      return 'Email o contraseña incorrectos';
+    }
+    if (errorLower.contains('email not confirmed')) {
+      return 'Por favor confirma tu email';
+    }
+    if (errorLower.contains('user not found')) {
+      return 'Usuario no encontrado';
+    }
+    if (errorLower.contains('invalid email')) {
+      return 'Email inválido';
+    }
+    if (errorLower.contains('password') && errorLower.contains('short')) {
+      return 'La contraseña debe tener al menos 6 caracteres';
+    }
+    if (errorLower.contains('email') && errorLower.contains('registered')) {
+      return 'Este email ya está registrado';
+    }
+    if (errorLower.contains('too many requests')) {
+      return 'Demasiados intentos. Intenta más tarde';
+    }
+    if (errorLower.contains('network')) {
+      return 'Error de conexión. Verifica tu internet';
+    }
+
+    return 'Error de autenticación: $error';
+  }
+
+  /// Obtener datos para mostrar en UI
+  Map<String, dynamic> get userStats {
+    if (_currentUser == null) return {};
+
+    return {
+      'name': _currentUser!.fullName,
+      'role': _currentUser!.roleDescription,
+      'email': _currentUser!.email,
+      'department': _currentUser!.department ?? 'N/A',
+      'initials': _currentUser!.initials,
+      'roleEmoji': _currentUser!.roleEmoji,
+      'canCreateSanciones': _currentUser!.canCreateSanciones,
+      'canApprove': _currentUser!.canApprove,
+      'canViewAll': _currentUser!.canViewAllSanciones,
+    };
+  }
+
+  /// Limpiar errores manualmente
+  void clearError() => _clearError();
+
+  /// Verificar conexión con la base de datos
+  Future<bool> testConnection() async {
+    try {
+      await _supabase.from('profiles').select('id').limit(1);
+      return true;
+    } catch (e) {
+      print('❌ Error de conexión: $e');
+      return false;
     }
   }
 
-  /// Obtener resumen de permisos para debug
-  String getPermissionsSummary() {
-    if (_currentUser == null) return 'No hay usuario autenticado';
-
-    final buffer = StringBuffer();
-    buffer.writeln('📋 RESUMEN DE PERMISOS - ${_currentUser!.fullName}');
-    buffer.writeln('🎭 Rol: ${_currentUser!.roleDescription}');
-    buffer.writeln('🟢 Estado: ${_currentUser!.isActive ? 'Activo' : 'Inactivo'}');
-    buffer.writeln('');
-    buffer.writeln('🔐 PERMISOS:');
-    
-    final permissions = _currentUser!.rolePermissions;
-    permissions.forEach((permission, hasPermission) {
-      final icon = hasPermission ? '✅' : '❌';
-      buffer.writeln('  $icon $permission');
-    });
-    
-    buffer.writeln('');
-    buffer.writeln('🎯 ACCIONES DISPONIBLES:');
-    final actions = _currentUser!.availableActions;
-    for (var action in actions) {
-      buffer.writeln('  • $action');
-    }
-    
-    return buffer.toString();
+  @override
+  void dispose() {
+    super.dispose();
   }
 }

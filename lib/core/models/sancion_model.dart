@@ -1,8 +1,8 @@
-import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
-/// 📋 Modelo de datos para Sanciones
-/// Representa una sanción laboral completa con todos sus campos
-/// 🆕 EXTENDIDO CON SISTEMA DE CÓDIGOS DE DESCUENTO Y APROBACIONES
+/// Modelo principal de sanción - idéntico a tu aplicación Kivy
+/// Con los nuevos campos: pendiente y observaciones_adicionales
+/// ✅ CORREGIDO: Constructor con ID opcional (requerido por el sistema)
 class SancionModel {
   final String id;
   final String supervisorId;
@@ -14,21 +14,22 @@ class SancionModel {
   final String hora;
   final String tipoSancion;
   final String? observaciones;
-  final String? observacionesAdicionales;
-  final bool pendiente;
+  final String? observacionesAdicionales; // NUEVO CAMPO
+  final bool pendiente; // NUEVO CAMPO
   final String? fotoUrl;
   final String? firmaPath;
-  final int? horasExtras;
+  final int? horasExtras; // Solo para HORAS EXTRAS
   final String status;
-  final String? comentariosGerencia; // 🆕 Para códigos de descuento
-  final String? comentariosRrhh;    // 🆕 Para procesamiento RRHH
+  final String? comentariosGerencia;
+  final String? comentariosRrhh;
   final DateTime? fechaRevision;
   final String? reviewedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  const SancionModel({
-    required this.id,
+  /// ✅ CORREGIDO: Constructor con ID opcional
+  SancionModel({
+    String? id, // ← Hacer opcional para evitar errores
     required this.supervisorId,
     required this.empleadoCod,
     required this.empleadoNombre,
@@ -39,32 +40,31 @@ class SancionModel {
     required this.tipoSancion,
     this.observaciones,
     this.observacionesAdicionales,
-    required this.pendiente,
+    this.pendiente = true,
     this.fotoUrl,
     this.firmaPath,
     this.horasExtras,
-    required this.status,
+    this.status = 'borrador',
     this.comentariosGerencia,
     this.comentariosRrhh,
     this.fechaRevision,
     this.reviewedBy,
-    required this.createdAt,
-    required this.updatedAt,
-  });
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : id = id ?? const Uuid().v4(), // ← Si no se proporciona ID, generar uno
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
-  /// =============================================
-  /// 🏭 FACTORY CONSTRUCTORS
-  /// =============================================
-
+  /// Crear desde Map (desde Supabase)
   factory SancionModel.fromMap(Map<String, dynamic> map) {
     return SancionModel(
-      id: map['id'] ?? '',
+      id: map['id'] ?? const Uuid().v4(),
       supervisorId: map['supervisor_id'] ?? '',
-      empleadoCod: map['empleado_cod']?.toInt() ?? 0,
+      empleadoCod: map['empleado_cod'] ?? 0,
       empleadoNombre: map['empleado_nombre'] ?? '',
       puesto: map['puesto'] ?? '',
       agente: map['agente'] ?? '',
-      fecha: map['fecha'] != null ? DateTime.parse(map['fecha']) : DateTime.now(),
+      fecha: DateTime.tryParse(map['fecha'] ?? '') ?? DateTime.now(),
       hora: map['hora'] ?? '',
       tipoSancion: map['tipo_sancion'] ?? '',
       observaciones: map['observaciones'],
@@ -72,45 +72,20 @@ class SancionModel {
       pendiente: map['pendiente'] ?? true,
       fotoUrl: map['foto_url'],
       firmaPath: map['firma_path'],
-      horasExtras: map['horas_extras']?.toInt(),
+      horasExtras: map['horas_extras'],
       status: map['status'] ?? 'borrador',
       comentariosGerencia: map['comentarios_gerencia'],
       comentariosRrhh: map['comentarios_rrhh'],
-      fechaRevision: map['fecha_revision'] != null 
-          ? DateTime.parse(map['fecha_revision']) 
+      fechaRevision: map['fecha_revision'] != null
+          ? DateTime.tryParse(map['fecha_revision'])
           : null,
       reviewedBy: map['reviewed_by'],
-      createdAt: map['created_at'] != null 
-          ? DateTime.parse(map['created_at']) 
-          : DateTime.now(),
-      updatedAt: map['updated_at'] != null 
-          ? DateTime.parse(map['updated_at']) 
-          : DateTime.now(),
+      createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
     );
   }
 
-  factory SancionModel.empty() {
-    return SancionModel(
-      id: '',
-      supervisorId: '',
-      empleadoCod: 0,
-      empleadoNombre: '',
-      puesto: '',
-      agente: '',
-      fecha: DateTime.now(),
-      hora: '${TimeOfDay.now().hour.toString().padLeft(2, '0')}:${TimeOfDay.now().minute.toString().padLeft(2, '0')}',
-      tipoSancion: '',
-      pendiente: true,
-      status: 'borrador',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// =============================================
-  /// 📤 SERIALIZACIÓN
-  /// =============================================
-
+  /// Convertir a Map (para enviar a Supabase)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -119,7 +94,7 @@ class SancionModel {
       'empleado_nombre': empleadoNombre,
       'puesto': puesto,
       'agente': agente,
-      'fecha': fecha.toIso8601String().split('T')[0],
+      'fecha': fecha.toIso8601String().split('T')[0], // Solo fecha YYYY-MM-DD
       'hora': hora,
       'tipo_sancion': tipoSancion,
       'observaciones': observaciones,
@@ -138,12 +113,159 @@ class SancionModel {
     };
   }
 
-  Map<String, dynamic> toJson() => toMap();
+  /// ✅ CORREGIDO: Tipos de sanción disponibles (idénticos a tu Kivy)
+  static const List<String> tiposSancion = [
+    'FALTA',
+    'ATRASO',
+    'PERMISO',
+    'DORMIDO',
+    'MALA URBANIDAD',
+    'FALTA DE RESPETO',
+    'MAL UNIFORMADO',
+    'ABANDONO DE PUESTO',
+    'MAL SERVICIO DE GUARDIA',
+    'INCUMPLIMIENTO DE POLITICAS',
+    'MAL USO DEL EQUIPO DE DOTACIÓN',
+    'HORAS EXTRAS',
+    'FRANCO TRABAJADO'
+  ];
 
-  /// =============================================
-  /// 🔄 COPYSWITH
-  /// =============================================
+  /// Obtener emoji para el tipo de sanción
+  String get tipoSancionEmoji {
+    switch (tipoSancion) {
+      case 'FALTA':
+        return '❌';
+      case 'ATRASO':
+        return '⏰';
+      case 'PERMISO':
+        return '📋';
+      case 'DORMIDO':
+        return '😴';
+      case 'MALA URBANIDAD':
+        return '🗣️';
+      case 'FALTA DE RESPETO':
+        return '😠';
+      case 'MAL UNIFORMADO':
+        return '👔';
+      case 'ABANDONO DE PUESTO':
+        return '🏃';
+      case 'MAL SERVICIO DE GUARDIA':
+        return '🛡️';
+      case 'INCUMPLIMIENTO DE POLITICAS':
+        return '📋';
+      case 'MAL USO DEL EQUIPO DE DOTACIÓN':
+        return '⚠️';
+      case 'HORAS EXTRAS':
+        return '⏱️';
+      case 'FRANCO TRABAJADO':
+        return '📅';
+      default:
+        return '⚠️';
+    }
+  }
 
+  /// Color del status
+  String get statusColor {
+    switch (status) {
+      case 'borrador':
+        return 'orange';
+      case 'enviado':
+        return 'blue';
+      case 'aprobado':
+        return 'green';
+      case 'rechazado':
+        return 'red';
+      default:
+        return 'grey';
+    }
+  }
+
+  /// Texto del status
+  String get statusText {
+    switch (status) {
+      case 'borrador':
+        return 'Borrador';
+      case 'enviado':
+        return 'Enviado';
+      case 'aprobado':
+        return 'Aprobado';
+      case 'rechazado':
+        return 'Rechazado';
+      default:
+        return status;
+    }
+  }
+
+  /// Fecha formateada para mostrar
+  String get fechaFormateada {
+    return '${fecha.day}/${fecha.month}/${fecha.year}';
+  }
+
+  /// Descripción completa para mostrar
+  String get descripcionCompleta {
+    final buffer = StringBuffer();
+    buffer.write('$tipoSancionEmoji $tipoSancion');
+
+    if (horasExtras != null) {
+      buffer.write(' ($horasExtras hrs)');
+    }
+
+    if (observaciones != null && observaciones!.isNotEmpty) {
+      buffer.write(' - ${observaciones!}');
+    }
+
+    return buffer.toString();
+  }
+
+  /// Validar si la sanción está completa
+  bool get isValid {
+    return empleadoCod > 0 &&
+        empleadoNombre.isNotEmpty &&
+        puesto.isNotEmpty &&
+        agente.isNotEmpty &&
+        tipoSancion.isNotEmpty;
+  }
+
+  /// Validar si requiere horas extras
+  bool get requiresHorasExtras => tipoSancion == 'HORAS EXTRAS';
+
+  /// ✅ NUEVO: Verificar si puede ser aprobada por gerencia
+  bool get canBeApprovedByGerencia => status == 'enviado';
+
+  /// ✅ NUEVO: Verificar si puede ser revisada por RRHH
+  bool get canBeReviewedByRrhh => status == 'aprobado' && comentariosGerencia != null;
+
+  /// ✅ NUEVO: Obtener código de descuento si existe
+  String? get codigoDescuento {
+    if (comentariosGerencia == null) return null;
+    
+    final comentario = comentariosGerencia!;
+    if (comentario.startsWith('D') && comentario.contains('%')) {
+      final partes = comentario.split(' - ');
+      if (partes.isNotEmpty) {
+        return partes[0]; // Devolver solo el código (ej: "D10%")
+      }
+    }
+    
+    return null;
+  }
+
+  /// ✅ NUEVO: Obtener comentario sin código
+  String? get comentarioSinCodigo {
+    if (comentariosGerencia == null) return null;
+    
+    final comentario = comentariosGerencia!;
+    if (comentario.contains(' - ')) {
+      final partes = comentario.split(' - ');
+      if (partes.length > 1) {
+        return partes.sublist(1).join(' - '); // Todo después del primer " - "
+      }
+    }
+    
+    return comentario; // Si no tiene formato de código, devolver completo
+  }
+
+  /// Crear copia con modificaciones
   SancionModel copyWith({
     String? id,
     String? supervisorId,
@@ -179,7 +301,8 @@ class SancionModel {
       hora: hora ?? this.hora,
       tipoSancion: tipoSancion ?? this.tipoSancion,
       observaciones: observaciones ?? this.observaciones,
-      observacionesAdicionales: observacionesAdicionales ?? this.observacionesAdicionales,
+      observacionesAdicionales:
+          observacionesAdicionales ?? this.observacionesAdicionales,
       pendiente: pendiente ?? this.pendiente,
       fotoUrl: fotoUrl ?? this.fotoUrl,
       firmaPath: firmaPath ?? this.firmaPath,
@@ -194,457 +317,11 @@ class SancionModel {
     );
   }
 
-  /// =============================================
-  /// 📊 GETTERS BÁSICOS (ORIGINALES)
-  /// =============================================
-
-  /// Texto del status para mostrar en UI
-  String get statusText {
-    switch (status) {
-      case 'borrador':
-        return 'Borrador';
-      case 'enviado':
-        return 'Enviado';
-      case 'aprobado':
-        return 'Aprobado';
-      case 'rechazado':
-        return 'Rechazado';
-      default:
-        return status;
-    }
+  @override
+  String toString() {
+    return 'SancionModel(id: $id, empleado: $empleadoNombre, tipo: $tipoSancion, status: $status)';
   }
 
-  /// Fecha formateada para mostrar
-  String get fechaFormateada {
-    return DateFormat('dd/MM/yyyy').format(fecha);
-  }
-
-  /// Fecha y hora formateada completa
-  String get fechaHoraCompleta {
-    return '$fechaFormateada $hora';
-  }
-
-  /// Emoji representativo del tipo de sanción
-  String get tipoSancionEmoji {
-    switch (tipoSancion) {
-      case 'FALTA':
-        return '❌';
-      case 'ATRASO':
-        return '⏰';
-      case 'PERMISO':
-        return '📝';
-      case 'DORMIDO':
-        return '😴';
-      case 'MALA URBANIDAD':
-        return '🤬';
-      case 'FALTA DE RESPETO':
-        return '😠';
-      case 'MAL UNIFORMADO':
-        return '👔';
-      case 'ABANDONO DE PUESTO':
-        return '🚶';
-      case 'MAL SERVICIO DE GUARDIA':
-        return '🛡️';
-      case 'INCUMPLIMIENTO DE POLITICAS':
-        return '📋';
-      case 'MAL USO DEL EQUIPO DE DOTACIÓN':
-        return '🔧';
-      case 'HORAS EXTRAS':
-        return '⏱️';
-      case 'FRANCO TRABAJADO':
-        return '📅';
-      default:
-        return '📋';
-    }
-  }
-
-  /// Verificar si tiene archivos adjuntos
-  bool get tieneArchivos {
-    return fotoUrl != null || firmaPath != null;
-  }
-
-  /// Verificar si está completa para enviar
-  bool get puedeEnviar {
-    return status == 'borrador' && 
-           empleadoNombre.isNotEmpty && 
-           tipoSancion.isNotEmpty &&
-           puesto.isNotEmpty &&
-           agente.isNotEmpty;
-  }
-
-  /// Verificar si puede ser editada
-  bool get puedeEditar {
-    return status == 'borrador';
-  }
-
-  /// Verificar si puede ser eliminada
-  bool get puedeEliminar {
-    return status == 'borrador';
-  }
-
-  /// =============================================
-  /// 🆕 GETTERS PARA CÓDIGOS DE DESCUENTO
-  /// =============================================
-
-  /// Obtener código de descuento aplicado por gerencia
-  String? get codigoDescuento {
-    if (comentariosGerencia == null) return null;
-    
-    if (comentariosGerencia!.contains('|')) {
-      return comentariosGerencia!.split('|')[0];
-    }
-    
-    return comentariosGerencia;
-  }
-
-  /// Obtener comentario de gerencia sin código
-  String? get comentarioGerenciaSinCodigo {
-    if (comentariosGerencia == null) return null;
-    
-    if (comentariosGerencia!.contains('|')) {
-      final partes = comentariosGerencia!.split('|');
-      return partes.length > 1 ? partes[1] : '';
-    }
-    
-    return comentariosGerencia;
-  }
-
-  /// Verificar si tiene descuento aplicado
-  bool get tieneDescuento {
-    final codigo = codigoDescuento;
-    return codigo != null && 
-           codigo != 'SIN_DESC' && 
-           codigo != 'RECHAZADO' &&
-           codigo.startsWith('D') && 
-           codigo.contains('%');
-  }
-
-  /// Obtener porcentaje de descuento
-  double? get porcentajeDescuento {
-    final codigo = codigoDescuento;
-    if (codigo == null || !tieneDescuento) return null;
-    
-    try {
-      // Extraer número de "D15%" -> 15.0
-      final numeroStr = codigo.substring(1).replaceAll('%', '');
-      return double.parse(numeroStr);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Verificar si fue procesado por RRHH
-  bool get fueModificadoPorRRHH {
-    return comentariosRrhh != null && 
-           comentariosRrhh!.startsWith('MODIFICADO');
-  }
-
-  /// Verificar si fue anulado por RRHH
-  bool get fueAnuladoPorRRHH {
-    return status == 'rechazado' && 
-           comentariosRrhh != null && 
-           comentariosRrhh!.startsWith('ANULADO_RRHH');
-  }
-
-  /// Verificar si está pendiente de procesamiento RRHH
-  bool get pendienteRRHH {
-    return status == 'aprobado' && 
-           comentariosGerencia != null &&
-           comentariosRrhh == null;
-  }
-
-  /// Verificar si fue procesado completamente
-  bool get procesamientoCompleto {
-    return status == 'aprobado' && 
-           comentariosRrhh != null;
-  }
-
-  /// Texto descriptivo del estado completo
-  String get estadoCompleto {
-    switch (status) {
-      case 'borrador':
-        return 'Borrador';
-      case 'enviado':
-        return 'Enviado - Pendiente Gerencia';
-      case 'aprobado':
-        if (comentariosRrhh != null) {
-          if (fueModificadoPorRRHH) return 'Procesado (Modificado por RRHH)';
-          return 'Procesado por RRHH';
-        } else if (comentariosGerencia != null) {
-          return 'Aprobado Gerencia - Pendiente RRHH';
-        } else {
-          return 'Aprobado';
-        }
-      case 'rechazado':
-        if (fueAnuladoPorRRHH) return 'Anulado por RRHH';
-        return 'Rechazado';
-      default:
-        return status;
-    }
-  }
-
-  /// Obtener información del código aplicado (para mostrar en UI)
-  Map<String, dynamic> get infoCodigoDescuento {
-    final codigo = codigoDescuento;
-    
-    if (codigo == null) {
-      return {
-        'tiene_codigo': false,
-        'codigo': null,
-        'porcentaje': null,
-        'descripcion': 'Sin código aplicado',
-        'color': null,
-      };
-    }
-
-    switch (codigo) {
-      case 'SIN_DESC':
-        return {
-          'tiene_codigo': true,
-          'codigo': codigo,
-          'porcentaje': 0.0,
-          'descripcion': '✅ Sin descuento salarial',
-          'color': 'blue',
-        };
-      case 'RECHAZADO':
-        return {
-          'tiene_codigo': true,
-          'codigo': codigo,
-          'porcentaje': null,
-          'descripcion': '❌ Rechazado por gerencia',
-          'color': 'red',
-        };
-      default:
-        if (tieneDescuento) {
-          final porcentaje = porcentajeDescuento;
-          return {
-            'tiene_codigo': true,
-            'codigo': codigo,
-            'porcentaje': porcentaje,
-            'descripcion': '💰 ${porcentaje?.toInt()}% descuento salarial',
-            'color': _getColorForPercentage(porcentaje),
-          };
-        } else {
-          return {
-            'tiene_codigo': true,
-            'codigo': codigo,
-            'porcentaje': null,
-            'descripcion': '🎯 Código personalizado: $codigo',
-            'color': 'purple',
-          };
-        }
-    }
-  }
-
-  /// Obtener color según porcentaje de descuento
-  String _getColorForPercentage(double? porcentaje) {
-    if (porcentaje == null) return 'grey';
-    
-    if (porcentaje <= 5) return 'orange';
-    if (porcentaje <= 10) return 'deepOrange';
-    if (porcentaje <= 15) return 'red';
-    if (porcentaje <= 20) return 'redAccent';
-    return 'purple'; // Para porcentajes mayores
-  }
-
-  /// Obtener información de procesamiento RRHH
-  Map<String, dynamic> get infoProcesamientoRRHH {
-    if (comentariosRrhh == null) {
-      return {
-        'fue_procesado': false,
-        'tipo_procesamiento': null,
-        'comentario_limpio': null,
-        'codigo_modificado': null,
-      };
-    }
-
-    final comentario = comentariosRrhh!;
-    
-    if (comentario.startsWith('MODIFICADO|')) {
-      final partes = comentario.split('|');
-      return {
-        'fue_procesado': true,
-        'tipo_procesamiento': 'modificado',
-        'comentario_limpio': partes.length > 2 ? partes[2] : '',
-        'codigo_modificado': partes.length > 1 ? partes[1] : null,
-      };
-    } else if (comentario.startsWith('ANULADO_RRHH|')) {
-      return {
-        'fue_procesado': true,
-        'tipo_procesamiento': 'anulado',
-        'comentario_limpio': comentario.replaceFirst('ANULADO_RRHH|', ''),
-        'codigo_modificado': null,
-      };
-    } else {
-      return {
-        'fue_procesado': true,
-        'tipo_procesamiento': 'confirmado',
-        'comentario_limpio': comentario,
-        'codigo_modificado': null,
-      };
-    }
-  }
-
-  /// Emoji representativo del estado
-  String get estadoEmoji {
-    switch (status) {
-      case 'borrador':
-        return '📝';
-      case 'enviado':
-        return '📤';
-      case 'aprobado':
-        if (comentariosRrhh != null) {
-          if (fueModificadoPorRRHH) return '📝';
-          if (fueAnuladoPorRRHH) return '🚫';
-          return '✅';
-        } else if (comentariosGerencia != null) {
-          return '⏳';
-        } else {
-          return '✅';
-        }
-      case 'rechazado':
-        return '❌';
-      default:
-        return '❓';
-    }
-  }
-
-  /// Descripción completa para reportes
-  String get descripcionCompleta {
-    final buffer = StringBuffer();
-    
-    buffer.writeln('📋 SANCIÓN: $tipoSancion');
-    buffer.writeln('👤 Empleado: $empleadoNombre ($empleadoCod)');
-    buffer.writeln('🏢 Puesto: $puesto');
-    buffer.writeln('🧑‍💼 Agente: $agente');
-    buffer.writeln('📅 Fecha: $fechaFormateada $hora');
-    buffer.writeln('📊 Estado: $estadoCompleto');
-    
-    if (pendiente) {
-      buffer.writeln('⏳ Estado: PENDIENTE');
-    } else {
-      buffer.writeln('✅ Estado: RESUELTO');
-    }
-    
-    if (observaciones != null && observaciones!.isNotEmpty) {
-      buffer.writeln('📝 Observaciones: $observaciones');
-    }
-    
-    if (observacionesAdicionales != null && observacionesAdicionales!.isNotEmpty) {
-      buffer.writeln('📝 Obs. Adicionales: $observacionesAdicionales');
-    }
-    
-    if (horasExtras != null) {
-      buffer.writeln('⏱️ Horas extras: $horasExtras');
-    }
-    
-    // Información de códigos de descuento
-    if (comentariosGerencia != null) {
-      final info = infoCodigoDescuento;
-      buffer.writeln('💼 Gerencia: ${info['descripcion']}');
-      if (comentarioGerenciaSinCodigo != null && comentarioGerenciaSinCodigo!.isNotEmpty) {
-        buffer.writeln('💬 Comentario Gerencia: $comentarioGerenciaSinCodigo');
-      }
-    }
-    
-    // Información de procesamiento RRHH
-    if (comentariosRrhh != null) {
-      final info = infoProcesamientoRRHH;
-      switch (info['tipo_procesamiento']) {
-        case 'modificado':
-          buffer.writeln('🏢 RRHH: Modificado a ${info['codigo_modificado']}');
-          break;
-        case 'anulado':
-          buffer.writeln('🏢 RRHH: Anulado');
-          break;
-        case 'confirmado':
-          buffer.writeln('🏢 RRHH: Confirmado');
-          break;
-      }
-      
-      if (info['comentario_limpio'] != null && info['comentario_limpio'].isNotEmpty) {
-        buffer.writeln('💬 Comentario RRHH: ${info['comentario_limpio']}');
-      }
-    }
-    
-    buffer.writeln('🔗 ID: $id');
-    buffer.writeln('📅 Creada: ${createdAt.day}/${createdAt.month}/${createdAt.year}');
-    
-    return buffer.toString().trim();
-  }
-
-  /// Obtener resumen ejecutivo para reportes
-  String get resumenEjecutivo {
-    final info = infoCodigoDescuento;
-    final procesamientoInfo = infoProcesamientoRRHH;
-    
-    String resumen = '$tipoSancion - $empleadoNombre';
-    
-    if (info['tiene_codigo']) {
-      resumen += ' | ${info['descripcion']}';
-    }
-    
-    if (procesamientoInfo['fue_procesado']) {
-      switch (procesamientoInfo['tipo_procesamiento']) {
-        case 'modificado':
-          resumen += ' | Modificado por RRHH';
-          break;
-        case 'anulado':
-          resumen += ' | Anulado por RRHH';
-          break;
-        case 'confirmado':
-          resumen += ' | Confirmado por RRHH';
-          break;
-      }
-    } else if (pendienteRRHH) {
-      resumen += ' | Pendiente RRHH';
-    }
-    
-    return resumen;
-  }
-
-  /// Verificar si requiere atención urgente
-  bool get requiereAtencionUrgente {
-    // Borradores muy antiguos
-    if (status == 'borrador' && 
-        DateTime.now().difference(createdAt).inDays > 7) {
-      return true;
-    }
-    
-    // Enviadas sin aprobar por más de 3 días
-    if (status == 'enviado' && 
-        DateTime.now().difference(createdAt).inDays > 3) {
-      return true;
-    }
-    
-    // Aprobadas por gerencia sin procesar por RRHH por más de 2 días
-    if (pendienteRRHH && 
-        fechaRevision != null &&
-        DateTime.now().difference(fechaRevision!).inDays > 2) {
-      return true;
-    }
-    
-    return false;
-  }
-
-  /// Días desde la última acción
-  int get diasDesdeUltimaAccion {
-    DateTime fechaReferencia;
-    
-    if (fechaRevision != null) {
-      fechaReferencia = fechaRevision!;
-    } else {
-      fechaReferencia = createdAt;
-    }
-    
-    return DateTime.now().difference(fechaReferencia).inDays;
-  }
-
-  /// =============================================
-  /// 🛠️ MÉTODOS DE UTILIDAD
-  /// =============================================
-
-  /// Comparar con otra sanción
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -653,109 +330,4 @@ class SancionModel {
 
   @override
   int get hashCode => id.hashCode;
-
-  /// Representación en string para debug
-  @override
-  String toString() {
-    return 'SancionModel(id: $id, empleado: $empleadoNombre, tipo: $tipoSancion, status: $status)';
-  }
-
-  /// Validar que la sanción esté completa
-  Map<String, String> validar() {
-    final errores = <String, String>{};
-    
-    if (empleadoNombre.isEmpty) {
-      errores['empleado'] = 'Debe seleccionar un empleado';
-    }
-    
-    if (tipoSancion.isEmpty) {
-      errores['tipo'] = 'Debe seleccionar un tipo de sanción';
-    }
-    
-    if (puesto.isEmpty) {
-      errores['puesto'] = 'El puesto es obligatorio';
-    }
-    
-    if (agente.isEmpty) {
-      errores['agente'] = 'El agente es obligatorio';
-    }
-    
-    if (hora.isEmpty) {
-      errores['hora'] = 'La hora es obligatoria';
-    }
-    
-    return errores;
-  }
-
-  /// Verificar si es válida para el estado actual
-  bool get esValidaParaEstado {
-    final errores = validar();
-    return errores.isEmpty;
-  }
-
-  /// Obtener próximo estado posible
-  List<String> get proximosEstadosPosibles {
-    switch (status) {
-      case 'borrador':
-        return ['enviado'];
-      case 'enviado':
-        return ['aprobado', 'rechazado'];
-      case 'aprobado':
-        if (pendienteRRHH) {
-          return ['rechazado']; // RRHH puede anular
-        }
-        return []; // Ya procesado
-      case 'rechazado':
-        return []; // Estado final
-      default:
-        return [];
-    }
-  }
-
-  /// Crear copia para edición
-  SancionModel paraEdicion() {
-    return copyWith(
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// Crear copia lista para envío
-  SancionModel paraEnvio() {
-    return copyWith(
-      status: 'enviado',
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// Crear copia aprobada con código
-  SancionModel aprobadaConCodigo(String codigoCompleto, String reviewedBy) {
-    return copyWith(
-      status: 'aprobado',
-      comentariosGerencia: codigoCompleto,
-      reviewedBy: reviewedBy,
-      fechaRevision: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// Crear copia rechazada
-  SancionModel rechazada(String motivo, String reviewedBy) {
-    return copyWith(
-      status: 'rechazado',
-      comentariosGerencia: 'RECHAZADO|$motivo',
-      reviewedBy: reviewedBy,
-      fechaRevision: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// Crear copia procesada por RRHH
-  SancionModel procesadaPorRRHH(String comentariosRrhh, String reviewedBy) {
-    return copyWith(
-      comentariosRrhh: comentariosRrhh,
-      reviewedBy: reviewedBy,
-      fechaRevision: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
 }

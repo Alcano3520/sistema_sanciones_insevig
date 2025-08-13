@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Modelo de usuario del sistema
 /// Define quién puede usar la aplicación y sus permisos
+/// ✅ CORREGIDO: Agregados getters 'initials' y 'roleEmoji' faltantes
 class UserModel {
   final String id;
   final String email;
@@ -75,16 +76,18 @@ class UserModel {
   static const String roleGerencia = 'gerencia';
   static const String roleRrhh = 'rrhh';
   static const String roleAprobador = 'aprobador';
+  static const String roleAdmin = 'admin';
 
   /// Verificadores de rol
   bool get isSupervisor => role == roleSupervisor;
   bool get isGerencia => role == roleGerencia;
   bool get isRrhh => role == roleRrhh;
   bool get isAprobador => role == roleAprobador;
+  bool get isAdmin => role == roleAdmin;
 
-  bool get canApprove => isAprobador || isGerencia || isRrhh;
-  bool get canCreateSanciones => isSupervisor;
-  bool get canViewAllSanciones => isGerencia || isRrhh;
+  bool get canApprove => isAprobador || isGerencia || isRrhh || isAdmin;
+  bool get canCreateSanciones => isSupervisor || isAdmin;
+  bool get canViewAllSanciones => isGerencia || isRrhh || isAdmin;
   bool get canChangeStatus => canApprove;
 
   /// Descripción del rol
@@ -98,12 +101,14 @@ class UserModel {
         return 'Recursos Humanos';
       case roleAprobador:
         return 'Aprobador';
+      case roleAdmin:
+        return 'Administrador';
       default:
         return role;
     }
   }
 
-  /// Emoji del rol
+  /// ✅ CORREGIDO: Emoji del rol (propiedad faltante)
   String get roleEmoji {
     switch (role) {
       case roleSupervisor:
@@ -114,6 +119,8 @@ class UserModel {
         return '🧑‍💼';
       case roleAprobador:
         return '✅';
+      case roleAdmin:
+        return '👑';
       default:
         return '👤';
     }
@@ -122,7 +129,7 @@ class UserModel {
   /// Nombre completo con rol
   String get displayName => '$fullName ($roleDescription)';
 
-  /// Iniciales para avatar
+  /// ✅ CORREGIDO: Iniciales para avatar (propiedad faltante)
   String get initials {
     final names = fullName.split(' ');
     if (names.length >= 2) {

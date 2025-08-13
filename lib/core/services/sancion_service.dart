@@ -1,94 +1,562 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:signature/signature.dart';
+import 'package:flutter/foundation.dart'; // 🆕 Para kIsWeb
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
-import 'package:path/path.dart' as path;
-
+import 'package:signature/signature.dart';
+import '../config/supabase_config.dart';
 import '../models/sancion_model.dart';
+import '../services/image_compression_service.dart'; // 🆕 NUEVO IMPORT
 
-/// 🔥 Servicio principal para gestión de sanciones
-/// Maneja todas las operaciones CRUD con Supabase
-/// 🆕 EXTENDIDO CON SISTEMA DE APROBACIONES Y CÓDIGOS DE DESCUENTO
+/// Servicio principal para manejar sanciones
+/// ACTUALIZADO con compresión automática de imágenes
+/// Incluye funcionalidad offline como tu app Kivy
+/// 🆕 COMPATIBLE WEB + ANDROID
+/// ✅ CORREGIDO: Getter público para Supabase + métodos jerárquicos
 class SancionService {
-  static final SupabaseClient _supabase = Supabase.instance.client;
-  static const String _tableName = 'sanciones';
-  static const String _bucketName = 'sanciones-files';
+  /// ✅ CORREGIDO: Getter público para que sea accesible desde otros servicios
+  SupabaseClient get supabase => SupabaseConfig.sancionesClient;
 
-  /// =============================================
-  /// 🏗️ CREAR SANCIONES
-  /// =============================================
+  // Mantenemos el getter privado para compatibilidad interna
+  SupabaseClient get _supabase => SupabaseConfig.sancionesClient;
 
-  /// Crear nueva sanción con archivos adjuntos
-  Future<String?> createSancion({
+  /// Crear nueva sanción (función principal como en Kivy)
+  Future<String> createSancion({
     required SancionModel sancion,
     File? fotoFile,
     SignatureController? signatureController,
   }) async {
     try {
-      print('🏗️ Iniciando creación de sanción...');
-      
-      // Generar ID único
-      final sancionId = const Uuid().v4();
-      
-      // Preparar datos base
-      final sancionData = sancion.copyWith(
-        id: sancionId,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ).toMap();
+      print('🔍 Creando sanción para ${sancion.empleadoNombre}...');
 
-      // Subir archivos si existen
+      String? fotoUrl;
+      String? firmaPath;
+
+      // 1. Subir foto si existe (CON COMPRESIÓN AUTOMÁTICA) 🆕
       if (fotoFile != null) {
-        final fotoUrl = await _uploadFoto(sancionId, fotoFile);
-        sancionData['foto_url'] = fotoUrl;
-        print('📸 Foto subida: $fotoUrl');
+        fotoUrl = await _uploadFotoCompressed(fotoFile, sancion.id);
+        print('📷 Foto comprimida y subida: $fotoUrl');
       }
 
-      if (signatureController != null) {
-        final firmaPath = await _uploadFirma(sancionId, signatureController);
-        sancionData['firma_path'] = firmaPath;
-        print('✍️ Firma subida: $firmaPath');
+      // 2. Subir firma si existe
+      if (signatureController != null && signatureController.isNotEmpty) {
+        firmaPath = await _uploadFirma(signatureController, sancion.id);
+        print('✏️ Firma subida: $firmaPath');
       }
 
-      // Insertar en base de datos
-      await _supabase.from(_tableName).insert(sancionData);
-      
-      print('✅ Sanción creada exitosamente: $sancionId');
-      return sancionId;
+      // 3. Crear sanción con archivos
+      final sancionConArchivos = sancion.copyWith(
+        fotoUrl: fotoUrl,
+        firmaPath: firmaPath,
+        updatedAt: DateTime.now(),
+      );
+
+      // 4. Guardar en Supabase
+      final response = await _supabase
+          .from('sanciones')
+          .insert(sancionConArchivos.toMap())
+          .select()
+          .single();
+
+      print('✅ Sanción creada exitosamente: ${response['id']}');
+      return response['id'];
     } catch (e) {
       print('❌ Error creando sanción: $e');
       rethrow;
     }
   }
 
-  /// =============================================
-  /// 📖 CONSULTAR SANCIONES
-  /// =============================================
+  /// 🆕 MÉTODO UNIVERSAL: Subir foto con compresión (Web + Android compatible)
+  Future<String?> _uploadFotoCompressed(File fotoFile, String sancionId) async {
+    try {
+      print(
+          '🔄 [${kIsWeb ? 'WEB' : 'MOBILE'}] Procesando foto para sanción $sancionId...');
 
-  /// Obtener mis sanciones (del supervisor actual)
+      // 1. Comprimir imagen usando el servicio universal
+      final compressedFile =
+          await ImageCompressionService.compressImage(fotoFile);
+
+      // 2. Generar nombre único para Supabase
+      final fileName =
+          '${sancionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final storagePath = 'sanciones/$fileName';
+
+      // 3. Subir según la plataforma
+      await _uploadToSupabase(compressedFile, storagePath);
+
+      // 4. Obtener URL pública
+      final publicUrl =
+          _supabase.storage.from('sancion-photos').getPublicUrl(storagePath);
+
+      print('✅ Foto subida exitosamente: $publicUrl');
+
+      // 5. Limpiar archivo temporal (solo en móvil)
+      await _cleanupTempFile(compressedFile, fotoFile);
+
+      return publicUrl;
+    } catch (e) {
+      print('❌ Error subiendo foto comprimida: $e');
+
+      // 🛡️ FALLBACK: Intentar con imagen original
+      return await _uploadFotoOriginalFallback(fotoFile, sancionId);
+    }
+  }
+
+  /// 🆕 Subir archivo a Supabase según la plataforma
+  Future<void> _uploadToSupabase(File file, String storagePath) async {
+    final bytes = await file.readAsBytes();
+
+    if (kIsWeb) {
+      // WEB: Usar uploadBinary (más confiable en Web)
+      print('🌐 Subiendo en Web con uploadBinary...');
+      await _supabase.storage
+          .from('sancion-photos')
+          .uploadBinary(storagePath, bytes);
+    } else {
+      // ANDROID/iOS: Intentar upload tradicional, fallback a uploadBinary
+      print('📱 Subiendo en móvil...');
+      try {
+        await _supabase.storage
+            .from('sancion-photos')
+            .upload(storagePath, file);
+        print('📱 Subida tradicional exitosa');
+      } catch (e) {
+        print('⚠️ Upload tradicional falló, usando uploadBinary: $e');
+        await _supabase.storage
+            .from('sancion-photos')
+            .uploadBinary(storagePath, bytes);
+        print('📱 UploadBinary exitoso como fallback');
+      }
+    }
+  }
+
+  /// 🆕 Limpiar archivo temporal de forma segura
+  Future<void> _cleanupTempFile(File compressedFile, File originalFile) async {
+    if (!kIsWeb && compressedFile.path != originalFile.path) {
+      try {
+        // Solo intentar eliminar si es un archivo físico diferente al original
+        if (await compressedFile.exists()) {
+          await compressedFile.delete();
+          print('🗑️ Archivo temporal eliminado');
+        }
+      } catch (e) {
+        print('⚠️ No se pudo eliminar archivo temporal: $e');
+        // No es crítico, continuar
+      }
+    }
+  }
+
+  /// 🆕 FALLBACK: Subir imagen original sin compresión
+  Future<String?> _uploadFotoOriginalFallback(
+      File fotoFile, String sancionId) async {
+    try {
+      print('🔄 Intentando subida sin compresión como fallback...');
+
+      final fileName =
+          '${sancionId}_${DateTime.now().millisecondsSinceEpoch}_original.jpg';
+      final storagePath = 'sanciones/$fileName';
+
+      await _uploadToSupabase(fotoFile, storagePath);
+
+      final publicUrl =
+          _supabase.storage.from('sancion-photos').getPublicUrl(storagePath);
+
+      print('✅ Fallback exitoso (sin compresión): $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      print('❌ Error en fallback: $e');
+      return null;
+    }
+  }
+
+  /// 🆕 MÉTODO ACTUALIZADO: Subir firma (sin cambios, pero más robusto)
+  Future<String?> _uploadFirma(
+      SignatureController controller, String sancionId) async {
+    try {
+      final signature = await controller.toPngBytes();
+      if (signature == null) return null;
+
+      final fileName =
+          '${sancionId}_signature_${DateTime.now().millisecondsSinceEpoch}.png';
+      final storagePath = 'firmas/$fileName';
+
+      // Usar uploadBinary siempre para firmas (son pequeñas)
+      await _supabase.storage
+          .from('sancion-signatures')
+          .uploadBinary(storagePath, signature);
+
+      final publicUrl = _supabase.storage
+          .from('sancion-signatures')
+          .getPublicUrl(storagePath);
+
+      print('✅ Firma subida: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      print('❌ Error subiendo firma: $e');
+      return null;
+    }
+  }
+
+  /// 🔥 ACTUALIZAR SANCIÓN EXISTENTE - MÉTODO CORREGIDO CON COMPRESIÓN
+  Future<bool> updateSancion(
+    SancionModel sancion, {
+    File? nuevaFoto,
+    SignatureController? nuevaFirma,
+  }) async {
+    try {
+      print('🔄 Actualizando sanción ${sancion.id}...');
+
+      String? fotoUrl = sancion.fotoUrl;
+      String? firmaPath = sancion.firmaPath;
+
+      // 1. Subir nueva foto CON COMPRESIÓN si se proporcionó 🆕
+      if (nuevaFoto != null) {
+        fotoUrl = await _uploadFotoCompressed(nuevaFoto, sancion.id);
+        print('📷 Nueva foto comprimida: $fotoUrl');
+      }
+
+      // 2. Subir nueva firma si se proporcionó
+      if (nuevaFirma != null && nuevaFirma.isNotEmpty) {
+        firmaPath = await _uploadFirma(nuevaFirma, sancion.id);
+        print('✏️ Nueva firma subida: $firmaPath');
+      }
+
+      // 3. Preparar datos para actualización (sin campos que no se pueden cambiar)
+      final updateData = {
+        'empleado_cod': sancion.empleadoCod,
+        'empleado_nombre': sancion.empleadoNombre,
+        'puesto': sancion.puesto,
+        'agente': sancion.agente,
+        'fecha': sancion.fecha
+            .toIso8601String()
+            .split('T')[0], // Solo fecha YYYY-MM-DD
+        'hora': sancion.hora,
+        'tipo_sancion': sancion.tipoSancion,
+        'observaciones': sancion.observaciones,
+        'observaciones_adicionales': sancion.observacionesAdicionales,
+        'pendiente': sancion.pendiente,
+        'horas_extras': sancion.horasExtras,
+        'status': sancion.status,
+        'foto_url': fotoUrl,
+        'firma_path': firmaPath,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // 4. Actualizar en Supabase
+      final response = await _supabase
+          .from('sanciones')
+          .update(updateData)
+          .eq('id', sancion.id)
+          .select();
+
+      if (response.isNotEmpty) {
+        print('✅ Sanción actualizada exitosamente: ${sancion.id}');
+        return true;
+      } else {
+        print('❌ No se pudo actualizar la sanción: respuesta vacía');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error actualizando sanción: $e');
+      print('❌ Detalles del error: ${e.toString()}');
+      rethrow;
+    }
+  }
+
+  /// 🔥 MÉTODO AUXILIAR PARA ACTUALIZACIÓN CON ARCHIVOS - ACTUALIZADO CON COMPRESIÓN
+  Future<bool> updateSancionWithFiles({
+    required SancionModel sancion,
+    File? nuevaFoto,
+    SignatureController? nuevaFirma,
+  }) async {
+    try {
+      print('🔄 Actualizando sanción con archivos ${sancion.id}...');
+
+      String? fotoUrl = sancion.fotoUrl;
+      String? firmaPath = sancion.firmaPath;
+
+      // Subir nueva foto CON COMPRESIÓN si se proporcionó 🆕
+      if (nuevaFoto != null) {
+        fotoUrl = await _uploadFotoCompressed(nuevaFoto, sancion.id);
+        print('📷 Nueva foto comprimida subida: $fotoUrl');
+      }
+
+      // Subir nueva firma si se proporcionó
+      if (nuevaFirma != null && nuevaFirma.isNotEmpty) {
+        firmaPath = await _uploadFirma(nuevaFirma, sancion.id);
+        print('✏️ Nueva firma subida: $firmaPath');
+      }
+
+      // Crear sanción con URLs actualizadas
+      final sancionActualizada = sancion.copyWith(
+        fotoUrl: fotoUrl,
+        firmaPath: firmaPath,
+        updatedAt: DateTime.now(),
+      );
+
+      // Actualizar usando el método principal
+      return await updateSancionSimple(sancionActualizada);
+    } catch (e) {
+      print('❌ Error actualizando sanción con archivos: $e');
+      return false;
+    }
+  }
+
+  /// 🔥 MÉTODO SIMPLIFICADO PARA DEBUG
+  Future<bool> updateSancionSimple(SancionModel sancion) async {
+    try {
+      print('🔄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
+      print('🔄 [DEBUG] Datos a actualizar:');
+      print('   - Empleado: ${sancion.empleadoNombre}');
+      print('   - Puesto: ${sancion.puesto}');
+      print('   - Agente: ${sancion.agente}');
+      print('   - Status: ${sancion.status}');
+
+      // Preparar solo los campos esenciales
+      final updateData = {
+        'empleado_cod': sancion.empleadoCod,
+        'empleado_nombre': sancion.empleadoNombre,
+        'puesto': sancion.puesto,
+        'agente': sancion.agente,
+        'fecha': sancion.fecha.toIso8601String().split('T')[0],
+        'hora': sancion.hora,
+        'tipo_sancion': sancion.tipoSancion,
+        'observaciones': sancion.observaciones,
+        'observaciones_adicionales': sancion.observacionesAdicionales,
+        'pendiente': sancion.pendiente,
+        'status': sancion.status,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // Solo agregar campos opcionales si no son null
+      if (sancion.horasExtras != null) {
+        updateData['horas_extras'] = sancion.horasExtras;
+      }
+
+      print('🔄 [DEBUG] Datos preparados para Supabase:');
+      updateData.forEach((key, value) {
+        print('   $key: $value');
+      });
+
+      final response = await _supabase
+          .from('sanciones')
+          .update(updateData)
+          .eq('id', sancion.id)
+          .select();
+
+      if (response.isNotEmpty) {
+        print('✅ [DEBUG] Sanción actualizada exitosamente');
+        return true;
+      } else {
+        print('❌ [DEBUG] Respuesta vacía al actualizar');
+        return false;
+      }
+    } catch (e) {
+      print('❌ [DEBUG] Error detallado: $e');
+      print('❌ [DEBUG] Tipo de error: ${e.runtimeType}');
+      rethrow;
+    }
+  }
+
+  /// ============================================= 
+  /// ✅ NUEVOS MÉTODOS PARA SISTEMA JERÁRQUICO
+  /// ============================================= 
+
+  /// ✅ NUEVO: Aprobar sanción por gerencia con código de descuento
+  Future<bool> aprobarConCodigoGerencia(
+    String sancionId,
+    String codigo,
+    String comentarios,
+    String reviewedBy,
+  ) async {
+    try {
+      print('👔 Aprobando sanción $sancionId con código $codigo...');
+      
+      final comentarioFinal = codigo == 'LIBRE' 
+        ? comentarios
+        : '$codigo - $comentarios';
+        
+      return await changeStatus(
+        sancionId,
+        'aprobado',
+        comentarios: comentarioFinal,
+        reviewedBy: reviewedBy,
+      );
+    } catch (e) {
+      print('❌ Error aprobando con código: $e');
+      return false;
+    }
+  }
+
+  /// ✅ NUEVO: Revisión RRHH con capacidad de modificar decisión gerencia
+  Future<bool> revisionRrhh(
+    String sancionId,
+    String accion,
+    String comentariosRrhh,
+    String reviewedBy, {
+    String? nuevosComentariosGerencia,
+  }) async {
+    try {
+      print('🧑‍💼 Revisión RRHH para sanción $sancionId - Acción: $accion');
+      
+      final updateData = <String, dynamic>{
+        'comentarios_rrhh': comentariosRrhh,
+        'reviewed_by': reviewedBy,
+        'fecha_revision': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // Según la acción RRHH
+      switch (accion) {
+        case 'confirmar':
+          // Mantener status actual, solo agregar comentarios RRHH
+          break;
+        case 'modificar':
+          if (nuevosComentariosGerencia != null) {
+            updateData['comentarios_gerencia'] = nuevosComentariosGerencia;
+          }
+          break;
+        case 'anular':
+          updateData['status'] = 'rechazado';
+          break;
+        case 'procesar':
+          // Procesar sin cambios, solo comentarios RRHH
+          break;
+      }
+
+      await _supabase
+          .from('sanciones')
+          .update(updateData)
+          .eq('id', sancionId);
+
+      print('✅ Revisión RRHH completada exitosamente');
+      return true;
+    } catch (e) {
+      print('❌ Error en revisión RRHH: $e');
+      return false;
+    }
+  }
+
+  /// ✅ NUEVO: Obtener sanciones específicas por rol
+  Future<List<SancionModel>> getSancionesByRol(String rol) async {
+    try {
+      switch (rol) {
+        case 'gerencia':
+          // Solo sanciones enviadas esperando gerencia
+          return await _getSancionesByStatus('enviado');
+        case 'rrhh':
+          // Sanciones aprobadas por gerencia esperando RRHH
+          return await _getSancionesAprobadaGerencia();
+        default:
+          return await getAllSanciones();
+      }
+    } catch (e) {
+      print('❌ Error obteniendo sanciones por rol: $e');
+      return [];
+    }
+  }
+
+  /// ✅ NUEVO: Obtener sanciones por status específico
+  Future<List<SancionModel>> _getSancionesByStatus(String status) async {
+    final response = await _supabase
+        .from('sanciones')
+        .select('*')
+        .eq('status', status)
+        .order('created_at', ascending: true);
+        
+    return response.map<SancionModel>((json) => SancionModel.fromMap(json)).toList();
+  }
+
+  /// ✅ NUEVO: Obtener sanciones aprobadas por gerencia (esperando RRHH)
+  Future<List<SancionModel>> _getSancionesAprobadaGerencia() async {
+    // ✅ CORREGIDO: Query simplificada para evitar errores de sintaxis
+    final response = await _supabase
+        .from('sanciones')
+        .select('*')
+        .eq('status', 'aprobado')
+        .order('created_at', ascending: true);
+    
+    // Filtrar en código Dart para evitar problemas con NULL checking en SQL
+    final sancionesAprobadas = response
+        .map<SancionModel>((json) => SancionModel.fromMap(json))
+        .where((sancion) => 
+            sancion.comentariosGerencia != null && 
+            sancion.comentariosRrhh == null)
+        .toList();
+        
+    return sancionesAprobadas;
+  }
+
+  /// ✅ NUEVO: Obtener contadores para tabs
+  Future<Map<String, int>> getContadoresPorRol(String rol) async {
+    try {
+      final contadores = <String, int>{
+        'pendientes_gerencia': 0,
+        'pendientes_rrhh': 0,
+        'total': 0,
+      };
+
+      switch (rol) {
+        case 'gerencia':
+          final sancionesEnviadas = await _getSancionesByStatus('enviado');
+          contadores['pendientes_gerencia'] = sancionesEnviadas.length;
+          break;
+          
+        case 'rrhh':
+          final sancionesAprobadas = await _getSancionesAprobadaGerencia();
+          contadores['pendientes_rrhh'] = sancionesAprobadas.length;
+          break;
+      }
+
+      return contadores;
+    } catch (e) {
+      print('❌ Error obteniendo contadores: $e');
+      return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+    }
+  }
+
+  /// 🆕 NUEVO: Método para pre-validar imagen antes de subir
+  Future<Map<String, dynamic>> validateImage(File imageFile) async {
+    try {
+      final info = await ImageCompressionService.getImageInfo(imageFile);
+      final needsCompression =
+          await ImageCompressionService.needsCompression(imageFile);
+
+      return {
+        'valid': true,
+        'info': info,
+        'needsCompression': needsCompression,
+        'estimatedCompressedSize': needsCompression
+            ? (info['size'] ?? 0) * 0.3 // Estimación: ~30% del tamaño original
+            : info['size'] ?? 0,
+      };
+    } catch (e) {
+      return {
+        'valid': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// 🆕 NUEVO: Limpiar archivos temporales (llamar periódicamente)
+  Future<void> cleanupTempFiles() async {
+    await ImageCompressionService.cleanupTempFiles();
+  }
+
+  /// Obtener sanciones del supervisor actual
   Future<List<SancionModel>> getMySanciones(String supervisorId) async {
     try {
       final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
+          .from('sanciones')
+          .select('*')
           .eq('supervisor_id', supervisorId)
           .order('created_at', ascending: false);
 
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
+      return response
+          .map<SancionModel>((json) => SancionModel.fromMap(json))
           .toList();
     } catch (e) {
       print('❌ Error obteniendo mis sanciones: $e');
-      rethrow;
+      return [];
     }
   }
 
@@ -96,93 +564,16 @@ class SancionService {
   Future<List<SancionModel>> getAllSanciones() async {
     try {
       final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
+          .from('sanciones')
+          .select('*')
           .order('created_at', ascending: false);
 
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
+      return response
+          .map<SancionModel>((json) => SancionModel.fromMap(json))
           .toList();
     } catch (e) {
       print('❌ Error obteniendo todas las sanciones: $e');
-      rethrow;
-    }
-  }
-
-  /// 🆕 Obtener sanciones para gerencia (enviadas + aprobadas por esta gerencia)
-  Future<List<SancionModel>> getSancionesParaGerencia() async {
-    try {
-      final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
-          .or('status.eq.enviado,and(status.eq.aprobado,comentarios_gerencia.not.is.null)')
-          .order('created_at', ascending: false);
-
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
-          .toList();
-    } catch (e) {
-      print('❌ Error obteniendo sanciones para gerencia: $e');
-      rethrow;
-    }
-  }
-
-  /// 🆕 Obtener sanciones para RRHH (aprobadas por gerencia + procesadas)
-  Future<List<SancionModel>> getSancionesParaRRHH() async {
-    try {
-      final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
-          .eq('status', 'aprobado')
-          .not('comentarios_gerencia', 'is', null)
-          .order('created_at', ascending: false);
-
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
-          .toList();
-    } catch (e) {
-      print('❌ Error obteniendo sanciones para RRHH: $e');
-      rethrow;
-    }
-  }
-
-  /// Obtener sanción por ID
-  Future<SancionModel?> getSancionById(String id) async {
-    try {
-      final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
-          .eq('id', id)
-          .single();
-
-      return SancionModel.fromMap(response);
-    } catch (e) {
-      print('❌ Error obteniendo sanción por ID: $e');
-      return null;
+      return [];
     }
   }
 
@@ -190,51 +581,39 @@ class SancionService {
   Future<List<SancionModel>> getSancionesByEmpleado(int empleadoCod) async {
     try {
       final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
+          .from('sanciones')
+          .select('*')
           .eq('empleado_cod', empleadoCod)
           .order('created_at', ascending: false);
 
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
+      return response
+          .map<SancionModel>((json) => SancionModel.fromMap(json))
           .toList();
     } catch (e) {
       print('❌ Error obteniendo sanciones del empleado: $e');
-      rethrow;
+      return [];
     }
   }
 
-  /// Obtener sanciones por rango de fechas
+  /// Obtener sanciones por fechas
   Future<List<SancionModel>> getSancionesByDateRange(
     DateTime fechaInicio,
     DateTime fechaFin,
   ) async {
     try {
       final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
+          .from('sanciones')
+          .select('*')
           .gte('fecha', fechaInicio.toIso8601String().split('T')[0])
           .lte('fecha', fechaFin.toIso8601String().split('T')[0])
           .order('created_at', ascending: false);
 
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
+      return response
+          .map<SancionModel>((json) => SancionModel.fromMap(json))
           .toList();
     } catch (e) {
       print('❌ Error obteniendo sanciones por rango: $e');
-      rethrow;
+      return [];
     }
   }
 
@@ -242,106 +621,21 @@ class SancionService {
   Future<List<SancionModel>> getSancionesPendientes() async {
     try {
       final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
+          .from('sanciones')
+          .select('*')
           .eq('pendiente', true)
           .order('created_at', ascending: false);
 
-      return (response as List)
-          .map((data) => SancionModel.fromMap(data))
+      return response
+          .map<SancionModel>((json) => SancionModel.fromMap(json))
           .toList();
     } catch (e) {
       print('❌ Error obteniendo sanciones pendientes: $e');
-      rethrow;
+      return [];
     }
   }
 
-  /// =============================================
-  /// ✏️ ACTUALIZAR SANCIONES
-  /// =============================================
-
-  /// Actualizar sanción con archivos
-  Future<bool> updateSancionWithFiles({
-    required SancionModel sancion,
-    File? nuevaFoto,
-    SignatureController? nuevaFirma,
-  }) async {
-    try {
-      print('✏️ Actualizando sanción: ${sancion.id}');
-      
-      final sancionData = sancion.copyWith(
-        updatedAt: DateTime.now(),
-      ).toMap();
-
-      // Actualizar foto si se proporciona una nueva
-      if (nuevaFoto != null) {
-        // Eliminar foto anterior si existe
-        if (sancion.fotoUrl != null) {
-          await _deleteFoto(sancion.fotoUrl!);
-        }
-        
-        final fotoUrl = await _uploadFoto(sancion.id, nuevaFoto);
-        sancionData['foto_url'] = fotoUrl;
-        print('📸 Nueva foto subida: $fotoUrl');
-      }
-
-      // Actualizar firma si se proporciona una nueva
-      if (nuevaFirma != null) {
-        // Eliminar firma anterior si existe
-        if (sancion.firmaPath != null) {
-          await _deleteFirma(sancion.firmaPath!);
-        }
-        
-        final firmaPath = await _uploadFirma(sancion.id, nuevaFirma);
-        sancionData['firma_path'] = firmaPath;
-        print('✍️ Nueva firma subida: $firmaPath');
-      }
-
-      // Actualizar en base de datos
-      await _supabase
-          .from(_tableName)
-          .update(sancionData)
-          .eq('id', sancion.id);
-
-      print('✅ Sanción actualizada exitosamente');
-      return true;
-    } catch (e) {
-      print('❌ Error actualizando sanción: $e');
-      rethrow;
-    }
-  }
-
-  /// Actualizar sanción simple (sin archivos)
-  Future<bool> updateSancionSimple(SancionModel sancion) async {
-    try {
-      final sancionData = sancion.copyWith(
-        updatedAt: DateTime.now(),
-      ).toMap();
-
-      await _supabase
-          .from(_tableName)
-          .update(sancionData)
-          .eq('id', sancion.id);
-
-      print('✅ Sanción actualizada (simple): ${sancion.id}');
-      return true;
-    } catch (e) {
-      print('❌ Error actualizando sanción simple: $e');
-      rethrow;
-    }
-  }
-
-  /// =============================================
-  /// 🔄 CAMBIOS DE ESTADO
-  /// =============================================
-
-  /// Cambiar status de sanción
+  /// Cambiar status de sanción (borrador -> enviado -> aprobado/rechazado)
   Future<bool> changeStatus(
     String sancionId,
     String newStatus, {
@@ -363,124 +657,62 @@ class SancionService {
         updateData['fecha_revision'] = DateTime.now().toIso8601String();
       }
 
-      await _supabase
-          .from(_tableName)
-          .update(updateData)
-          .eq('id', sancionId);
+      await _supabase.from('sanciones').update(updateData).eq('id', sancionId);
 
-      print('✅ Status cambiado: $sancionId -> $newStatus');
+      print('✅ Status cambiado a $newStatus para sanción $sancionId');
       return true;
     } catch (e) {
       print('❌ Error cambiando status: $e');
-      rethrow;
-    }
-  }
-
-  /// 🆕 Actualizar sanción con procesamiento RRHH específico
-  Future<bool> updateSancionRRHH(
-    String sancionId,
-    String status,
-    String comentariosRrhh,
-    String reviewedBy,
-  ) async {
-    try {
-      await _supabase
-          .from(_tableName)
-          .update({
-            'status': status,
-            'comentarios_rrhh': comentariosRrhh,
-            'reviewed_by': reviewedBy,
-            'fecha_revision': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', sancionId);
-
-      print('✅ Sanción $sancionId procesada por RRHH: $status');
-      return true;
-    } catch (e) {
-      print('❌ Error procesando sanción por RRHH: $e');
-      rethrow;
+      return false;
     }
   }
 
   /// Marcar sanción como pendiente/resuelta
   Future<bool> togglePendiente(String sancionId, bool pendiente) async {
     try {
-      await _supabase
-          .from(_tableName)
-          .update({
-            'pendiente': pendiente,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', sancionId);
+      await _supabase.from('sanciones').update({
+        'pendiente': pendiente,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', sancionId);
 
-      print('✅ Pendiente actualizado: $sancionId -> $pendiente');
+      print('✅ Sanción marcada como ${pendiente ? "pendiente" : "resuelta"}');
       return true;
     } catch (e) {
-      print('❌ Error actualizando pendiente: $e');
-      rethrow;
+      print('❌ Error cambiando estado pendiente: $e');
+      return false;
     }
   }
-
-  /// =============================================
-  /// 🗑️ ELIMINAR SANCIONES
-  /// =============================================
 
   /// Eliminar sanción (solo borradores)
   Future<bool> deleteSancion(String sancionId) async {
     try {
-      // Obtener sanción para verificar archivos
-      final sancion = await getSancionById(sancionId);
-      if (sancion == null) {
-        throw Exception('Sanción no encontrada');
-      }
-
-      // Solo permitir eliminar borradores
-      if (sancion.status != 'borrador') {
-        throw Exception('Solo se pueden eliminar sanciones en estado borrador');
-      }
-
-      // Eliminar archivos asociados
-      if (sancion.fotoUrl != null) {
-        await _deleteFoto(sancion.fotoUrl!);
-      }
-      
-      if (sancion.firmaPath != null) {
-        await _deleteFirma(sancion.firmaPath!);
-      }
-
-      // Eliminar de base de datos
       await _supabase
-          .from(_tableName)
+          .from('sanciones')
           .delete()
-          .eq('id', sancionId);
+          .eq('id', sancionId)
+          .eq('status', 'borrador');
 
       print('✅ Sanción eliminada: $sancionId');
       return true;
     } catch (e) {
       print('❌ Error eliminando sanción: $e');
-      rethrow;
+      return false;
     }
   }
-
-  /// =============================================
-  /// 📈 ESTADÍSTICAS
-  /// =============================================
 
   /// Obtener estadísticas de sanciones
   Future<Map<String, dynamic>> getEstadisticas({String? supervisorId}) async {
     try {
-      var query = _supabase.from(_tableName).select('status, tipo_sancion, created_at, pendiente');
-      
+      var query = _supabase.from('sanciones').select('*');
+
       if (supervisorId != null) {
         query = query.eq('supervisor_id', supervisorId);
       }
 
       final response = await query;
-      final sanciones = response as List;
 
-      final stats = <String, dynamic>{
-        'total': sanciones.length,
+      final stats = {
+        'total': response.length,
         'borradores': 0,
         'enviadas': 0,
         'aprobadas': 0,
@@ -494,682 +726,72 @@ class SancionService {
       final ahora = DateTime.now();
       final hace30Dias = ahora.subtract(const Duration(days: 30));
 
-      for (var sancion in sanciones) {
-        final status = sancion['status'] as String;
-        final tipoSancion = sancion['tipo_sancion'] as String;
-        final createdAt = DateTime.parse(sancion['created_at']);
-        final pendiente = sancion['pendiente'] as bool? ?? false;
+      for (var sancion in response) {
+        final status = sancion['status'];
+        final pendiente = sancion['pendiente'] ?? false;
+        final fecha = DateTime.tryParse(sancion['created_at'] ?? '');
+        final tipo = sancion['tipo_sancion'];
 
         // Contar por status
         switch (status) {
           case 'borrador':
-            stats['borradores']++;
+            stats['borradores'] = (stats['borradores'] as int) + 1;
             break;
           case 'enviado':
-            stats['enviadas']++;
+            stats['enviadas'] = (stats['enviadas'] as int) + 1;
             break;
           case 'aprobado':
-            stats['aprobadas']++;
+            stats['aprobadas'] = (stats['aprobadas'] as int) + 1;
             break;
           case 'rechazado':
-            stats['rechazadas']++;
+            stats['rechazadas'] = (stats['rechazadas'] as int) + 1;
             break;
         }
 
         // Contar pendientes
         if (pendiente) {
-          stats['pendientes']++;
+          stats['pendientes'] = (stats['pendientes'] as int) + 1;
         } else {
-          stats['resueltas']++;
+          stats['resueltas'] = (stats['resueltas'] as int) + 1;
         }
 
         // Contar por tipo
         final porTipo = stats['porTipo'] as Map<String, int>;
-        porTipo[tipoSancion] = (porTipo[tipoSancion] ?? 0) + 1;
+        porTipo[tipo] = (porTipo[tipo] ?? 0) + 1;
 
         // Último mes
-        if (createdAt.isAfter(hace30Dias)) {
-          stats['ultimoMes']++;
+        if (fecha != null && fecha.isAfter(hace30Dias)) {
+          stats['ultimoMes'] = (stats['ultimoMes'] as int) + 1;
         }
       }
 
       return stats;
     } catch (e) {
       print('❌ Error obteniendo estadísticas: $e');
-      rethrow;
-    }
-  }
-
-  /// 🆕 Obtener estadísticas por rol
-  Future<Map<String, dynamic>> getEstadisticasByRole() async {
-    try {
-      // Obtener todas las sanciones con códigos
-      final response = await _supabase
-          .from(_tableName)
-          .select('status, comentarios_gerencia, comentarios_rrhh')
-          .not('comentarios_gerencia', 'is', null);
-
-      final sanciones = response as List;
-      
-      int totalConDescuento = 0;
-      int modificadas = 0;
-      int anuladas = 0;
-      Map<String, int> porCodigo = {};
-
-      for (var sancion in sanciones) {
-        final comentariosGerencia = sancion['comentarios_gerencia'] as String?;
-        final comentariosRrhh = sancion['comentarios_rrhh'] as String?;
-        final status = sancion['status'] as String;
-
-        // Contar con descuento
-        if (comentariosGerencia != null && 
-            !comentariosGerencia.startsWith('SIN_DESC') &&
-            !comentariosGerencia.startsWith('RECHAZADO')) {
-          totalConDescuento++;
-        }
-
-        // Contar por código
-        if (comentariosGerencia != null) {
-          final codigo = comentariosGerencia.split('|')[0];
-          porCodigo[codigo] = (porCodigo[codigo] ?? 0) + 1;
-        }
-
-        // Contar modificadas por RRHH
-        if (comentariosRrhh != null && comentariosRrhh.startsWith('MODIFICADO')) {
-          modificadas++;
-        }
-
-        // Contar anuladas por RRHH
-        if (status == 'rechazado' && 
-            comentariosRrhh != null && 
-            comentariosRrhh.startsWith('ANULADO_RRHH')) {
-          anuladas++;
-        }
-      }
-
       return {
-        'total_con_descuento': totalConDescuento,
-        'modificadas': modificadas,
-        'anuladas': anuladas,
-        'por_codigo': porCodigo,
-      };
-    } catch (e) {
-      print('❌ Error obteniendo estadísticas por rol: $e');
-      return {};
-    }
-  }
-
-  /// 🆕 Obtener sanciones que requieren atención urgente
-  Future<List<SancionModel>> getSancionesUrgentes() async {
-    try {
-      final DateTime hace3Dias = DateTime.now().subtract(const Duration(days: 3));
-      final DateTime hace7Dias = DateTime.now().subtract(const Duration(days: 7));
-
-      final response = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
-          .or(
-            'and(status.eq.borrador,created_at.lt.${hace7Dias.toIso8601String()}),'
-            'and(status.eq.enviado,created_at.lt.${hace3Dias.toIso8601String()})'
-          )
-          .order('created_at', ascending: true);
-
-      final sanciones = (response as List)
-          .map((data) => SancionModel.fromMap(data))
-          .toList();
-
-      // Agregar también las pendientes de RRHH por más de 2 días
-      final hace2Dias = DateTime.now().subtract(const Duration(days: 2));
-      final responsePendientesRRHH = await _supabase
-          .from(_tableName)
-          .select('''
-            id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-            fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-            pendiente, foto_url, firma_path, horas_extras, status,
-            comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-            created_at, updated_at
-          ''')
-          .eq('status', 'aprobado')
-          .not('comentarios_gerencia', 'is', null)
-          .is_('comentarios_rrhh', null)
-          .lt('fecha_revision', hace2Dias.toIso8601String())
-          .order('fecha_revision', ascending: true);
-
-      final pendientesRRHH = (responsePendientesRRHH as List)
-          .map((data) => SancionModel.fromMap(data))
-          .toList();
-
-      // Combinar y eliminar duplicados
-      final todasUrgentes = [...sanciones, ...pendientesRRHH];
-      final idsVistos = <String>{};
-      
-      return todasUrgentes.where((sancion) {
-        if (idsVistos.contains(sancion.id)) {
-          return false;
-        }
-        idsVistos.add(sancion.id);
-        return true;
-      }).toList();
-
-    } catch (e) {
-      print('❌ Error obteniendo sanciones urgentes: $e');
-      return [];
-    }
-  }
-
-  /// 🆕 Obtener resumen ejecutivo de sanciones
-  Future<Map<String, dynamic>> getResumenEjecutivo({
-    DateTime? fechaInicio,
-    DateTime? fechaFin,
-  }) async {
-    try {
-      fechaInicio ??= DateTime.now().subtract(const Duration(days: 30));
-      fechaFin ??= DateTime.now();
-
-      final response = await _supabase
-          .from(_tableName)
-          .select('''
-            status, comentarios_gerencia, comentarios_rrhh, 
-            tipo_sancion, created_at, pendiente
-          ''')
-          .gte('created_at', fechaInicio.toIso8601String())
-          .lte('created_at', fechaFin.toIso8601String())
-          .order('created_at', ascending: false);
-
-      final sanciones = response as List;
-      
-      // Contadores principales
-      int total = sanciones.length;
-      int borradores = 0;
-      int enviadas = 0;
-      int aprobadas = 0;
-      int rechazadas = 0;
-      int pendientesRRHH = 0;
-      int procesadasRRHH = 0;
-      int pendientesAccion = 0;
-      int conDescuento = 0;
-      
-      Map<String, int> porTipo = {};
-      Map<String, int> porCodigo = {};
-
-      for (var sancion in sanciones) {
-        final status = sancion['status'] as String;
-        final comentariosGerencia = sancion['comentarios_gerencia'] as String?;
-        final comentariosRrhh = sancion['comentarios_rrhh'] as String?;
-        final tipoSancion = sancion['tipo_sancion'] as String;
-        final pendiente = sancion['pendiente'] as bool? ?? false;
-
-        // Contar por status
-        switch (status) {
-          case 'borrador':
-            borradores++;
-            break;
-          case 'enviado':
-            enviadas++;
-            break;
-          case 'aprobado':
-            aprobadas++;
-            if (comentariosGerencia != null && comentariosRrhh == null) {
-              pendientesRRHH++;
-            } else if (comentariosRrhh != null) {
-              procesadasRRHH++;
-            }
-            break;
-          case 'rechazado':
-            rechazadas++;
-            break;
-        }
-
-        // Contar pendientes de acción
-        if (pendiente) {
-          pendientesAccion++;
-        }
-
-        // Contar por tipo
-        porTipo[tipoSancion] = (porTipo[tipoSancion] ?? 0) + 1;
-
-        // Contar con descuento
-        if (comentariosGerencia != null && 
-            !comentariosGerencia.startsWith('SIN_DESC') &&
-            !comentariosGerencia.startsWith('RECHAZADO')) {
-          conDescuento++;
-          
-          // Contar por código
-          final codigo = comentariosGerencia.split('|')[0];
-          porCodigo[codigo] = (porCodigo[codigo] ?? 0) + 1;
-        }
-      }
-
-      return {
-        'periodo': {
-          'inicio': fechaInicio.toIso8601String(),
-          'fin': fechaFin.toIso8601String(),
-          'dias': fechaFin.difference(fechaInicio).inDays,
-        },
-        'totales': {
-          'total': total,
-          'borradores': borradores,
-          'enviadas': enviadas,
-          'aprobadas': aprobadas,
-          'rechazadas': rechazadas,
-          'pendientes_rrhh': pendientesRRHH,
-          'procesadas_rrhh': procesadasRRHH,
-          'pendientes_accion': pendientesAccion,
-          'con_descuento': conDescuento,
-        },
-        'distribucion': {
-          'por_tipo': porTipo,
-          'por_codigo': porCodigo,
-        },
-        'metricas': {
-          'tasa_aprobacion': total > 0 ? (aprobadas / total * 100).round() : 0,
-          'tasa_rechazo': total > 0 ? (rechazadas / total * 100).round() : 0,
-          'tasa_descuento': aprobadas > 0 ? (conDescuento / aprobadas * 100).round() : 0,
-          'tiempo_promedio_procesamiento': _calcularTiempoPromedioProcesamient(sanciones),
-        },
-      };
-    } catch (e) {
-      print('❌ Error obteniendo resumen ejecutivo: $e');
-      return {};
-    }
-  }
-
-  /// Calcular tiempo promedio de procesamiento
-  double _calcularTiempoPromedioProcesamient(List sanciones) {
-    final procesadas = sanciones.where((s) => 
-      s['status'] == 'aprobado' || s['status'] == 'rechazado'
-    ).toList();
-
-    if (procesadas.isEmpty) return 0.0;
-
-    double totalDias = 0;
-    int contador = 0;
-
-    for (var sancion in procesadas) {
-      try {
-        final createdAt = DateTime.parse(sancion['created_at']);
-        final fechaRevision = sancion['fecha_revision'] != null 
-          ? DateTime.parse(sancion['fecha_revision'])
-          : DateTime.now();
-        
-        final dias = fechaRevision.difference(createdAt).inDays;
-        totalDias += dias;
-        contador++;
-      } catch (e) {
-        // Ignorar errores de parsing de fechas
-      }
-    }
-
-    return contador > 0 ? totalDias / contador : 0.0;
-  }
-
-  /// 🆕 Obtener alertas del sistema
-  Future<List<Map<String, dynamic>>> getAlertas() async {
-    try {
-      final alertas = <Map<String, dynamic>>[];
-      
-      // Alertas de sanciones urgentes
-      final urgentes = await getSancionesUrgentes();
-      if (urgentes.isNotEmpty) {
-        alertas.add({
-          'tipo': 'urgente',
-          'titulo': '⚠️ Sanciones que requieren atención',
-          'mensaje': '${urgentes.length} sanciones requieren atención urgente',
-          'cantidad': urgentes.length,
-          'accion': 'revisar_urgentes',
-          'prioridad': 'alta',
-        });
-      }
-
-      // Alertas de sanciones pendientes RRHH
-      final pendientesRRHH = await _supabase
-          .from(_tableName)
-          .select('id')
-          .eq('status', 'aprobado')
-          .not('comentarios_gerencia', 'is', null)
-          .is_('comentarios_rrhh', null);
-
-      if ((pendientesRRHH as List).isNotEmpty) {
-        alertas.add({
-          'tipo': 'pendiente_rrhh',
-          'titulo': '📋 Pendientes de RRHH',
-          'mensaje': '${pendientesRRHH.length} sanciones esperan procesamiento de RRHH',
-          'cantidad': pendientesRRHH.length,
-          'accion': 'revisar_rrhh',
-          'prioridad': 'media',
-        });
-      }
-
-      // Alertas de borradores antiguos
-      final hace7Dias = DateTime.now().subtract(const Duration(days: 7));
-      final borradoresAntiguos = await _supabase
-          .from(_tableName)
-          .select('id')
-          .eq('status', 'borrador')
-          .lt('created_at', hace7Dias.toIso8601String());
-
-      if ((borradoresAntiguos as List).isNotEmpty) {
-        alertas.add({
-          'tipo': 'borradores_antiguos',
-          'titulo': '📝 Borradores sin enviar',
-          'mensaje': '${borradoresAntiguos.length} borradores llevan más de 7 días sin enviar',
-          'cantidad': borradoresAntiguos.length,
-          'accion': 'revisar_borradores',
-          'prioridad': 'baja',
-        });
-      }
-
-      return alertas;
-    } catch (e) {
-      print('❌ Error obteniendo alertas: $e');
-      return [];
-    }
-  }
-
-  /// 🆕 Generar reporte detallado para exportación
-  Future<Map<String, dynamic>> generarReporteDetallado({
-    DateTime? fechaInicio,
-    DateTime? fechaFin,
-    String? filtroStatus,
-    String? filtroTipo,
-    List<String>? empleadosCodigos,
-  }) async {
-    try {
-      var query = _supabase.from(_tableName).select('''
-        id, supervisor_id, empleado_cod, empleado_nombre, puesto, agente,
-        fecha, hora, tipo_sancion, observaciones, observaciones_adicionales,
-        pendiente, foto_url, firma_path, horas_extras, status,
-        comentarios_gerencia, comentarios_rrhh, fecha_revision, reviewed_by,
-        created_at, updated_at
-      ''');
-
-      // Aplicar filtros
-      if (fechaInicio != null) {
-        query = query.gte('created_at', fechaInicio.toIso8601String());
-      }
-      
-      if (fechaFin != null) {
-        query = query.lte('created_at', fechaFin.toIso8601String());
-      }
-      
-      if (filtroStatus != null && filtroStatus != 'todos') {
-        query = query.eq('status', filtroStatus);
-      }
-      
-      if (filtroTipo != null && filtroTipo != 'todos') {
-        query = query.eq('tipo_sancion', filtroTipo);
-      }
-      
-      if (empleadosCodigos != null && empleadosCodigos.isNotEmpty) {
-        query = query.in_('empleado_cod', empleadosCodigos);
-      }
-
-      final response = await query.order('created_at', ascending: false);
-
-      final sanciones = (response as List)
-          .map((data) => SancionModel.fromMap(data))
-          .toList();
-
-      // Generar estadísticas del reporte
-      final estadisticas = _generarEstadisticasReporte(sanciones);
-
-      return {
-        'metadata': {
-          'generado_en': DateTime.now().toIso8601String(),
-          'total_registros': sanciones.length,
-          'filtros_aplicados': {
-            'fecha_inicio': fechaInicio?.toIso8601String(),
-            'fecha_fin': fechaFin?.toIso8601String(),
-            'status': filtroStatus,
-            'tipo': filtroTipo,
-            'empleados_especificos': empleadosCodigos?.length ?? 0,
-          },
-        },
-        'sanciones': sanciones.map((s) => s.toMap()).toList(),
-        'estadisticas': estadisticas,
-      };
-    } catch (e) {
-      print('❌ Error generando reporte detallado: $e');
-      rethrow;
-    }
-  }
-
-  /// Generar estadísticas para reporte
-  Map<String, dynamic> _generarEstadisticasReporte(List<SancionModel> sanciones) {
-    final stats = <String, dynamic>{};
-    
-    // Contadores básicos
-    stats['total'] = sanciones.length;
-    stats['por_status'] = <String, int>{};
-    stats['por_tipo'] = <String, int>{};
-    stats['por_empleado'] = <String, int>{};
-    stats['por_mes'] = <String, int>{};
-    stats['con_descuento'] = 0;
-    stats['pendientes'] = 0;
-    
-    for (var sancion in sanciones) {
-      // Por status
-      stats['por_status'][sancion.status] = 
-          (stats['por_status'][sancion.status] ?? 0) + 1;
-      
-      // Por tipo
-      stats['por_tipo'][sancion.tipoSancion] = 
-          (stats['por_tipo'][sancion.tipoSancion] ?? 0) + 1;
-      
-      // Por empleado
-      final empleado = '${sancion.empleadoNombre} (${sancion.empleadoCod})';
-      stats['por_empleado'][empleado] = 
-          (stats['por_empleado'][empleado] ?? 0) + 1;
-      
-      // Por mes
-      final mes = '${sancion.createdAt.year}-${sancion.createdAt.month.toString().padLeft(2, '0')}';
-      stats['por_mes'][mes] = (stats['por_mes'][mes] ?? 0) + 1;
-      
-      // Con descuento
-      if (sancion.tieneDescuento) {
-        stats['con_descuento']++;
-      }
-      
-      // Pendientes
-      if (sancion.pendiente) {
-        stats['pendientes']++;
-      }
-    }
-    
-    return stats;
-  }
-
-  /// =============================================
-  /// 📁 GESTIÓN DE ARCHIVOS
-  /// =============================================
-
-  /// Subir foto de sanción
-  Future<String> _uploadFoto(String sancionId, File fotoFile) async {
-    try {
-      // Comprimir imagen
-      final compressedImage = await _compressImage(fotoFile);
-      
-      // Generar nombre único
-      final fileName = 'fotos/${sancionId}_foto_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      // Subir a Supabase Storage
-      await _supabase.storage
-          .from(_bucketName)
-          .uploadBinary(fileName, compressedImage);
-      
-      // Obtener URL pública
-      final publicUrl = _supabase.storage
-          .from(_bucketName)
-          .getPublicUrl(fileName);
-      
-      return publicUrl;
-    } catch (e) {
-      print('❌ Error subiendo foto: $e');
-      rethrow;
-    }
-  }
-
-  /// Subir firma de sanción
-  Future<String> _uploadFirma(String sancionId, SignatureController signatureController) async {
-    try {
-      // Generar imagen de la firma
-      final signatureImage = await signatureController.toPngBytes();
-      if (signatureImage == null) {
-        throw Exception('No se pudo generar la imagen de la firma');
-      }
-      
-      // Generar nombre único
-      final fileName = 'firmas/${sancionId}_firma_${DateTime.now().millisecondsSinceEpoch}.png';
-      
-      // Subir a Supabase Storage
-      await _supabase.storage
-          .from(_bucketName)
-          .uploadBinary(fileName, signatureImage);
-      
-      // Obtener URL pública
-      final publicUrl = _supabase.storage
-          .from(_bucketName)
-          .getPublicUrl(fileName);
-      
-      return publicUrl;
-    } catch (e) {
-      print('❌ Error subiendo firma: $e');
-      rethrow;
-    }
-  }
-
-  /// Comprimir imagen
-  Future<Uint8List> _compressImage(File imageFile) async {
-    try {
-      final compressedImage = await FlutterImageCompress.compressWithFile(
-        imageFile.absolute.path,
-        quality: 70,
-        minWidth: 800,
-        minHeight: 600,
-      );
-      
-      return compressedImage ?? imageFile.readAsBytesSync();
-    } catch (e) {
-      print('⚠️ Error comprimiendo imagen, usando original: $e');
-      return imageFile.readAsBytesSync();
-    }
-  }
-
-  /// Eliminar foto
-  Future<void> _deleteFoto(String fotoUrl) async {
-    try {
-      final fileName = _extractFileNameFromUrl(fotoUrl);
-      if (fileName.isNotEmpty) {
-        await _supabase.storage
-            .from(_bucketName)
-            .remove([fileName]);
-        print('🗑️ Foto eliminada: $fileName');
-      }
-    } catch (e) {
-      print('⚠️ Error eliminando foto: $e');
-    }
-  }
-
-  /// Eliminar firma
-  Future<void> _deleteFirma(String firmaPath) async {
-    try {
-      final fileName = _extractFileNameFromUrl(firmaPath);
-      if (fileName.isNotEmpty) {
-        await _supabase.storage
-            .from(_bucketName)
-            .remove([fileName]);
-        print('🗑️ Firma eliminada: $fileName');
-      }
-    } catch (e) {
-      print('⚠️ Error eliminando firma: $e');
-    }
-  }
-
-  /// Extraer nombre de archivo de URL
-  String _extractFileNameFromUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-      final segments = uri.pathSegments;
-      
-      // Buscar el segmento que contiene el nombre del archivo
-      for (int i = 0; i < segments.length; i++) {
-        if (segments[i] == _bucketName && i + 1 < segments.length) {
-          // Reunir todos los segmentos restantes (para manejar subcarpetas)
-          return segments.sublist(i + 1).join('/');
-        }
-      }
-      
-      return '';
-    } catch (e) {
-      print('⚠️ Error extrayendo nombre de archivo: $e');
-      return '';
-    }
-  }
-
-  /// =============================================
-  /// 🔧 UTILIDADES
-  /// =============================================
-
-  /// Validar imagen antes de subir
-  Future<Map<String, dynamic>> validateImage(File imageFile) async {
-    try {
-      final fileSize = await imageFile.length();
-      final maxSize = 10 * 1024 * 1024; // 10MB
-      
-      final extension = path.extension(imageFile.path).toLowerCase();
-      final allowedExtensions = ['.jpg', '.jpeg', '.png'];
-      
-      return {
-        'isValid': fileSize <= maxSize && allowedExtensions.contains(extension),
-        'fileSize': fileSize,
-        'maxSize': maxSize,
-        'extension': extension,
-        'allowedExtensions': allowedExtensions,
-      };
-    } catch (e) {
-      return {
-        'isValid': false,
-        'error': e.toString(),
+        'total': 0,
+        'borradores': 0,
+        'enviadas': 0,
+        'aprobadas': 0,
+        'rechazadas': 0,
+        'pendientes': 0,
+        'resueltas': 0,
+        'porTipo': <String, int>{},
+        'ultimoMes': 0,
       };
     }
   }
 
-  /// Limpiar archivos temporales
-  Future<void> cleanupTempFiles() async {
+  /// Obtener sanción por ID
+  Future<SancionModel?> getSancionById(String id) async {
     try {
-      // En web no hay archivos temporales que limpiar
-      if (kIsWeb) return;
-      
-      // Aquí podrías implementar limpieza de archivos temporales en móvil
-      print('🧹 Limpieza de archivos temporales completada');
-    } catch (e) {
-      print('⚠️ Error en limpieza: $e');
-    }
-  }
+      final response =
+          await _supabase.from('sanciones').select('*').eq('id', id).single();
 
-  /// Obtener información del servicio
-  Map<String, dynamic> getServiceInfo() {
-    return {
-      'service_name': 'SancionService',
-      'table_name': _tableName,
-      'bucket_name': _bucketName,
-      'features': [
-        'CRUD completo',
-        'Gestión de archivos',
-        'Compresión de imágenes',
-        'Sistema de aprobaciones', // 🆕
-        'Códigos de descuento',     // 🆕
-        'Procesamiento RRHH',       // 🆕
-        'Estadísticas avanzadas',   // 🆕
-        'Alertas del sistema',      // 🆕
-      ],
-      'version': '2.0.0', // 🆕 Actualizada
-    };
+      return SancionModel.fromMap(response);
+    } catch (e) {
+      print('❌ Error obteniendo sanción $id: $e');
+      return null;
+    }
   }
 }

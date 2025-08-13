@@ -1,17 +1,15 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 import '../models/sancion_model.dart';
 import '../services/sancion_service.dart';
-import '../providers/auth_provider.dart';
 import 'offline_manager.dart';
 
-/// 📄 Repository wrapper para SancionService
+/// 🔄 Repository wrapper para SancionService
 /// Maneja todas las operaciones CRUD de sanciones con soporte offline
 /// En web: pasa todas las llamadas directamente al service original
 /// En móvil: usa OfflineManager para funcionalidad offline completa
-/// 🆕 EXTENDIDO CON SISTEMA DE APROBACIONES Y CÓDIGOS DE DESCUENTO
+/// ✅ CORREGIDO: Agregados métodos jerárquicos para aprobaciones
 class SancionRepository {
   static SancionRepository? _instance;
   static SancionRepository get instance => _instance ??= SancionRepository._();
@@ -22,7 +20,7 @@ class SancionRepository {
   final OfflineManager _offlineManager = OfflineManager.instance;
 
   /// =============================================
-  /// 🏗️ CREAR SANCIONES
+  /// 🔍 CREAR SANCIONES
   /// =============================================
 
   /// Crear nueva sanción
@@ -51,7 +49,296 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 📖 CONSULTAR SANCIONES
+  /// ✅ NUEVOS MÉTODOS JERÁRQUICOS
+  /// =============================================
+
+  /// ✅ NUEVO: Aprobar sanción por gerencia con código de descuento
+  Future<bool> aprobarConCodigoGerencia(
+    String sancionId,
+    String codigo,
+    String comentarios,
+    String reviewedBy,
+  ) async {
+    try {
+      // Siempre intentar online primero
+      final success = await _sancionService.aprobarConCodigoGerencia(
+        sancionId,
+        codigo,
+        comentarios,
+        reviewedBy,
+      );
+
+      if (!kIsWeb && success) {
+        // En móvil: actualizar cache local también
+        await _updateLocalSancionAfterApproval(
+          sancionId, 
+          'aprobado', 
+          '$codigo - $comentarios',
+          reviewedBy,
+        );
+      }
+
+      return success;
+    } catch (e) {
+      print('❌ Error aprobando con código: $e');
+
+      if (!kIsWeb) {
+        // En móvil: agregar a cola de sincronización
+        await _offlineManager.database.addToSyncQueue('aprobar_gerencia', {
+          'sancion_id': sancionId,
+          'codigo': codigo,
+          'comentarios': comentarios,
+          'reviewed_by': reviewedBy,
+        });
+
+        // Actualizar localmente
+        await _updateLocalSancionAfterApproval(
+          sancionId,
+          'aprobado', 
+          '$codigo - $comentarios',
+          reviewedBy,
+        );
+        
+        return true; // Exitoso localmente
+      }
+
+      return false;
+    }
+  }
+
+  /// ✅ NUEVO: Revisión RRHH con capacidad de modificar decisión gerencia
+  Future<bool> revisionRrhh(
+    String sancionId,
+    String accion,
+    String comentariosRrhh,
+    String reviewedBy, {
+    String? nuevosComentariosGerencia,
+  }) async {
+    try {
+      // Siempre intentar online primero
+      final success = await _sancionService.revisionRrhh(
+        sancionId,
+        accion,
+        comentariosRrhh,
+        reviewedBy,
+        nuevosComentariosGerencia: nuevosComentariosGerencia,
+      );
+
+      if (!kIsWeb && success) {
+        // En móvil: actualizar cache local también
+        await _updateLocalSancionAfterRrhhReview(
+          sancionId,
+          accion,
+          comentariosRrhh,
+          reviewedBy,
+          nuevosComentariosGerencia,
+        );
+      }
+
+      return success;
+    } catch (e) {
+      print('❌ Error en revisión RRHH: $e');
+
+      if (!kIsWeb) {
+        // En móvil: agregar a cola de sincronización
+        await _offlineManager.database.addToSyncQueue('revision_rrhh', {
+          'sancion_id': sancionId,
+          'accion': accion,
+          'comentarios_rrhh': comentariosRrhh,
+          'reviewed_by': reviewedBy,
+          'nuevos_comentarios_gerencia': nuevosComentariosGerencia,
+        });
+
+        // Actualizar localmente
+        await _updateLocalSancionAfterRrhhReview(
+          sancionId,
+          accion,
+          comentariosRrhh,
+          reviewedBy,
+          nuevosComentariosGerencia,
+        );
+        
+        return true; // Exitoso localmente
+      }
+
+      return false;
+    }
+  }
+
+  /// ✅ NUEVO: Obtener sanciones específicas por rol
+  Future<List<SancionModel>> getSancionesByRol(String rol) async {
+    try {
+      return await _sancionService.getSancionesByRol(rol);
+    } catch (e) {
+      print('❌ Error obteniendo sanciones por rol: $e');
+
+      if (!kIsWeb) {
+        // Fallback: filtrar cache local por rol
+        return await _getLocalSancionesByRol(rol);
+      }
+
+      return [];
+    }
+  }
+
+  /// ✅ NUEVO: Obtener contadores para tabs
+  Future<Map<String, int>> getContadoresPorRol(String rol) async {
+    try {
+      return await _sancionService.getContadoresPorRol(rol);
+    } catch (e) {
+      print('❌ Error obteniendo contadores: $e');
+
+      if (!kIsWeb) {
+        // Fallback: calcular contadores de cache local
+        return await _getLocalContadoresByRol(rol);
+      }
+
+      return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+    }
+  }
+
+  /// =============================================
+  /// 🔧 MÉTODOS AUXILIARES PARA ACTUALIZACIONES LOCALES
+  /// =============================================
+
+  /// Actualizar sanción local después de aprobación gerencia
+  Future<void> _updateLocalSancionAfterApproval(
+    String sancionId,
+    String newStatus,
+    String comentarios,
+    String reviewedBy,
+  ) async {
+    if (kIsWeb) return;
+
+    try {
+      final sancionesLocales = _offlineManager.database.getSanciones();
+      final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
+
+      if (sancionIndex != -1) {
+        final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
+          status: newStatus,
+          comentariosGerencia: comentarios,
+          reviewedBy: reviewedBy,
+          fechaRevision: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await _offlineManager.database.saveSancion(sancionActualizada);
+        print('✅ Sanción local actualizada después de aprobación');
+      }
+    } catch (e) {
+      print('❌ Error actualizando sanción local: $e');
+    }
+  }
+
+  /// Actualizar sanción local después de revisión RRHH
+  Future<void> _updateLocalSancionAfterRrhhReview(
+    String sancionId,
+    String accion,
+    String comentariosRrhh,
+    String reviewedBy,
+    String? nuevosComentariosGerencia,
+  ) async {
+    if (kIsWeb) return;
+
+    try {
+      final sancionesLocales = _offlineManager.database.getSanciones();
+      final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
+
+      if (sancionIndex != -1) {
+        final sancionOriginal = sancionesLocales[sancionIndex];
+        
+        // Determinar nuevo status según acción
+        String newStatus = sancionOriginal.status;
+        if (accion == 'anular') {
+          newStatus = 'rechazado';
+        }
+
+        final sancionActualizada = sancionOriginal.copyWith(
+          status: newStatus,
+          comentariosRrhh: comentariosRrhh,
+          comentariosGerencia: nuevosComentariosGerencia ?? sancionOriginal.comentariosGerencia,
+          reviewedBy: reviewedBy,
+          fechaRevision: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await _offlineManager.database.saveSancion(sancionActualizada);
+        print('✅ Sanción local actualizada después de revisión RRHH');
+      }
+    } catch (e) {
+      print('❌ Error actualizando sanción local RRHH: $e');
+    }
+  }
+
+  /// Obtener sanciones locales filtradas por rol
+  Future<List<SancionModel>> _getLocalSancionesByRol(String rol) async {
+    if (kIsWeb) return [];
+
+    try {
+      final sancionesLocales = _offlineManager.database.getSanciones();
+      
+      switch (rol) {
+        case 'gerencia':
+          // Solo sanciones enviadas esperando gerencia
+          return sancionesLocales.where((s) => s.status == 'enviado').toList();
+          
+        case 'rrhh':
+          // Sanciones aprobadas por gerencia esperando RRHH
+          return sancionesLocales.where((s) => 
+              s.status == 'aprobado' && 
+              s.comentariosGerencia != null && 
+              s.comentariosRrhh == null
+          ).toList();
+          
+        default:
+          return sancionesLocales;
+      }
+    } catch (e) {
+      print('❌ Error obteniendo sanciones locales por rol: $e');
+      return [];
+    }
+  }
+
+  /// Calcular contadores locales por rol
+  Future<Map<String, int>> _getLocalContadoresByRol(String rol) async {
+    if (kIsWeb) return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+
+    try {
+      final sancionesLocales = _offlineManager.database.getSanciones();
+      
+      final contadores = <String, int>{
+        'pendientes_gerencia': 0,
+        'pendientes_rrhh': 0,
+        'total': sancionesLocales.length,
+      };
+
+      switch (rol) {
+        case 'gerencia':
+          contadores['pendientes_gerencia'] = sancionesLocales
+              .where((s) => s.status == 'enviado')
+              .length;
+          break;
+          
+        case 'rrhh':
+          contadores['pendientes_rrhh'] = sancionesLocales
+              .where((s) => 
+                  s.status == 'aprobado' && 
+                  s.comentariosGerencia != null && 
+                  s.comentariosRrhh == null)
+              .length;
+          break;
+      }
+
+      return contadores;
+    } catch (e) {
+      print('❌ Error calculando contadores locales: $e');
+      return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+    }
+  }
+
+  /// =============================================
+  /// 📖 CONSULTAR SANCIONES (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Obtener mis sanciones (del supervisor actual)
@@ -77,71 +364,6 @@ class SancionRepository {
     return await _offlineManager.getSanciones('', allSanciones: true);
   }
 
-  /// 🆕 Obtener sanciones para gerencia (enviadas + aprobadas por esta gerencia)
-  Future<List<SancionModel>> getSancionesParaGerencia() async {
-    if (kIsWeb) {
-      return await _sancionService.getSancionesParaGerencia();
-    }
-
-    try {
-      final sanciones = await _sancionService.getSancionesParaGerencia();
-      
-      // Actualizar cache en móvil
-      if (!kIsWeb) {
-        for (var sancion in sanciones) {
-          await _offlineManager.database.saveSancion(sancion);
-        }
-      }
-      
-      return sanciones;
-    } catch (e) {
-      print('❌ Error obteniendo sanciones para gerencia: $e');
-      
-      if (!kIsWeb) {
-        // Fallback: filtrar cache local
-        final sancionesLocales = _offlineManager.database.getSanciones();
-        return sancionesLocales.where((s) => 
-          s.status == 'enviado' || 
-          (s.status == 'aprobado' && s.comentariosGerencia != null)
-        ).toList();
-      }
-      
-      return [];
-    }
-  }
-
-  /// 🆕 Obtener sanciones para RRHH (aprobadas por gerencia + procesadas)
-  Future<List<SancionModel>> getSancionesParaRRHH() async {
-    if (kIsWeb) {
-      return await _sancionService.getSancionesParaRRHH();
-    }
-
-    try {
-      final sanciones = await _sancionService.getSancionesParaRRHH();
-      
-      // Actualizar cache en móvil
-      if (!kIsWeb) {
-        for (var sancion in sanciones) {
-          await _offlineManager.database.saveSancion(sancion);
-        }
-      }
-      
-      return sanciones;
-    } catch (e) {
-      print('❌ Error obteniendo sanciones para RRHH: $e');
-      
-      if (!kIsWeb) {
-        // Fallback: filtrar cache local
-        final sancionesLocales = _offlineManager.database.getSanciones();
-        return sancionesLocales.where((s) => 
-          s.status == 'aprobado' && s.comentariosGerencia != null
-        ).toList();
-      }
-      
-      return [];
-    }
-  }
-
   /// Obtener sanción por ID
   Future<SancionModel?> getSancionById(String id) async {
     try {
@@ -165,7 +387,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// ✏️ ACTUALIZAR SANCIONES
+  /// ✏️ ACTUALIZAR SANCIONES (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Actualizar sanción existente
@@ -191,6 +413,12 @@ class SancionRepository {
     );
   }
 
+  /// ✅ NUEVO: Método de compatibilidad para sancion_card.dart
+  /// Este método evita errores en sancion_card.dart que espera 1 parámetro
+  Future<bool> updateSancionRRHH(SancionModel sancion) async {
+    return await updateSancionSimple(sancion);
+  }
+
   /// Actualizar sanción simple (sin archivos)
   Future<bool> updateSancionSimple(SancionModel sancion) async {
     if (kIsWeb) {
@@ -203,7 +431,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 🔄 CAMBIOS DE ESTADO
+  /// 🔄 CAMBIOS DE ESTADO (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Cambiar status de sanción (borrador -> enviado -> aprobado/rechazado)
@@ -277,147 +505,6 @@ class SancionRepository {
     }
   }
 
-  /// 🆕 Aprobar sanción con código de descuento (GERENCIA)
-  Future<bool> aprobarConCodigo(
-    String sancionId,
-    String codigoCompleto,
-    String reviewedBy,
-  ) async {
-    try {
-      final success = await _sancionService.changeStatus(
-        sancionId,
-        'aprobado', // Status aprobado con códigos en comentarios_gerencia
-        comentarios: codigoCompleto, // Guarda en comentarios_gerencia
-        reviewedBy: reviewedBy,
-      );
-
-      if (!kIsWeb && success) {
-        // Actualizar cache local
-        final sancionesLocales = _offlineManager.database.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-
-        if (sancionIndex != -1) {
-          final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
-            status: 'aprobado',
-            comentariosGerencia: codigoCompleto,
-            reviewedBy: reviewedBy,
-            fechaRevision: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-          await _offlineManager.database.saveSancion(sancionActualizada);
-        }
-      }
-
-      return success;
-    } catch (e) {
-      print('❌ Error aprobando con código: $e');
-
-      if (!kIsWeb) {
-        // Agregar a cola de sincronización
-        await _offlineManager.database.addToSyncQueue('aprobar_con_codigo', {
-          'sancion_id': sancionId,
-          'codigo_completo': codigoCompleto,
-          'reviewed_by': reviewedBy,
-        });
-
-        // Actualizar localmente
-        final sancionesLocales = _offlineManager.database.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-
-        if (sancionIndex != -1) {
-          final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
-            status: 'aprobado',
-            comentariosGerencia: codigoCompleto,
-            reviewedBy: reviewedBy,
-            fechaRevision: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-          await _offlineManager.database.saveSancion(sancionActualizada);
-          return true;
-        }
-      }
-
-      return false;
-    }
-  }
-
-  /// 🆕 Procesar sanción por RRHH (confirmar, modificar o anular)
-  Future<bool> procesarRRHH(
-    String sancionId,
-    String accion, // 'confirmar', 'modificar', 'anular'
-    String comentariosRrhh,
-    String reviewedBy,
-    {String? nuevoCodigo}
-  ) async {
-    try {
-      String statusFinal;
-      String comentariosFinales = comentariosRrhh;
-      
-      switch (accion) {
-        case 'confirmar':
-          statusFinal = 'aprobado'; // Mantiene aprobado
-          break;
-        case 'modificar':
-          statusFinal = 'aprobado';
-          comentariosFinales = 'MODIFICADO|$nuevoCodigo|$comentariosRrhh';
-          break;
-        case 'anular':
-          statusFinal = 'rechazado';
-          comentariosFinales = 'ANULADO_RRHH|$comentariosRrhh';
-          break;
-        default:
-          return false;
-      }
-
-      // Usar método especializado para RRHH
-      final success = await _sancionService.updateSancionRRHH(
-        sancionId,
-        statusFinal,
-        comentariosFinales,
-        reviewedBy,
-      );
-
-      if (!kIsWeb && success) {
-        // Actualizar cache local
-        final sancionesLocales = _offlineManager.database.getSanciones();
-        final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
-
-        if (sancionIndex != -1) {
-          final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
-            status: statusFinal,
-            comentariosRrhh: comentariosFinales,
-            reviewedBy: reviewedBy,
-            fechaRevision: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-
-          await _offlineManager.database.saveSancion(sancionActualizada);
-        }
-      }
-
-      return success;
-    } catch (e) {
-      print('❌ Error procesando RRHH: $e');
-
-      if (!kIsWeb) {
-        // Agregar a cola de sincronización
-        await _offlineManager.database.addToSyncQueue('procesar_rrhh', {
-          'sancion_id': sancionId,
-          'accion': accion,
-          'comentarios_rrhh': comentariosRrhh,
-          'reviewed_by': reviewedBy,
-          'nuevo_codigo': nuevoCodigo,
-        });
-
-        return true; // Exitoso localmente
-      }
-
-      return false;
-    }
-  }
-
   /// Marcar sanción como pendiente/resuelta
   Future<bool> togglePendiente(String sancionId, bool pendiente) async {
     try {
@@ -473,7 +560,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 🗑️ ELIMINAR SANCIONES
+  /// 🗑️ ELIMINAR SANCIONES (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Eliminar sanción (solo borradores)
@@ -506,7 +593,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 📊 CONSULTAS ESPECIALES
+  /// 📊 CONSULTAS ESPECIALES (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Obtener sanciones por empleado
@@ -571,7 +658,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 📈 ESTADÍSTICAS
+  /// 📈 ESTADÍSTICAS (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Obtener estadísticas de sanciones
@@ -657,69 +744,8 @@ class SancionRepository {
     }
   }
 
-  /// 🆕 Obtener estadísticas por rol
-  Future<Map<String, dynamic>> getEstadisticasByRole() async {
-    try {
-      // Esta función necesitaría acceso al contexto para obtener el usuario actual
-      // Como workaround, calculamos estadísticas localmente
-      if (kIsWeb) {
-        return await _sancionService.getEstadisticasByRole();
-      }
-
-      // En móvil, calcular estadísticas de cache local
-      final sancionesLocales = _offlineManager.database.getSanciones();
-      
-      return {
-        'total_con_descuento': _contarConDescuento(sancionesLocales),
-        'modificadas': _contarModificadas(sancionesLocales),
-        'anuladas': _contarAnuladas(sancionesLocales),
-        'por_codigo': _contarPorCodigo(sancionesLocales),
-      };
-    } catch (e) {
-      print('❌ Error obteniendo estadísticas por rol: $e');
-      return {};
-    }
-  }
-
-  // 🆕 MÉTODOS AUXILIARES PARA ESTADÍSTICAS
-  int _contarConDescuento(List<SancionModel> sanciones) {
-    return sanciones.where((s) => 
-      s.comentariosGerencia != null && 
-      !s.comentariosGerencia!.startsWith('SIN_DESC') &&
-      !s.comentariosGerencia!.startsWith('RECHAZADO')
-    ).length;
-  }
-
-  int _contarModificadas(List<SancionModel> sanciones) {
-    return sanciones.where((s) => 
-      s.comentariosRrhh != null && 
-      s.comentariosRrhh!.startsWith('MODIFICADO')
-    ).length;
-  }
-
-  int _contarAnuladas(List<SancionModel> sanciones) {
-    return sanciones.where((s) => 
-      s.status == 'rechazado' && 
-      s.comentariosRrhh != null && 
-      s.comentariosRrhh!.startsWith('ANULADO_RRHH')
-    ).length;
-  }
-
-  Map<String, int> _contarPorCodigo(List<SancionModel> sanciones) {
-    final conteo = <String, int>{};
-    
-    for (var sancion in sanciones) {
-      if (sancion.comentariosGerencia != null) {
-        final codigo = sancion.comentariosGerencia!.split('|')[0];
-        conteo[codigo] = (conteo[codigo] ?? 0) + 1;
-      }
-    }
-    
-    return conteo;
-  }
-
   /// =============================================
-  /// 🔧 MÉTODOS DE DESARROLLO Y DEBUG
+  /// 🔧 MÉTODOS DE DESARROLLO Y DEBUG (EXISTENTES)
   /// =============================================
 
   /// Pre-validar imagen antes de subir
@@ -734,7 +760,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 🎯 MÉTODOS DE INFORMACIÓN OFFLINE
+  /// 🎯 MÉTODOS DE INFORMACIÓN OFFLINE (EXISTENTES)
   /// =============================================
 
   /// Obtener información del estado del repository
@@ -743,8 +769,6 @@ class SancionRepository {
       'platform': kIsWeb ? 'web' : 'mobile',
       'offline_supported': !kIsWeb,
       'service_class': 'SancionRepository',
-      'approval_system': 'enabled', // 🆕
-      'discount_codes': 'enabled', // 🆕
     };
 
     if (!kIsWeb) {
@@ -812,7 +836,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 🎮 MODO DE DESARROLLO
+  /// 🎮 MODO DE DESARROLLO (EXISTENTES)
   /// =============================================
 
   /// Simular modo offline (solo para testing)

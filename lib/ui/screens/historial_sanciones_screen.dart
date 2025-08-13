@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import '../widgets/codigo_descuento_dialog.dart';
+
 // 🔥 NUEVAS IMPORTACIONES PARA PDF
 import '../../core/services/pdf_service.dart';
 import 'package:printing/printing.dart';
 import 'dart:typed_data';
+
+// ✅ NUEVAS IMPORTACIONES PARA SISTEMA JERÁRQUICO
+import '../widgets/aprobacion_gerencia_dialog.dart';
+import '../widgets/revision_rrhh_dialog.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
@@ -16,7 +20,8 @@ import 'detalle_sancion_screen.dart';
 
 /// Pantalla de historial de sanciones - Como tu PantallaHistorial de Kivy
 /// Incluye filtros, búsqueda y visualización completa de sanciones
-/// 🆕 AHORA CON GENERACIÓN DE REPORTES PDF + SISTEMA DE APROBACIONES
+/// 🔥 AHORA CON GENERACIÓN DE REPORTES PDF
+/// ✅ SISTEMA JERÁRQUICO: Supervisor → Gerencia → RRHH
 class HistorialSancionesScreen extends StatefulWidget {
   const HistorialSancionesScreen({super.key});
 
@@ -29,9 +34,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     with SingleTickerProviderStateMixin {
   final SancionRepository _sancionRepository = SancionRepository.instance;
   final ScrollController _scrollController = ScrollController();
-  
-  // 🆕 CONTROLLER DE TABS
-  TabController? _tabController;
 
   List<SancionModel> _sanciones = [];
   List<SancionModel> _sancionesFiltradas = [];
@@ -44,29 +46,19 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   bool _soloMias = true; // Para supervisores
   bool _soloPendientes = false;
   DateTimeRange? _rangoFechas;
-  
-  // 🆕 ESTADÍSTICAS POR ROL
-  Map<String, dynamic> _estadisticasRol = {};
+
+  // ✅ NUEVAS VARIABLES PARA SISTEMA JERÁRQUICO
+  TabController? _tabController;
+  int _pendientesGerencia = 0;
+  int _pendientesRrhh = 0;
+  String _currentUserRole = '';
+  bool _modoAprobacion = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeTabs();
+    _initializeForRole();
     _loadSanciones();
-    _loadEstadisticasRol();
-  }
-
-  void _initializeTabs() {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    
-    // Configurar tabs según rol
-    if (user.role == 'gerencia' || user.role == 'aprobador') {
-      _tabController = TabController(length: 3, vsync: this);
-    } else if (user.role == 'rrhh') {
-      _tabController = TabController(length: 3, vsync: this);
-    } else {
-      _tabController = TabController(length: 2, vsync: this); // Supervisor normal
-    }
   }
 
   @override
@@ -76,23 +68,127 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     super.dispose();
   }
 
+  /// ✅ NUEVO: Inicializar según el rol del usuario
+  void _initializeForRole() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser!;
+    _currentUserRole = user.role;
+
+    // TabController específico por rol
+    if (user.canApprove) {
+      if (user.role == 'gerencia') {
+        _tabController = TabController(length: 2, vsync: this);
+        // Tab 1: Todas, Tab 2: Pendientes para gerencia
+      } else if (user.role == 'rrhh') {
+        _tabController = TabController(length: 3, vsync: this);
+        // Tab 1: Todas, Tab 2: De Gerencia, Tab 3: Pendientes RRHH
+      } else if (user.role == 'aprobador') {
+        _tabController = TabController(length: 2, vsync: this);
+        // Tab 1: Todas, Tab 2: Pendientes para aprobación
+      }
+
+      _tabController?.addListener(() {
+        setState(() {
+          _modoAprobacion = _tabController!.index > 0;
+        });
+        _loadSancionesByTab();
+      });
+    }
+  }
+
+  /// ✅ NUEVO: Cargar sanciones según tab y rol
+  Future<void> _loadSancionesByTab() async {
+    if (_tabController == null) return;
+
+    final tabIndex = _tabController!.index;
+
+    setState(() => _isLoading = true);
+
+    try {
+      List<SancionModel> sanciones = [];
+
+      switch (_currentUserRole) {
+        case 'gerencia':
+          if (tabIndex == 1) {
+            // Cargar solo sanciones status='enviado' (esperando gerencia)
+            sanciones = await _sancionRepository.getSancionesByRol('gerencia');
+          } else {
+            sanciones = await _sancionRepository.getAllSanciones();
+          }
+          break;
+
+        case 'rrhh':
+          if (tabIndex == 1) {
+            // Cargar sanciones aprobadas por gerencia (esperando RRHH)
+            sanciones = await _sancionRepository.getSancionesByRol('rrhh');
+          } else if (tabIndex == 2) {
+            // Cargar todas las pendientes RRHH (mismo que tab 1 para RRHH)
+            sanciones = await _sancionRepository.getSancionesByRol('rrhh');
+          } else {
+            sanciones = await _sancionRepository.getAllSanciones();
+          }
+          break;
+
+        case 'aprobador':
+          if (tabIndex == 1) {
+            // Cargar sanciones pendientes de aprobación
+            sanciones = await _sancionRepository.getSancionesPendientes();
+          } else {
+            sanciones = await _sancionRepository.getAllSanciones();
+          }
+          break;
+
+        default:
+          sanciones = await _sancionRepository.getAllSanciones();
+      }
+
+      if (mounted) {
+        setState(() {
+          _sanciones = sanciones;
+          _isLoading = false;
+        });
+        _aplicarFiltros();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cargando sanciones: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// ✅ NUEVO: Actualizar contadores
+  Future<void> _updateContadores() async {
+    try {
+      final contadores = await _sancionRepository.getContadoresPorRol(_currentUserRole);
+      if (mounted) {
+        setState(() {
+          _pendientesGerencia = contadores['pendientes_gerencia'] ?? 0;
+          _pendientesRrhh = contadores['pendientes_rrhh'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error actualizando contadores: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          // 🆕 TABS POR ROL
-          if (_showTabsForRole(user.role)) _buildTabBar(),
-
           // Barra de búsqueda y filtros
           _buildSearchAndFilters(),
 
-          // 🆕 ESTADÍSTICAS POR ROL
-          if (!_isLoading) _buildEstadisticasRole(),
+          // Estadísticas rápidas
+          if (!_isLoading && !_modoAprobacion) _buildQuickStats(),
 
           // Lista de sanciones
           Expanded(
@@ -108,14 +204,35 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     );
   }
 
-  // 🔥 APPBAR MEJORADO CON BOTÓN PDF
+  /// ✅ NUEVO: AppBar específico por rol con tabs
   PreferredSizeWidget _buildAppBar() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser!;
+
     return AppBar(
-      title: const Text('Historial de Sanciones'),
+      title: Text(_getTitleByRole()),
       backgroundColor: const Color(0xFF1E3A8A),
       foregroundColor: Colors.white,
       elevation: 0,
+
+      // TabBar específico por rol
+      bottom: user.canApprove && _tabController != null
+          ? TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.white,
+              tabs: _getTabsByRole(),
+            )
+          : null,
+
       actions: [
+        // Botón específico para aprobación con códigos
+        if (_modoAprobacion && user.role == 'gerencia')
+          IconButton(
+            icon: const Icon(Icons.percent),
+            onPressed: _showCodigosDescuentoInfo,
+            tooltip: 'Códigos de descuento',
+          ),
+
         IconButton(
           icon: const Icon(Icons.refresh),
           onPressed: _loadSanciones,
@@ -126,7 +243,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           onPressed: _showFiltrosDialog,
           tooltip: 'Filtros avanzados',
         ),
-        // 🆕 BOTÓN PDF AGREGADO
+        // 🔥 BOTÓN PDF AGREGADO
         IconButton(
           icon: const Icon(Icons.picture_as_pdf),
           onPressed: _showPDFOptionsMenu,
@@ -162,134 +279,88 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     );
   }
 
-  // 🆕 TAB BAR SEGÚN ROL
-  Widget _buildTabBar() {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    
-    return Container(
-      color: Colors.white,
-      child: TabBar(
-        controller: _tabController,
-        labelColor: const Color(0xFF1E3A8A),
-        unselectedLabelColor: Colors.grey,
-        indicatorColor: const Color(0xFF1E3A8A),
-        tabs: _getTabsForRole(user.role),
-        onTap: (index) {
-          _onTabChanged(index);
-        },
-      ),
-    );
-  }
-
-  List<Widget> _getTabsForRole(String role) {
-    switch (role) {
+  /// ✅ NUEVO: Títulos específicos por rol
+  String _getTitleByRole() {
+    switch (_currentUserRole) {
       case 'gerencia':
-      case 'aprobador':
-        return [
-          Tab(text: 'Todas (${_sanciones.length})'),
-          Tab(text: 'Pendientes Aprobación (${_getPendientesGerencia()})'),
-          Tab(text: 'Mis Aprobadas (${_getAprobadasGerencia()})'),
-        ];
-      
+        return 'Aprobaciones Gerencia';
       case 'rrhh':
-        return [
-          Tab(text: 'Todas (${_sanciones.length})'),
-          Tab(text: 'Pendientes RRHH (${_getPendientesRRHH()})'),
-          Tab(text: 'Procesadas (${_getProcesadasRRHH()})'),
-        ];
-      
+        return 'Gestión RRHH';
+      case 'aprobador':
+        return 'Aprobaciones';
       default:
-        return [
-          Tab(text: 'Todas (${_sanciones.length})'),
-          Tab(text: 'Pendientes (${_getPendientesSuper()})'),
-        ];
+        return 'Historial de Sanciones';
     }
   }
 
-  bool _showTabsForRole(String role) {
-    return ['gerencia', 'aprobador', 'rrhh'].contains(role);
+  /// ✅ NUEVO: Tabs específicos por rol
+  List<Widget> _getTabsByRole() {
+    switch (_currentUserRole) {
+      case 'gerencia':
+        return [
+          const Tab(text: 'Todas'),
+          Tab(text: 'Pendientes ($_pendientesGerencia)'),
+        ];
+      case 'rrhh':
+        return [
+          const Tab(text: 'Todas'),
+          Tab(text: 'De Gerencia ($_pendientesGerencia)'),
+          Tab(text: 'Pendientes ($_pendientesRrhh)'),
+        ];
+      case 'aprobador':
+        return [
+          const Tab(text: 'Todas'),
+          Tab(text: 'Pendientes ($_pendientesGerencia)'),
+        ];
+      default:
+        return [const Tab(text: 'Todas')];
+    }
   }
 
-  void _onTabChanged(int index) {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    
-    setState(() {
-      switch (user.role) {
-        case 'gerencia':
-        case 'aprobador':
-          switch (index) {
-            case 0: // Todas
-              _filtroStatus = 'todos';
-              break;
-            case 1: // Pendientes aprobación
-              _filtroStatus = 'enviado';
-              break;
-            case 2: // Mis aprobadas
-              _filtroStatus = 'aprobado';
-              break;
-          }
-          break;
-        
-        case 'rrhh':
-          switch (index) {
-            case 0: // Todas
-              _filtroStatus = 'todos';
-              break;
-            case 1: // Pendientes RRHH (aprobado sin comentarios_rrhh)
-              _filtroStatus = 'aprobado_pendiente_rrhh';
-              break;
-            case 2: // Procesadas (aprobado con comentarios_rrhh)
-              _filtroStatus = 'aprobado_procesado_rrhh';
-              break;
-          }
-          break;
-        
-        default:
-          switch (index) {
-            case 0: // Todas
-              _filtroStatus = 'todos';
-              break;
-            case 1: // Pendientes
-              _soloPendientes = true;
-              break;
-          }
-      }
-    });
-    
-    _aplicarFiltros();
-  }
-
-  // 🆕 CONTADORES ESPECÍFICOS POR ROL
-  int _getPendientesGerencia() {
-    return _sanciones.where((s) => s.status == 'enviado').length;
-  }
-
-  int _getAprobadasGerencia() {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    return _sanciones.where((s) => 
-      s.status == 'aprobado' && s.reviewedBy == user.id
-    ).length;
-  }
-
-  int _getPendientesRRHH() {
-    // Aprobadas por gerencia pero sin procesar por RRHH
-    return _sanciones.where((s) => 
-      s.status == 'aprobado' && 
-      s.comentariosGerencia != null && 
-      s.comentariosRrhh == null
-    ).length;
-  }
-
-  int _getProcesadasRRHH() {
-    // Aprobadas y procesadas por RRHH
-    return _sanciones.where((s) => 
-      s.status == 'aprobado' && 
-      s.comentariosRrhh != null
-    ).length;
-  }
-
-  int _getPendientesSuper() {
-    return _sanciones.where((s) => s.pendiente).length;
+  /// ✅ NUEVO: Mostrar información de códigos de descuento
+  void _showCodigosDescuentoInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.percent, color: Color(0xFF1E3A8A)),
+            SizedBox(width: 8),
+            Text('Códigos de Descuento'),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Códigos disponibles:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              _CodigoDescuentoItem('D00%', 'Sin descuento (sanción completa)'),
+              _CodigoDescuentoItem('D05%', 'Descuento 5% (falta menor)'),
+              _CodigoDescuentoItem('D10%', 'Descuento 10% (circunstancias atenuantes)'),
+              _CodigoDescuentoItem('D15%', 'Descuento 15% (buen historial laboral)'),
+              _CodigoDescuentoItem('D20%', 'Descuento 20% (caso especial)'),
+              _CodigoDescuentoItem('LIBRE', 'Comentario libre sin código'),
+              SizedBox(height: 16),
+              Text(
+                'El código se agregará automáticamente a los comentarios con el formato: "D10% - Su comentario"',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSearchAndFilters() {
@@ -362,23 +433,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
                   () => _setFiltroStatus('aprobado'),
                 ),
                 const SizedBox(width: 8),
-                // 🆕 FILTROS ESPECÍFICOS PARA RRHH
-                if (_isRRHHUser()) ...[
-                  _buildFilterChip(
-                    'Pendientes RRHH',
-                    _filtroStatus == 'aprobado_pendiente_rrhh',
-                    () => _setFiltroStatus('aprobado_pendiente_rrhh'),
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(
-                    'Procesadas RRHH',
-                    _filtroStatus == 'aprobado_procesado_rrhh',
-                    () => _setFiltroStatus('aprobado_procesado_rrhh'),
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
-                ],
                 _buildFilterChip(
                   'Pendientes',
                   _soloPendientes,
@@ -391,11 +445,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         ],
       ),
     );
-  }
-
-  bool _isRRHHUser() {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    return user.role == 'rrhh';
   }
 
   Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap,
@@ -412,129 +461,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             ? (color ?? const Color(0xFF1E3A8A))
             : Colors.grey.shade700,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-    );
-  }
-
-  // 🆕 ESTADÍSTICAS ESPECÍFICAS POR ROL
-  Widget _buildEstadisticasRole() {
-    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-    
-    if (user.role == 'gerencia' || user.role == 'aprobador') {
-      return _buildEstadisticasGerencia();
-    } else if (user.role == 'rrhh') {
-      return _buildEstadisticasRRHH();
-    } else {
-      return _buildQuickStats(); // Estadísticas originales para supervisores
-    }
-  }
-
-  Widget _buildEstadisticasGerencia() {
-    final pendientes = _getPendientesGerencia();
-    final aprobadas = _getAprobadasGerencia();
-    final conDescuento = _estadisticasRol['total_con_descuento'] ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.admin_panel_settings, color: Color(0xFF1E3A8A)),
-              const SizedBox(width: 8),
-              const Text(
-                'Panel Gerencia',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('Pendientes\nAprobación', pendientes, Icons.pending_actions, Colors.orange),
-              Container(width: 1, height: 30, color: Colors.grey.shade300),
-              _buildStatItem('Mis\nAprobadas', aprobadas, Icons.check_circle, Colors.green),
-              Container(width: 1, height: 30, color: Colors.grey.shade300),
-              _buildStatItem('Con\nDescuento', conDescuento, Icons.discount, Colors.red),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEstadisticasRRHH() {
-    final pendientesRRHH = _getPendientesRRHH();
-    final procesadas = _getProcesadasRRHH();
-    final modificadas = _estadisticasRol['modificadas'] ?? 0;
-    final anuladas = _estadisticasRol['anuladas'] ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.business_center, color: Color(0xFF1E3A8A)),
-              const SizedBox(width: 8),
-              const Text(
-                'Panel RRHH',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('Pendientes\nRRHH', pendientesRRHH, Icons.pending_actions, Colors.orange),
-              Container(width: 1, height: 30, color: Colors.grey.shade300),
-              _buildStatItem('Procesadas', procesadas, Icons.verified, Colors.blue),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('Modificadas', modificadas, Icons.edit, Colors.purple),
-              Container(width: 1, height: 30, color: Colors.grey.shade300),
-              _buildStatItem('Anuladas', anuladas, Icons.block, Colors.red),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -595,7 +521,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             fontSize: 12,
             color: Colors.grey,
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -610,19 +535,22 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         itemCount: _sancionesFiltradas.length,
         itemBuilder: (context, index) {
           final sancion = _sancionesFiltradas[index];
-          final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
-          
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: SancionCard(
               sancion: sancion,
               onTap: () => _verDetalle(sancion),
               onStatusChanged: _onSancionStatusChanged,
-              // 🆕 PARÁMETROS ESPECÍFICOS POR ROL
-              showCodigoDescuento: _shouldShowCodigoDescuento(sancion, user),
-              showProcesamientoRRHH: _shouldShowProcesamientoRRHH(sancion, user),
-              showBotonesGerencia: _shouldShowBotonesGerencia(sancion, user),
-              showBotonesRRHH: _shouldShowBotonesRRHH(sancion, user),
+              // ✅ NUEVO: Callbacks específicos para aprobación
+              onApprobar: _modoAprobacion && _currentUserRole == 'gerencia'
+                  ? () => _mostrarDialogoAprobacionGerencia(sancion)
+                  : null,
+              onRechazar: _modoAprobacion && _currentUserRole == 'gerencia'
+                  ? () => _rechazarSancionGerencia(sancion)
+                  : null,
+              onRevisionRrhh: _modoAprobacion && _currentUserRole == 'rrhh'
+                  ? () => _mostrarDialogoRevisionRrhh(sancion)
+                  : null,
             ),
           );
         },
@@ -630,25 +558,236 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     );
   }
 
-  // 🆕 LÓGICA DE MOSTRAR ELEMENTOS SEGÚN ROL Y ESTADO
-  bool _shouldShowCodigoDescuento(SancionModel sancion, user) {
-    return sancion.status == 'aprobado' && sancion.comentariosGerencia != null;
+  /// ✅ NUEVO: Mostrar diálogo de aprobación para gerencia
+  void _mostrarDialogoAprobacionGerencia(SancionModel sancion) {
+    showDialog(
+      context: context,
+      builder: (context) => AprobacionGerenciaDialog(
+        sancion: sancion,
+        onApprove: (codigo, comentario) => _aprobarConCodigoGerencia(sancion, codigo, comentario),
+        onReject: (comentario) => _rechazarConComentarioGerencia(sancion, comentario),
+      ),
+    );
   }
 
-  bool _shouldShowProcesamientoRRHH(SancionModel sancion, user) {
-    return sancion.status == 'aprobado' && sancion.comentariosRrhh != null;
+  /// ✅ NUEVO: Aprobar sanción con código de descuento
+  Future<void> _aprobarConCodigoGerencia(
+    SancionModel sancion,
+    String codigo,
+    String comentario,
+  ) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.currentUser!.id;
+
+      final success = await _sancionRepository.aprobarConCodigoGerencia(
+        sancion.id,
+        codigo,
+        comentario,
+        userId,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('✅ Sanción aprobada con código $codigo'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        await _loadSanciones();
+        await _updateContadores();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Error aprobando sanción'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  bool _shouldShowBotonesGerencia(SancionModel sancion, user) {
-    return (user.role == 'gerencia' || user.role == 'aprobador') && 
-           sancion.status == 'enviado';
+  /// ✅ NUEVO: Rechazar sanción con comentario (gerencia)
+  Future<void> _rechazarConComentarioGerencia(
+    SancionModel sancion,
+    String comentario,
+  ) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.currentUser!.id;
+
+      final success = await _sancionRepository.changeStatus(
+        sancion.id,
+        'rechazado',
+        comentarios: comentario,
+        reviewedBy: userId,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.cancel, color: Colors.white),
+                SizedBox(width: 8),
+                Text('❌ Sanción rechazada por gerencia'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        
+        await _loadSanciones();
+        await _updateContadores();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  bool _shouldShowBotonesRRHH(SancionModel sancion, user) {
-    return user.role == 'rrhh' && 
-           sancion.status == 'aprobado' && 
-           sancion.comentariosGerencia != null &&
-           sancion.comentariosRrhh == null;
+  /// ✅ NUEVO: Rechazar sanción rápida (gerencia)
+  Future<void> _rechazarSancionGerencia(SancionModel sancion) async {
+    final comentario = await _showComentarioDialog(
+      'Rechazar Sanción',
+      'Motivo del rechazo (obligatorio):',
+      'Explique por qué se rechaza esta sanción...',
+    );
+
+    if (comentario != null && comentario.isNotEmpty) {
+      await _rechazarConComentarioGerencia(sancion, comentario);
+    }
+  }
+
+  /// ✅ NUEVO: Mostrar diálogo de revisión para RRHH
+  void _mostrarDialogoRevisionRrhh(SancionModel sancion) {
+    showDialog(
+      context: context,
+      builder: (context) => RevisionRrhhDialog(
+        sancion: sancion,
+        onRevision: (accion, comentariosRrhh, nuevosComentariosGerencia) =>
+            _procesarRevisionRrhh(sancion, accion, comentariosRrhh ?? '', nuevosComentariosGerencia),
+      ),
+    );
+  }
+
+  /// ✅ NUEVO: Procesar revisión RRHH
+  Future<void> _procesarRevisionRrhh(
+    SancionModel sancion,
+    String accion,
+    String comentariosRrhh,
+    String? nuevosComentariosGerencia,
+  ) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.currentUser!.id;
+
+      final success = await _sancionRepository.revisionRrhh(
+        sancion.id,
+        accion,
+        comentariosRrhh,
+        userId,
+        nuevosComentariosGerencia: nuevosComentariosGerencia,
+      );
+
+      if (success && mounted) {
+        String mensaje;
+        switch (accion) {
+          case 'confirmar':
+            mensaje = '✅ Decisión gerencia confirmada por RRHH';
+            break;
+          case 'modificar':
+            mensaje = '✏️ Decisión gerencia modificada por RRHH';
+            break;
+          case 'anular':
+            mensaje = '❌ Sanción anulada por RRHH';
+            break;
+          case 'procesar':
+            mensaje = '📋 Sanción procesada por RRHH';
+            break;
+          default:
+            mensaje = '✅ Revisión RRHH completada';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(mensaje),
+            backgroundColor: accion == 'anular' ? Colors.red : Colors.green,
+          ),
+        );
+        
+        await _loadSanciones();
+        await _updateContadores();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error en revisión RRHH: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// ✅ NUEVO: Diálogo genérico para comentarios
+  Future<String?> _showComentarioDialog(
+    String title,
+    String label,
+    String hint,
+  ) async {
+    final controller = TextEditingController();
+    
+    return await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
@@ -728,7 +867,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   }
 
   // ==========================================
-  // 🔥 FUNCIONALIDADES PDF AGREGADAS (MANTENIDAS ORIGINALES)
+  // 🔥 FUNCIONALIDADES PDF AGREGADAS
   // ==========================================
 
   /// **Mostrar menú de opciones PDF**
@@ -1150,7 +1289,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
               children: [
                 Icon(Icons.share, color: Colors.white),
                 SizedBox(width: 8),
-                Text('📤 Reporte listo para compartir'),
+                Text('🔤 Reporte listo para compartir'),
               ],
             ),
             backgroundColor: Colors.blue,
@@ -1206,7 +1345,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   }
 
   // ==========================================
-  // 🔧 FUNCIONES ORIGINALES DE CARGA Y FILTRADO + EXTENSIONES
+  // 🔧 FUNCIONES ORIGINALES DE CARGA Y FILTRADO
   // ==========================================
 
   // Funciones de carga y filtrado
@@ -1219,22 +1358,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
 
       List<SancionModel> sanciones;
 
-      // 🆕 CARGA ESPECÍFICA POR ROL
-      switch (user.role) {
-        case 'gerencia':
-        case 'aprobador':
-          sanciones = await _sancionRepository.getSancionesParaGerencia();
-          break;
-        case 'rrhh':
-          sanciones = await _sancionRepository.getSancionesParaRRHH();
-          break;
-        default:
-          // Supervisor normal
-          if (user.canViewAllSanciones && !_soloMias) {
-            sanciones = await _sancionRepository.getAllSanciones();
-          } else {
-            sanciones = await _sancionRepository.getMySanciones(user.id);
-          }
+      if (user.canViewAllSanciones && !_soloMias) {
+        // Gerencia/RRHH pueden ver todas
+        sanciones = await _sancionRepository.getAllSanciones();
+      } else {
+        // Supervisores solo ven las suyas
+        sanciones = await _sancionRepository.getMySanciones(user.id);
       }
 
       if (mounted) {
@@ -1243,6 +1372,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           _isLoading = false;
         });
         _aplicarFiltros();
+        await _updateContadores();
       }
     } catch (e) {
       if (mounted) {
@@ -1254,20 +1384,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           ),
         );
       }
-    }
-  }
-
-  // 🆕 CARGAR ESTADÍSTICAS POR ROL
-  Future<void> _loadEstadisticasRol() async {
-    try {
-      final stats = await _sancionRepository.getEstadisticasByRole();
-      if (mounted) {
-        setState(() {
-          _estadisticasRol = stats;
-        });
-      }
-    } catch (e) {
-      print('❌ Error cargando estadísticas por rol: $e');
     }
   }
 
@@ -1292,27 +1408,9 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           if (!coincide) return false;
         }
 
-        // 🆕 FILTROS ESPECÍFICOS POR ROL Y ESTADO
-        switch (_filtroStatus) {
-          case 'aprobado_pendiente_rrhh':
-            // Aprobado por gerencia pero sin procesar por RRHH
-            return sancion.status == 'aprobado' && 
-                   sancion.comentariosGerencia != null && 
-                   sancion.comentariosRrhh == null;
-          
-          case 'aprobado_procesado_rrhh':
-            // Aprobado y procesado por RRHH
-            return sancion.status == 'aprobado' && 
-                   sancion.comentariosRrhh != null;
-          
-          case 'todos':
-            break; // No filtrar por status
-          
-          default:
-            // Filtro por status normal
-            if (sancion.status != _filtroStatus) {
-              return false;
-            }
+        // Filtro por status
+        if (_filtroStatus != 'todos' && sancion.status != _filtroStatus) {
+          return false;
         }
 
         // Filtro por tipo
@@ -1347,7 +1445,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     setState(() {
       _filtroStatus = status;
       if (status != 'todos') {
-        _soloPendientes = false; // Limpiar filtro de pendientes si se selecciona otro status
+        _soloPendientes =
+            false; // Limpiar filtro de pendientes si se selecciona otro status
       }
     });
     _aplicarFiltros();
@@ -1357,7 +1456,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     setState(() {
       _soloPendientes = !_soloPendientes;
       if (_soloPendientes) {
-        _filtroStatus = 'todos'; // Limpiar filtro de status si se selecciona pendientes
+        _filtroStatus =
+            'todos'; // Limpiar filtro de status si se selecciona pendientes
       }
     });
     _aplicarFiltros();
@@ -1406,7 +1506,6 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     ).then((updated) {
       if (updated == true) {
         _loadSanciones(); // Recargar si hubo cambios
-        _loadEstadisticasRol(); // 🆕 Recargar estadísticas
       }
     });
   }
@@ -1415,14 +1514,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     Navigator.pushNamed(context, '/create_sancion').then((result) {
       if (result == true) {
         _loadSanciones();
-        _loadEstadisticasRol(); // 🆕 Recargar estadísticas
       }
     });
   }
 
   void _onSancionStatusChanged() {
     _loadSanciones(); // Recargar cuando cambie el status de una sanción
-    _loadEstadisticasRol(); // 🆕 Recargar estadísticas
   }
 
   void _handleMenuAction(String action) {
@@ -1450,6 +1547,49 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       const SnackBar(
         content: Text('🚧 Estadísticas detalladas - Próximamente'),
         backgroundColor: Colors.orange,
+      ),
+    );
+  }
+}
+
+/// ✅ NUEVO: Widget auxiliar para mostrar códigos de descuento
+class _CodigoDescuentoItem extends StatelessWidget {
+  final String codigo;
+  final String descripcion;
+
+  const _CodigoDescuentoItem(this.codigo, this.descripcion);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E3A8A).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.3)),
+            ),
+            child: Text(
+              codigo,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              descripcion,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
       ),
     );
   }
