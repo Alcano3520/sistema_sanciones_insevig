@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-
+import '../widgets/codigo_descuento_dialog.dart';
 // 🔥 NUEVAS IMPORTACIONES PARA PDF
 import '../../core/services/pdf_service.dart';
 import 'package:printing/printing.dart';
@@ -16,7 +16,7 @@ import 'detalle_sancion_screen.dart';
 
 /// Pantalla de historial de sanciones - Como tu PantallaHistorial de Kivy
 /// Incluye filtros, búsqueda y visualización completa de sanciones
-/// 🆕 AHORA CON GENERACIÓN DE REPORTES PDF
+/// 🆕 AHORA CON GENERACIÓN DE REPORTES PDF + SISTEMA DE APROBACIONES
 class HistorialSancionesScreen extends StatefulWidget {
   const HistorialSancionesScreen({super.key});
 
@@ -25,9 +25,13 @@ class HistorialSancionesScreen extends StatefulWidget {
       _HistorialSancionesScreenState();
 }
 
-class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
+class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
+    with SingleTickerProviderStateMixin {
   final SancionRepository _sancionRepository = SancionRepository.instance;
   final ScrollController _scrollController = ScrollController();
+  
+  // 🆕 CONTROLLER DE TABS
+  TabController? _tabController;
 
   List<SancionModel> _sanciones = [];
   List<SancionModel> _sancionesFiltradas = [];
@@ -40,31 +44,55 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
   bool _soloMias = true; // Para supervisores
   bool _soloPendientes = false;
   DateTimeRange? _rangoFechas;
+  
+  // 🆕 ESTADÍSTICAS POR ROL
+  Map<String, dynamic> _estadisticasRol = {};
 
   @override
   void initState() {
     super.initState();
+    _initializeTabs();
     _loadSanciones();
+    _loadEstadisticasRol();
+  }
+
+  void _initializeTabs() {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    
+    // Configurar tabs según rol
+    if (user.role == 'gerencia' || user.role == 'aprobador') {
+      _tabController = TabController(length: 3, vsync: this);
+    } else if (user.role == 'rrhh') {
+      _tabController = TabController(length: 3, vsync: this);
+    } else {
+      _tabController = TabController(length: 2, vsync: this); // Supervisor normal
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: _buildAppBar(),
       body: Column(
         children: [
+          // 🆕 TABS POR ROL
+          if (_showTabsForRole(user.role)) _buildTabBar(),
+
           // Barra de búsqueda y filtros
           _buildSearchAndFilters(),
 
-          // Estadísticas rápidas
-          if (!_isLoading) _buildQuickStats(),
+          // 🆕 ESTADÍSTICAS POR ROL
+          if (!_isLoading) _buildEstadisticasRole(),
 
           // Lista de sanciones
           Expanded(
@@ -132,6 +160,136 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
         ),
       ],
     );
+  }
+
+  // 🆕 TAB BAR SEGÚN ROL
+  Widget _buildTabBar() {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    
+    return Container(
+      color: Colors.white,
+      child: TabBar(
+        controller: _tabController,
+        labelColor: const Color(0xFF1E3A8A),
+        unselectedLabelColor: Colors.grey,
+        indicatorColor: const Color(0xFF1E3A8A),
+        tabs: _getTabsForRole(user.role),
+        onTap: (index) {
+          _onTabChanged(index);
+        },
+      ),
+    );
+  }
+
+  List<Widget> _getTabsForRole(String role) {
+    switch (role) {
+      case 'gerencia':
+      case 'aprobador':
+        return [
+          Tab(text: 'Todas (${_sanciones.length})'),
+          Tab(text: 'Pendientes Aprobación (${_getPendientesGerencia()})'),
+          Tab(text: 'Mis Aprobadas (${_getAprobadasGerencia()})'),
+        ];
+      
+      case 'rrhh':
+        return [
+          Tab(text: 'Todas (${_sanciones.length})'),
+          Tab(text: 'Pendientes RRHH (${_getPendientesRRHH()})'),
+          Tab(text: 'Procesadas (${_getProcesadasRRHH()})'),
+        ];
+      
+      default:
+        return [
+          Tab(text: 'Todas (${_sanciones.length})'),
+          Tab(text: 'Pendientes (${_getPendientesSuper()})'),
+        ];
+    }
+  }
+
+  bool _showTabsForRole(String role) {
+    return ['gerencia', 'aprobador', 'rrhh'].contains(role);
+  }
+
+  void _onTabChanged(int index) {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    
+    setState(() {
+      switch (user.role) {
+        case 'gerencia':
+        case 'aprobador':
+          switch (index) {
+            case 0: // Todas
+              _filtroStatus = 'todos';
+              break;
+            case 1: // Pendientes aprobación
+              _filtroStatus = 'enviado';
+              break;
+            case 2: // Mis aprobadas
+              _filtroStatus = 'aprobado';
+              break;
+          }
+          break;
+        
+        case 'rrhh':
+          switch (index) {
+            case 0: // Todas
+              _filtroStatus = 'todos';
+              break;
+            case 1: // Pendientes RRHH (aprobado sin comentarios_rrhh)
+              _filtroStatus = 'aprobado_pendiente_rrhh';
+              break;
+            case 2: // Procesadas (aprobado con comentarios_rrhh)
+              _filtroStatus = 'aprobado_procesado_rrhh';
+              break;
+          }
+          break;
+        
+        default:
+          switch (index) {
+            case 0: // Todas
+              _filtroStatus = 'todos';
+              break;
+            case 1: // Pendientes
+              _soloPendientes = true;
+              break;
+          }
+      }
+    });
+    
+    _aplicarFiltros();
+  }
+
+  // 🆕 CONTADORES ESPECÍFICOS POR ROL
+  int _getPendientesGerencia() {
+    return _sanciones.where((s) => s.status == 'enviado').length;
+  }
+
+  int _getAprobadasGerencia() {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    return _sanciones.where((s) => 
+      s.status == 'aprobado' && s.reviewedBy == user.id
+    ).length;
+  }
+
+  int _getPendientesRRHH() {
+    // Aprobadas por gerencia pero sin procesar por RRHH
+    return _sanciones.where((s) => 
+      s.status == 'aprobado' && 
+      s.comentariosGerencia != null && 
+      s.comentariosRrhh == null
+    ).length;
+  }
+
+  int _getProcesadasRRHH() {
+    // Aprobadas y procesadas por RRHH
+    return _sanciones.where((s) => 
+      s.status == 'aprobado' && 
+      s.comentariosRrhh != null
+    ).length;
+  }
+
+  int _getPendientesSuper() {
+    return _sanciones.where((s) => s.pendiente).length;
   }
 
   Widget _buildSearchAndFilters() {
@@ -204,6 +362,23 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
                   () => _setFiltroStatus('aprobado'),
                 ),
                 const SizedBox(width: 8),
+                // 🆕 FILTROS ESPECÍFICOS PARA RRHH
+                if (_isRRHHUser()) ...[
+                  _buildFilterChip(
+                    'Pendientes RRHH',
+                    _filtroStatus == 'aprobado_pendiente_rrhh',
+                    () => _setFiltroStatus('aprobado_pendiente_rrhh'),
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildFilterChip(
+                    'Procesadas RRHH',
+                    _filtroStatus == 'aprobado_procesado_rrhh',
+                    () => _setFiltroStatus('aprobado_procesado_rrhh'),
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _buildFilterChip(
                   'Pendientes',
                   _soloPendientes,
@@ -216,6 +391,11 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
         ],
       ),
     );
+  }
+
+  bool _isRRHHUser() {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    return user.role == 'rrhh';
   }
 
   Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap,
@@ -232,6 +412,129 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
             ? (color ?? const Color(0xFF1E3A8A))
             : Colors.grey.shade700,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+    );
+  }
+
+  // 🆕 ESTADÍSTICAS ESPECÍFICAS POR ROL
+  Widget _buildEstadisticasRole() {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    
+    if (user.role == 'gerencia' || user.role == 'aprobador') {
+      return _buildEstadisticasGerencia();
+    } else if (user.role == 'rrhh') {
+      return _buildEstadisticasRRHH();
+    } else {
+      return _buildQuickStats(); // Estadísticas originales para supervisores
+    }
+  }
+
+  Widget _buildEstadisticasGerencia() {
+    final pendientes = _getPendientesGerencia();
+    final aprobadas = _getAprobadasGerencia();
+    final conDescuento = _estadisticasRol['total_con_descuento'] ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.admin_panel_settings, color: Color(0xFF1E3A8A)),
+              const SizedBox(width: 8),
+              const Text(
+                'Panel Gerencia',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E3A8A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem('Pendientes\nAprobación', pendientes, Icons.pending_actions, Colors.orange),
+              Container(width: 1, height: 30, color: Colors.grey.shade300),
+              _buildStatItem('Mis\nAprobadas', aprobadas, Icons.check_circle, Colors.green),
+              Container(width: 1, height: 30, color: Colors.grey.shade300),
+              _buildStatItem('Con\nDescuento', conDescuento, Icons.discount, Colors.red),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEstadisticasRRHH() {
+    final pendientesRRHH = _getPendientesRRHH();
+    final procesadas = _getProcesadasRRHH();
+    final modificadas = _estadisticasRol['modificadas'] ?? 0;
+    final anuladas = _estadisticasRol['anuladas'] ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.business_center, color: Color(0xFF1E3A8A)),
+              const SizedBox(width: 8),
+              const Text(
+                'Panel RRHH',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E3A8A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem('Pendientes\nRRHH', pendientesRRHH, Icons.pending_actions, Colors.orange),
+              Container(width: 1, height: 30, color: Colors.grey.shade300),
+              _buildStatItem('Procesadas', procesadas, Icons.verified, Colors.blue),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem('Modificadas', modificadas, Icons.edit, Colors.purple),
+              Container(width: 1, height: 30, color: Colors.grey.shade300),
+              _buildStatItem('Anuladas', anuladas, Icons.block, Colors.red),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -292,6 +595,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
             fontSize: 12,
             color: Colors.grey,
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -306,17 +610,45 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
         itemCount: _sancionesFiltradas.length,
         itemBuilder: (context, index) {
           final sancion = _sancionesFiltradas[index];
+          final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+          
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: SancionCard(
               sancion: sancion,
               onTap: () => _verDetalle(sancion),
               onStatusChanged: _onSancionStatusChanged,
+              // 🆕 PARÁMETROS ESPECÍFICOS POR ROL
+              showCodigoDescuento: _shouldShowCodigoDescuento(sancion, user),
+              showProcesamientoRRHH: _shouldShowProcesamientoRRHH(sancion, user),
+              showBotonesGerencia: _shouldShowBotonesGerencia(sancion, user),
+              showBotonesRRHH: _shouldShowBotonesRRHH(sancion, user),
             ),
           );
         },
       ),
     );
+  }
+
+  // 🆕 LÓGICA DE MOSTRAR ELEMENTOS SEGÚN ROL Y ESTADO
+  bool _shouldShowCodigoDescuento(SancionModel sancion, user) {
+    return sancion.status == 'aprobado' && sancion.comentariosGerencia != null;
+  }
+
+  bool _shouldShowProcesamientoRRHH(SancionModel sancion, user) {
+    return sancion.status == 'aprobado' && sancion.comentariosRrhh != null;
+  }
+
+  bool _shouldShowBotonesGerencia(SancionModel sancion, user) {
+    return (user.role == 'gerencia' || user.role == 'aprobador') && 
+           sancion.status == 'enviado';
+  }
+
+  bool _shouldShowBotonesRRHH(SancionModel sancion, user) {
+    return user.role == 'rrhh' && 
+           sancion.status == 'aprobado' && 
+           sancion.comentariosGerencia != null &&
+           sancion.comentariosRrhh == null;
   }
 
   Widget _buildEmptyState() {
@@ -396,7 +728,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
   }
 
   // ==========================================
-  // 🔥 FUNCIONALIDADES PDF AGREGADAS
+  // 🔥 FUNCIONALIDADES PDF AGREGADAS (MANTENIDAS ORIGINALES)
   // ==========================================
 
   /// **Mostrar menú de opciones PDF**
@@ -465,7 +797,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
                   if (_filtroStatus != 'todos')
                     Text('Filtro estado: $_filtroStatus', style: const TextStyle(fontSize: 12)),
                   if (_soloPendientes)
-                    const Text('Solo pendientes: SÍ', style: TextStyle(fontSize: 12)),
+                    const Text('Solo pendientes: Sí', style: TextStyle(fontSize: 12)),
                   if (_rangoFechas != null)
                     Text(
                       'Rango: ${_rangoFechas!.start.day}/${_rangoFechas!.start.month} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}',
@@ -786,8 +1118,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(kIsWeb 
-                      ? '📥 Reporte descargado: $filename'
-                      : '📥 Reporte guardado en Documentos'),
+                      ? '🔥 Reporte descargado: $filename'
+                      : '🔥 Reporte guardado en Documentos'),
                 ),
               ],
             ),
@@ -874,7 +1206,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
   }
 
   // ==========================================
-  // 🔧 FUNCIONES ORIGINALES DE CARGA Y FILTRADO
+  // 🔧 FUNCIONES ORIGINALES DE CARGA Y FILTRADO + EXTENSIONES
   // ==========================================
 
   // Funciones de carga y filtrado
@@ -887,12 +1219,22 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
 
       List<SancionModel> sanciones;
 
-      if (user.canViewAllSanciones && !_soloMias) {
-        // Gerencia/RRHH pueden ver todas
-        sanciones = await _sancionRepository.getAllSanciones();
-      } else {
-        // Supervisores solo ven las suyas
-        sanciones = await _sancionRepository.getMySanciones(user.id);
+      // 🆕 CARGA ESPECÍFICA POR ROL
+      switch (user.role) {
+        case 'gerencia':
+        case 'aprobador':
+          sanciones = await _sancionRepository.getSancionesParaGerencia();
+          break;
+        case 'rrhh':
+          sanciones = await _sancionRepository.getSancionesParaRRHH();
+          break;
+        default:
+          // Supervisor normal
+          if (user.canViewAllSanciones && !_soloMias) {
+            sanciones = await _sancionRepository.getAllSanciones();
+          } else {
+            sanciones = await _sancionRepository.getMySanciones(user.id);
+          }
       }
 
       if (mounted) {
@@ -912,6 +1254,20 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
           ),
         );
       }
+    }
+  }
+
+  // 🆕 CARGAR ESTADÍSTICAS POR ROL
+  Future<void> _loadEstadisticasRol() async {
+    try {
+      final stats = await _sancionRepository.getEstadisticasByRole();
+      if (mounted) {
+        setState(() {
+          _estadisticasRol = stats;
+        });
+      }
+    } catch (e) {
+      print('❌ Error cargando estadísticas por rol: $e');
     }
   }
 
@@ -936,9 +1292,27 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
           if (!coincide) return false;
         }
 
-        // Filtro por status
-        if (_filtroStatus != 'todos' && sancion.status != _filtroStatus) {
-          return false;
+        // 🆕 FILTROS ESPECÍFICOS POR ROL Y ESTADO
+        switch (_filtroStatus) {
+          case 'aprobado_pendiente_rrhh':
+            // Aprobado por gerencia pero sin procesar por RRHH
+            return sancion.status == 'aprobado' && 
+                   sancion.comentariosGerencia != null && 
+                   sancion.comentariosRrhh == null;
+          
+          case 'aprobado_procesado_rrhh':
+            // Aprobado y procesado por RRHH
+            return sancion.status == 'aprobado' && 
+                   sancion.comentariosRrhh != null;
+          
+          case 'todos':
+            break; // No filtrar por status
+          
+          default:
+            // Filtro por status normal
+            if (sancion.status != _filtroStatus) {
+              return false;
+            }
         }
 
         // Filtro por tipo
@@ -973,8 +1347,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     setState(() {
       _filtroStatus = status;
       if (status != 'todos') {
-        _soloPendientes =
-            false; // Limpiar filtro de pendientes si se selecciona otro status
+        _soloPendientes = false; // Limpiar filtro de pendientes si se selecciona otro status
       }
     });
     _aplicarFiltros();
@@ -984,8 +1357,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     setState(() {
       _soloPendientes = !_soloPendientes;
       if (_soloPendientes) {
-        _filtroStatus =
-            'todos'; // Limpiar filtro de status si se selecciona pendientes
+        _filtroStatus = 'todos'; // Limpiar filtro de status si se selecciona pendientes
       }
     });
     _aplicarFiltros();
@@ -1034,6 +1406,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     ).then((updated) {
       if (updated == true) {
         _loadSanciones(); // Recargar si hubo cambios
+        _loadEstadisticasRol(); // 🆕 Recargar estadísticas
       }
     });
   }
@@ -1042,12 +1415,14 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     Navigator.pushNamed(context, '/create_sancion').then((result) {
       if (result == true) {
         _loadSanciones();
+        _loadEstadisticasRol(); // 🆕 Recargar estadísticas
       }
     });
   }
 
   void _onSancionStatusChanged() {
     _loadSanciones(); // Recargar cuando cambie el status de una sanción
+    _loadEstadisticasRol(); // 🆕 Recargar estadísticas
   }
 
   void _handleMenuAction(String action) {
