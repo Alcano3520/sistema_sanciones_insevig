@@ -13,7 +13,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # 🔥 DEPENDENCIAS PRINCIPALES (mantén las que ya tienes)
+  # 🔥 DEPENDENCIAS PRINCIPALES
   supabase_flutter: ^2.5.6
   provider: ^6.1.2
   image_picker: ^1.0.7
@@ -22,52 +22,38 @@ dependencies:
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.4
   permission_handler: ^11.3.1
-  
-
-  # 🆕 DEPENDENCIAS PARA COMPRESIÓN (corregidas)
   image: ^4.1.7
   path_provider: ^2.1.1
   path: ^1.8.3
-  # universal_io: ^2.2.2  # ❌ ELIMINADA - causaba conflictos
-  
-  # 🆕 DEPENDENCIA FALTANTE para UUID
   uuid: ^4.3.3
-
-  # 🆕 DEPENDENCIAS ADICIONALES para Web compatibilidad
   flutter_web_plugins:
     sdk: flutter
-  # 🆕 OFFLINE MÓVIL (condicionalmente importadas)
-  hive: ^2.2.3               # Base de datos local ultrarrápida
-  hive_flutter: ^1.1.0       # Integración Flutter + paths automáticos
-  connectivity_plus: ^5.0.2  # Detección conectividad multiplataforma
-    # Rutas de almacenamiento móvil
-  # PDFs
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  connectivity_plus: ^5.0.2
   pdf: ^3.10.7
   printing: ^5.12.0
-  
-  # Ya las tienes, pero verificar versiones:
-  
   share_plus: ^7.2.2  
-  
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^3.0.0
-  hive_generator: ^2.0.1     # Generador TypeAdapters automático
-  build_runner: ^2.4.8       # Builder para generación código
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.8
+  flutter_launcher_icons: ^0.13.1   # 📌 Agregado para los íconos
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"  # 📌 Pon aquí tu ícono 1024x1024
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
 
-  # 🎨 ASSETS (comentados hasta que los crees)
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
-
-  # 🔤 FONTS (si usas)
-  # fonts:
-  #   - family: CustomFont
-  #     fonts:
-  #       - asset: assets/fonts/CustomFont.ttf
+  # 🎨 ASSETS
+  assets:
+    - assets/icon.png
+    # - assets/images/
+    # - assets/icons/
