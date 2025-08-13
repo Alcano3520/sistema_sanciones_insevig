@@ -8,6 +8,7 @@ import '../../core/offline/sancion_repository.dart';
 import '../../core/offline/empleado_repository.dart';
 import '../../core/offline/connectivity_service.dart';
 import '../../core/offline/offline_manager.dart';
+import '../../core/models/sancion_model.dart'; // ✅ AGREGADO: Import del modelo
 import 'create_sancion_screen.dart';
 import 'historial_sanciones_screen.dart';
 
@@ -142,20 +143,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ✅ RENOMBRADO Y MEJORADO: Método principal de carga
+  // ✅ REEMPLAZAR COMPLETAMENTE el método _loadData()
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser!;
 
-      // Usar repositories
-      if (authProvider.currentUser!.isSupervisor) {
-        _stats = await _sancionRepository.getEstadisticas(
-          supervisorId: authProvider.currentUser!.id,
-        );
+      print('📊 Cargando datos para ${user.role} (${user.fullName})...');
+
+      // ✅ LÓGICA CORREGIDA ESPECÍFICA POR ROL
+      if (user.isSupervisor) {
+        // ✅ SUPERVISOR: Usar método especial que carga solo SUS sanciones
+        _stats = await _calcularEstadisticasParaRol(user.role);
       } else {
-        _stats = await _sancionRepository.getEstadisticas();
+        // ✅ GERENCIA/RRHH: Usar método que carga todas las sanciones del sistema
+        _stats = await _calcularEstadisticasParaRol(user.role);
       }
 
       _empleadoStats = await _empleadoRepository.getEstadisticasEmpleados();
@@ -163,7 +167,11 @@ class _HomeScreenState extends State<HomeScreen> {
       // Actualizar estado de conectividad
       _isOnline = ConnectivityService.instance.isConnected;
       
-      print('📊 Estadísticas cargadas: $_stats');
+      print('📊 Estadísticas cargadas para ${user.role}:');
+      print('   - Enviadas: ${_stats['enviadas']}');
+      print('   - Aprobadas: ${_stats['aprobadas']}');
+      print('   - Pendientes: ${_stats['pendientes']}');
+      print('   - Alcance: ${_stats['alcance']}');
     } catch (e) {
       print('❌ Error cargando datos: $e');
 
@@ -179,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ✅ MÉTODO MEJORADO: Cargar estadísticas específicas por rol
+  // ✅ REEMPLAZAR COMPLETAMENTE el método _loadEstadisticas()
   Future<void> _loadEstadisticas() async {
     try {
       print('📊 Recargando estadísticas...');
@@ -187,25 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.currentUser!;
 
-      // ✅ NUEVO: Usar método específico por rol
-      Map<String, dynamic> newStats;
-      try {
-        newStats = await _sancionRepository.getEstadisticasParaRol(
-          user.role,
-          userId: user.isSupervisor ? user.id : null,
-        );
-      } catch (e) {
-        // Fallback al método original si el nuevo no existe
-        print('⚠️ Usando método de estadísticas original');
-        if (user.isSupervisor) {
-          newStats = await _sancionRepository.getEstadisticas(
-            supervisorId: user.id,
-          );
-        } else {
-          newStats = await _sancionRepository.getEstadisticas();
-        }
-      }
-
+      // ✅ LÓGICA UNIFICADA: Todos los roles usan el método corregido
+      Map<String, dynamic> newStats = await _calcularEstadisticasParaRol(user.role);
       final newEmpleadoStats = await _empleadoRepository.getEstadisticasEmpleados();
 
       if (mounted) {
@@ -215,14 +206,122 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         
         print('✅ Estadísticas actualizadas para ${user.role}:');
-        print('   - Enviadas: ${_stats['enviadas'] ?? 0}');
-        print('   - Aprobadas: ${_stats['aprobadas'] ?? 0}');
-        print('   - Pendientes: ${_stats['pendientes'] ?? 0}');
-        print('   - Título pendientes: ${_stats['titulo_pendientes'] ?? 'N/A'}');
+        print('   - Enviadas: ${_stats['enviadas']}');
+        print('   - Aprobadas: ${_stats['aprobadas']}');
+        print('   - Pendientes: ${_stats['pendientes']} ← ${_stats['descripcion_pendientes']}');
+        print('   - Alcance: ${_stats['alcance']}');
       }
     } catch (e) {
       print('❌ Error recargando estadísticas: $e');
     }
+  }
+
+  // ✅ CORREGIR: Método para calcular estadísticas - SUPERVISOR ESPECÍFICO
+  Future<Map<String, dynamic>> _calcularEstadisticasParaRol(String role) async {
+    print('🎯 Calculando estadísticas específicas para rol: $role');
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser!;
+
+    // ✅ DIFERENCIAL CRÍTICO: Supervisor vs Gerencia/RRHH
+    List<SancionModel> sanciones;
+    
+    if (user.isSupervisor) {
+      // ✅ SUPERVISOR: Solo SUS propias sanciones
+      sanciones = await _sancionRepository.getMySanciones(user.id);
+      print('👤 SUPERVISOR: Cargando solo mis sanciones (${sanciones.length})');
+    } else {
+      // ✅ GERENCIA/RRHH: Todas las sanciones del sistema
+      sanciones = await _sancionRepository.getAllSanciones();
+      print('🏢 ${role.toUpperCase()}: Cargando todas las sanciones (${sanciones.length})');
+    }
+
+    // Contadores base
+    int borradores = 0;
+    int enviadas = 0;
+    int aprobadas = 0;
+    int rechazadas = 0;
+    int procesadas = 0;
+    int anuladas = 0;
+
+    // Contar por status
+    for (var sancion in sanciones) {
+      switch (sancion.status.toLowerCase()) {
+        case 'borrador':
+          borradores++;
+          break;
+        case 'enviado':
+          enviadas++;
+          break;
+        case 'aprobado':
+          aprobadas++;
+          break;
+        case 'rechazado':
+          rechazadas++;
+          break;
+        case 'procesado':
+          procesadas++;
+          break;
+        case 'anulado':
+          anuladas++;
+          break;
+      }
+    }
+
+    // ✅ LÓGICA ESPECÍFICA POR ROL PARA PENDIENTES
+    int pendientes;
+    String descripcionPendientes;
+    
+    switch (role.toLowerCase()) {
+      case 'supervisor':
+        // ✅ SUPERVISOR: Solo las ENVIADAS son pendientes para él
+        // Las aprobadas ya no están bajo su control
+        pendientes = enviadas;
+        descripcionPendientes = 'Mis sanciones enviadas esperando aprobación';
+        print('👨‍💼 SUPERVISOR - Pendientes = $pendientes (solo mis enviadas)');
+        break;
+        
+      case 'gerencia':
+        // ✅ GERENCIA: Solo las ENVIADAS (status='enviado')
+        pendientes = enviadas;
+        descripcionPendientes = 'Sanciones enviadas esperando mi aprobación';
+        print('🏢 GERENCIA - Pendientes = $pendientes (solo enviadas del sistema)');
+        break;
+        
+      case 'rrhh':
+        // ✅ RRHH: Solo las APROBADAS (status='aprobado')
+        pendientes = aprobadas;
+        descripcionPendientes = 'Sanciones aprobadas esperando procesamiento';
+        print('👥 RRHH - Pendientes = $pendientes (solo aprobadas del sistema)');
+        break;
+        
+      default:
+        // ✅ OTROS ROLES: Total pendientes
+        pendientes = enviadas + aprobadas;
+        descripcionPendientes = 'Total sanciones en proceso';
+        print('🔄 OTROS - Pendientes = $pendientes (enviadas + aprobadas)');
+    }
+
+    // ✅ AGREGAR: Estadísticas adicionales para debug
+    final resultado = {
+      'borradores': borradores,
+      'enviadas': enviadas,
+      'aprobadas': aprobadas,
+      'rechazadas': rechazadas,
+      'procesadas': procesadas,
+      'anuladas': anuladas,
+      'pendientes': pendientes,
+      'descripcion_pendientes': descripcionPendientes,
+      'total': sanciones.length,
+      
+      // ✅ DEBUG: Información adicional
+      'es_supervisor': user.isSupervisor,
+      'alcance': user.isSupervisor ? 'Solo mis sanciones' : 'Todas las sanciones',
+      'usuario_id': user.id,
+    };
+
+    print('📊 Resultado final para $role: $resultado');
+    return resultado;
   }
 
   @override
@@ -360,9 +459,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: FittedBox(
+      title: const FittedBox(
         fit: BoxFit.scaleDown,
-        child: const Text('Sistema de Sanciones - INSEVIG'),
+        child: Text('Sistema de Sanciones - INSEVIG'),
       ),
       backgroundColor: const Color(0xFF1E3A8A),
       foregroundColor: Colors.white,
@@ -519,7 +618,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ✅ CORREGIR: Widget de estadísticas - LAYOUT ESPECÍFICO POR ROL
   Widget _buildStatsSection() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser!;
+    final isGerencia = user.role.toLowerCase() == 'gerencia';
+    final isSupervisor = user.isSupervisor;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -534,7 +639,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Color(0xFF1E3A8A),
               ),
             ),
-            // ✅ NUEVO: Botón de debug para ver detalles
+            // ✅ BOTÓN DEBUG MEJORADO
             if (kDebugMode)
               IconButton(
                 icon: const Icon(Icons.info_outline, size: 20),
@@ -545,51 +650,138 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Estadísticas de sanciones
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard('📝', 'Borradores',
-                    _stats['borradores'] ?? 0, Colors.orange)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard(
-                    '📤', 'Enviadas', _stats['enviadas'] ?? 0, Colors.blue)),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard(
-                    '✅', 'Aprobadas', _stats['aprobadas'] ?? 0, Colors.green)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard(
-                    '❌', 'Rechazadas', _stats['rechazadas'] ?? 0, Colors.red)),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard(
-                    '⚠️', 
-                    _stats['titulo_pendientes'] ?? 'Pendientes',
-                    _stats['pendientes'] ?? 0, 
-                    Colors.amber)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard('👥', 'Empleados',
-                    _empleadoStats['total'] ?? 0, Colors.indigo)),
-          ],
-        ),
+        // ✅ LAYOUT ESPECÍFICO POR ROL
+        if (isSupervisor) ...[
+          // ✅ LAYOUT PARA SUPERVISOR
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('📝', 'Borradores',
+                      _stats['borradores'] ?? 0, Colors.orange)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('📤', 'Enviadas',
+                      _stats['enviadas'] ?? 0, Colors.blue)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('✅', 'Aprobadas',
+                      _stats['aprobadas'] ?? 0, Colors.green)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('⚠️', 'Esperando', // ✅ SUPERVISOR: "Esperando" aprobación
+                      _stats['pendientes'] ?? 0, Colors.amber)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('❌', 'Rechazadas',
+                      _stats['rechazadas'] ?? 0, Colors.red)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('👥', 'Empleados',
+                      _empleadoStats['total'] ?? 0, Colors.indigo)),
+            ],
+          ),
+        ] else if (isGerencia) ...[
+          // ✅ LAYOUT PARA GERENCIA
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('📝', 'Borradores',
+                      _stats['borradores'] ?? 0, Colors.orange)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('⚠️', 'Por Aprobar', // ✅ GERENCIA: "Por Aprobar"
+                      _stats['pendientes'] ?? 0, Colors.amber)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('✅', 'Aprobadas',
+                      _stats['aprobadas'] ?? 0, Colors.green)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('❌', 'Rechazadas',
+                      _stats['rechazadas'] ?? 0, Colors.red)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('✅', 'Procesadas',
+                      _stats['procesadas'] ?? 0, Colors.green.shade300)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('👥', 'Empleados',
+                      _empleadoStats['total'] ?? 0, Colors.indigo)),
+            ],
+          ),
+        ] else ...[
+          // ✅ LAYOUT PARA RRHH Y OTROS
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('📝', 'Borradores',
+                      _stats['borradores'] ?? 0, Colors.orange)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('📤', 'Enviadas',
+                      _stats['enviadas'] ?? 0, Colors.blue)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('✅', 'Aprobadas',
+                      _stats['aprobadas'] ?? 0, Colors.green)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('❌', 'Rechazadas',
+                      _stats['rechazadas'] ?? 0, Colors.red)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildStatCard('⚠️', _getTituloPendientes(),
+                      _stats['pendientes'] ?? 0, Colors.amber)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildStatCard('👥', 'Empleados',
+                      _empleadoStats['total'] ?? 0, Colors.indigo)),
+            ],
+          ),
+        ],
       ],
     );
+  }
+
+  // ✅ NUEVO: Título dinámico para pendientes según rol
+  String _getTituloPendientes() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final role = authProvider.currentUser?.role ?? '';
+    
+    switch (role.toLowerCase()) {
+      case 'gerencia':
+        return 'Por Aprobar'; // ✅ Más claro para gerencia
+      case 'rrhh':
+        return 'Por Procesar';
+      case 'supervisor':
+        return 'Esperando'; // ✅ CORREGIDO: Solo las enviadas esperando aprobación
+      default:
+        return 'Pendientes';
+    }
   }
 
   Widget _buildStatCard(String emoji, String label, int count, Color color) {
@@ -1035,7 +1227,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ✅ NUEVO: Método para mostrar debug de estadísticas
+  // ✅ ACTUALIZAR: Debug con más detalles
   void _mostrarDebugEstadisticas() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.currentUser!;
@@ -1055,23 +1247,34 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Usuario: ${user.fullName}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Usuario: ${user.fullName}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('Rol: ${user.role}'),
+                    Text('Es supervisor: ${user.isSupervisor}'),
+                  ],
+                ),
               ),
-              Text('Rol: ${user.role}'),
-              Text('Es supervisor: ${user.isSupervisor}'),
-              Text('Puede ver todas: ${user.canViewAllSanciones}'),
               
-              const Divider(),
+              const SizedBox(height: 12),
               
               const Text(
-                'Estadísticas calculadas:',
+                'Estadísticas mostradas:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               
-              ..._stats.entries.map((entry) => Padding(
+              ..._stats.entries.where((e) => e.key != 'descripcion_pendientes').map((entry) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1085,17 +1288,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               )),
               
-              const Divider(),
+              const SizedBox(height: 12),
               
-              const Text(
-                'Explicación de "Pendientes":',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              
-              Text(
-                _getExplicacionPendientes(user.role),
-                style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.amber),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '⚠️ Lógica de "Pendientes":',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _stats['descripcion_pendientes'] ?? 'No definida',
+                      style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1105,7 +1320,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cerrar'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               _loadEstadisticas(); // Recargar
@@ -1115,20 +1330,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
-
-  // ✅ NUEVO: Explicación contextual de qué significa "pendientes" por rol
-  String _getExplicacionPendientes(String role) {
-    switch (role.toLowerCase()) {
-      case 'gerencia':
-        return 'Para gerencia: Sanciones con status "enviado" que esperan tu aprobación.';
-      case 'rrhh':
-        return 'Para RRHH: Sanciones con status "aprobado" que esperan procesamiento.';
-      case 'supervisor':
-        return 'Para supervisor: Tus sanciones enviadas que están en proceso (enviado + aprobado).';
-      default:
-        return 'Pendientes generales: Suma de todas las sanciones que esperan alguna acción.';
-    }
   }
 
   void _logout() {
