@@ -7,6 +7,7 @@ import '../../core/offline/sancion_repository.dart';
 /// Widget para mostrar una sanción en formato card
 /// Incluye funcionalidades de aprobar, rechazar y gestionar según el rol
 /// ✅ CORREGIDO: Agregados callbacks para sistema jerárquico
+/// ✅ NUEVO: Muestra información del supervisor para gerencia/RRHH
 class SancionCard extends StatelessWidget {
   final SancionModel sancion;
   final VoidCallback? onTap;
@@ -122,6 +123,9 @@ class SancionCard extends StatelessWidget {
                     ],
                   ),
 
+                  // ✅ NUEVO: Información del supervisor (solo para gerencia/RRHH)
+                  _buildSupervisorInfo(currentUser),
+
                   // Observaciones si existen
                   if (sancion.observaciones != null && sancion.observaciones!.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -200,6 +204,59 @@ class SancionCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  /// ✅ NUEVO: Construir información del supervisor (solo para gerencia/RRHH)
+  Widget _buildSupervisorInfo(dynamic currentUser) {
+    // Solo mostrar para gerencia y RRHH
+    if (currentUser == null || !currentUser.canApprove) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.indigo.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: Colors.indigo.withOpacity(0.2),
+            child: Text(
+              sancion.supervisorInitials,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.indigo,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(
+            Icons.supervisor_account,
+            size: 14,
+            color: Colors.indigo.withOpacity(0.7),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              sancion.supervisorDisplay,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: Colors.indigo,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -4,6 +4,7 @@ import '../../core/models/sancion_model.dart';
 /// Widget especializado para aprobación de sanciones por parte de Gerencia
 /// Incluye sistema de códigos de descuento predefinidos
 /// Flujo: Supervisor crea → **GERENCIA APRUEBA CON CÓDIGO** → RRHH procesa
+/// ✅ ACTUALIZADO: Muestra información del supervisor que creó la sanción
 class AprobacionGerenciaDialog extends StatefulWidget {
   final SancionModel sancion;
   final Function(String codigo, String comentario) onApprove;
@@ -267,7 +268,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
     );
   }
 
-  /// Construir resumen visual de la sanción
+  /// ✅ MODIFICADO: Construir resumen visual de la sanción CON SUPERVISOR
   Widget _buildResumenSancion() {
     return Container(
       padding: const EdgeInsets.all(12), // ✅ REDUCIDO de 16 a 12
@@ -318,6 +319,64 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
           ),
 
           const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
+
+          // ✅ NUEVO: Información del supervisor que creó la sanción
+          Container(
+            padding: const EdgeInsets.all(8),
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.blue.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                // Avatar del supervisor
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.blue.withOpacity(0.2),
+                  child: Text(
+                    widget.sancion.supervisorInitials,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Creada por:',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        widget.sancion.supervisorDisplay,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Ícono identificativo
+                Icon(
+                  Icons.person_pin,
+                  size: 16,
+                  color: Colors.blue.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
 
           // Detalles de la sanción (solo los esenciales)
           _buildDetalleItem(Icons.person, 'Empleado', widget.sancion.empleadoNombre),

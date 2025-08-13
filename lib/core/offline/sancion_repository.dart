@@ -5,11 +5,12 @@ import '../models/sancion_model.dart';
 import '../services/sancion_service.dart';
 import 'offline_manager.dart';
 
-/// 🔄 Repository wrapper para SancionService
+/// 📄 Repository wrapper para SancionService
 /// Maneja todas las operaciones CRUD de sanciones con soporte offline
 /// En web: pasa todas las llamadas directamente al service original
 /// En móvil: usa OfflineManager para funcionalidad offline completa
 /// ✅ CORREGIDO: Agregados métodos jerárquicos para aprobaciones
+/// ✅ NUEVO: Incluye información del supervisor en consultas
 class SancionRepository {
   static SancionRepository? _instance;
   static SancionRepository get instance => _instance ??= SancionRepository._();
@@ -165,9 +166,12 @@ class SancionRepository {
     }
   }
 
-  /// ✅ NUEVO: Obtener sanciones específicas por rol
+  /// ✅ MODIFICADO: Obtener sanciones específicas por rol CON INFORMACIÓN DEL SUPERVISOR
   Future<List<SancionModel>> getSancionesByRol(String rol) async {
     try {
+      print('🎭 Obteniendo sanciones para rol: $rol');
+      
+      // ✅ TEMPORAL: Usar método existente hasta actualizar SancionService
       return await _sancionService.getSancionesByRol(rol);
     } catch (e) {
       print('❌ Error obteniendo sanciones por rol: $e');
@@ -363,10 +367,10 @@ class SancionRepository {
         allSanciones: false);
   }
 
-  /// Obtener todas las sanciones (para gerencia/RRHH)
+  /// ✅ MODIFICADO: Obtener todas las sanciones CON INFORMACIÓN DEL SUPERVISOR
   Future<List<SancionModel>> getAllSanciones() async {
     if (kIsWeb) {
-      // 🌐 Web: comportamiento original
+      // 🌐 Web: usar método existente hasta actualizar service
       return await _sancionService.getAllSanciones();
     }
 

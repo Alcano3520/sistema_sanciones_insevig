@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 /// Modelo principal de sanción - idéntico a tu aplicación Kivy
 /// Con los nuevos campos: pendiente y observaciones_adicionales
 /// ✅ CORREGIDO: Constructor con ID opcional (requerido por el sistema)
+/// ✅ NUEVO: Campos del supervisor agregados
 class SancionModel {
   final String id;
   final String supervisorId;
@@ -26,6 +27,10 @@ class SancionModel {
   final String? reviewedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  // ✅ NUEVOS CAMPOS para información del supervisor
+  final String? supervisorNombre;
+  final String? supervisorEmail;
 
   /// ✅ CORREGIDO: Constructor con ID opcional
   SancionModel({
@@ -51,11 +56,37 @@ class SancionModel {
     this.reviewedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
+    // ✅ NUEVOS PARÁMETROS
+    this.supervisorNombre,
+    this.supervisorEmail,
   })  : id = id ?? const Uuid().v4(), // ← Si no se proporciona ID, generar uno
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
-  /// Crear desde Map (desde Supabase)
+  /// ✅ GETTER para mostrar supervisor de forma amigable
+  String get supervisorDisplay {
+    if (supervisorNombre != null && supervisorNombre!.isNotEmpty) {
+      return supervisorNombre!;
+    } else if (supervisorEmail != null && supervisorEmail!.isNotEmpty) {
+      return supervisorEmail!;
+    }
+    return 'Supervisor no disponible';
+  }
+
+  /// ✅ GETTER para iniciales del supervisor
+  String get supervisorInitials {
+    if (supervisorNombre != null && supervisorNombre!.isNotEmpty) {
+      final parts = supervisorNombre!.trim().split(' ');
+      if (parts.length >= 2) {
+        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      } else if (parts.isNotEmpty) {
+        return parts[0][0].toUpperCase();
+      }
+    }
+    return 'S';
+  }
+
+  /// ✅ MÉTODO fromMap ACTUALIZADO (crear desde Map/Supabase)
   factory SancionModel.fromMap(Map<String, dynamic> map) {
     return SancionModel(
       id: map['id'] ?? const Uuid().v4(),
@@ -82,10 +113,13 @@ class SancionModel {
       reviewedBy: map['reviewed_by'],
       createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
+      // ✅ NUEVOS CAMPOS
+      supervisorNombre: map['supervisor_nombre'],
+      supervisorEmail: map['supervisor_email'],
     );
   }
 
-  /// Convertir a Map (para enviar a Supabase)
+  /// ✅ MÉTODO toMap ACTUALIZADO (convertir a Map para enviar a Supabase)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -110,6 +144,9 @@ class SancionModel {
       'reviewed_by': reviewedBy,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      // ✅ NUEVOS CAMPOS
+      'supervisor_nombre': supervisorNombre,
+      'supervisor_email': supervisorEmail,
     };
   }
 
@@ -289,6 +326,9 @@ class SancionModel {
     String? reviewedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
+    // ✅ NUEVOS PARÁMETROS PARA COPYWITH
+    String? supervisorNombre,
+    String? supervisorEmail,
   }) {
     return SancionModel(
       id: id ?? this.id,
@@ -314,12 +354,15 @@ class SancionModel {
       reviewedBy: reviewedBy ?? this.reviewedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      // ✅ NUEVOS CAMPOS EN COPYWITH
+      supervisorNombre: supervisorNombre ?? this.supervisorNombre,
+      supervisorEmail: supervisorEmail ?? this.supervisorEmail,
     );
   }
 
   @override
   String toString() {
-    return 'SancionModel(id: $id, empleado: $empleadoNombre, tipo: $tipoSancion, status: $status)';
+    return 'SancionModel(id: $id, empleado: $empleadoNombre, tipo: $tipoSancion, status: $status, supervisor: $supervisorDisplay)';
   }
 
   @override
