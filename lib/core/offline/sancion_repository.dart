@@ -280,16 +280,20 @@ class SancionRepository {
       
       switch (rol) {
         case 'gerencia':
-          // Solo sanciones enviadas esperando gerencia
-          return sancionesLocales.where((s) => s.status == 'enviado').toList();
+          // ✅ CORREGIDO: Solo sanciones enviadas esperando gerencia
+          final sancionesEnviadas = sancionesLocales.where((s) => s.status == 'enviado').toList();
+          print('📱 Local - Sanciones enviadas para gerencia: ${sancionesEnviadas.length}');
+          return sancionesEnviadas;
           
         case 'rrhh':
           // Sanciones aprobadas por gerencia esperando RRHH
-          return sancionesLocales.where((s) => 
+          final sancionesParaRrhh = sancionesLocales.where((s) => 
               s.status == 'aprobado' && 
               s.comentariosGerencia != null && 
               s.comentariosRrhh == null
           ).toList();
+          print('📱 Local - Sanciones para RRHH: ${sancionesParaRrhh.length}');
+          return sancionesParaRrhh;
           
         default:
           return sancionesLocales;

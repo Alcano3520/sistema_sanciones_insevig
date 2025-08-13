@@ -74,25 +74,42 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     final user = authProvider.currentUser!;
     _currentUserRole = user.role;
 
+    print('🔧 Inicializando para rol: $_currentUserRole');
+
     // TabController específico por rol
     if (user.canApprove) {
       if (user.role == 'gerencia') {
         _tabController = TabController(length: 2, vsync: this);
+        print('👔 TabController gerencia configurado (2 tabs)');
         // Tab 1: Todas, Tab 2: Pendientes para gerencia
       } else if (user.role == 'rrhh') {
         _tabController = TabController(length: 3, vsync: this);
+        print('🧑‍💼 TabController RRHH configurado (3 tabs)');
         // Tab 1: Todas, Tab 2: De Gerencia, Tab 3: Pendientes RRHH
       } else if (user.role == 'aprobador') {
         _tabController = TabController(length: 2, vsync: this);
+        print('✅ TabController aprobador configurado (2 tabs)');
         // Tab 1: Todas, Tab 2: Pendientes para aprobación
       }
 
       _tabController?.addListener(() {
+        final newIndex = _tabController!.index;
+        final wasApprovalMode = _modoAprobacion;
+        
         setState(() {
-          _modoAprobacion = _tabController!.index > 0;
+          _modoAprobacion = newIndex > 0;
         });
-        _loadSancionesByTab();
+        
+        print('📑 Tab cambiado a: $newIndex, Modo aprobación: $_modoAprobacion');
+        
+        // Solo recargar si cambió de tab o entró/salió del modo aprobación
+        if (wasApprovalMode != _modoAprobacion || _modoAprobacion) {
+          _loadSancionesByTab();
+        }
       });
+      
+      // Cargar contadores iniciales
+      _updateContadores();
     }
   }
 
@@ -110,9 +127,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       switch (_currentUserRole) {
         case 'gerencia':
           if (tabIndex == 1) {
-            // Cargar solo sanciones status='enviado' (esperando gerencia)
+            // ✅ CORREGIDO: SOLO sanciones status='enviado' (pendientes de gerencia)
+            print('🔍 Cargando sanciones ENVIADAS para gerencia...');
             sanciones = await _sancionRepository.getSancionesByRol('gerencia');
+            print('📋 Encontradas ${sanciones.length} sanciones enviadas');
           } else {
+            // Tab "Todas" - cargar todas las sanciones
             sanciones = await _sancionRepository.getAllSanciones();
           }
           break;
@@ -147,9 +167,18 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           _sanciones = sanciones;
           _isLoading = false;
         });
-        _aplicarFiltros();
+        
+        // ✅ IMPORTANTE: NO aplicar filtros adicionales en modo aprobación
+        if (_modoAprobacion) {
+          setState(() {
+            _sancionesFiltradas = sanciones; // Usar directamente las sanciones cargadas
+          });
+        } else {
+          _aplicarFiltros(); // Solo aplicar filtros en modo "Todas"
+        }
       }
     } catch (e) {
+      print('❌ Error en _loadSancionesByTab: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -189,6 +218,9 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
 
           // Estadísticas rápidas
           if (!_isLoading && !_modoAprobacion) _buildQuickStats(),
+
+          // ✅ NUEVO: Indicador especial para modo aprobación
+          if (!_isLoading && _modoAprobacion) _buildModoAprobacionHeader(),
 
           // Lista de sanciones
           Expanded(
@@ -502,6 +534,102 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     );
   }
 
+  /// ✅ NUEVO: Header especial para modo aprobación
+  Widget _buildModoAprobacionHeader() {
+    final total = _sancionesFiltradas.length;
+    final roleText = _currentUserRole == 'gerencia' ? 'GERENCIA' : 'RRHH';
+    
+    // ✅ DEBUG: Log del estado actual
+    print('🎯 Header modo aprobación:');
+    print('   - Role: $_currentUserRole');
+    print('   - Total filtradas: $total');
+    print('   - Pendientes gerencia: $_pendientesGerencia');
+    print('   - Modo aprobación: $_modoAprobacion');
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF1E3A8A),
+            const Color(0xFF3B82F6),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              _currentUserRole == 'gerencia' ? Icons.business : Icons.admin_panel_settings,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'MODO APROBACIÓN $roleText',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  total > 0 
+                      ? '$total sanciones pendientes de revisión'
+                      : '¡Excelente! No hay sanciones pendientes',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (total > 0) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$total',
+                style: const TextStyle(
+                  color: Color(0xFF1E3A8A),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatItem(String label, int count, IconData icon, Color color) {
     return Column(
       children: [
@@ -577,6 +705,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     String comentario,
   ) async {
     try {
+      print('👔 Iniciando aprobación: ${sancion.id} con código $codigo');
+      
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.currentUser!.id;
 
@@ -588,6 +718,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       );
 
       if (success && mounted) {
+        print('✅ Aprobación exitosa, iniciando recarga...');
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -600,11 +732,14 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
               ],
             ),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1), // ✅ Más rápido
           ),
         );
         
-        await _loadSanciones();
-        await _updateContadores();
+        // ✅ RECARGA INMEDIATA Y ESPECÍFICA
+        await _recargarModoAprobacion();
+        
+        print('🎉 Proceso de aprobación completado');
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -614,6 +749,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         );
       }
     } catch (e) {
+      print('❌ Error en aprobación: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -652,11 +788,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
               ],
             ),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 2), // ✅ Reducido para fluidez
           ),
         );
         
-        await _loadSanciones();
-        await _updateContadores();
+        // ✅ AUTO-ACTUALIZACIÓN INTELIGENTE
+        await _recargarModoAprobacion();
       }
     } catch (e) {
       if (mounted) {
@@ -737,11 +874,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           SnackBar(
             content: Text(mensaje),
             backgroundColor: accion == 'anular' ? Colors.red : Colors.green,
+            duration: const Duration(seconds: 2), // ✅ Reducido para fluidez
           ),
         );
         
-        await _loadSanciones();
-        await _updateContadores();
+        // ✅ AUTO-ACTUALIZACIÓN INTELIGENTE
+        await _recargarModoAprobacion();
       }
     } catch (e) {
       if (mounted) {
@@ -788,6 +926,37 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         ],
       ),
     );
+  }
+
+  /// ✅ NUEVO: Recarga inteligente para modo aprobación
+  Future<void> _recargarModoAprobacion() async {
+    // Indicador visual de actualización (opcional)
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+    
+    try {
+      // Actualizar contadores primero
+      await _updateContadores();
+      
+      // Si está en modo aprobación, recargar por tab específico
+      if (_modoAprobacion && _tabController != null) {
+        print('🔄 Recargando modo aprobación - Tab: ${_tabController!.index}');
+        await _loadSancionesByTab();
+      } else {
+        // Si no está en modo aprobación, recarga normal
+        await _loadSanciones();
+      }
+    } finally {
+      // Restaurar estado de carga
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Widget _buildEmptyState() {
@@ -853,14 +1022,21 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   Widget _buildFloatingActionButton() {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        if (!authProvider.currentUser!.canCreateSanciones) {
+        final user = authProvider.currentUser;
+        
+        // ✅ MEJORADO: Gerencia también puede crear sanciones
+        if (user == null || !user.canCreateSanciones) {
           return const SizedBox.shrink();
         }
 
-        return FloatingActionButton(
+        return FloatingActionButton.extended(
           onPressed: _crearNuevaSancion,
           backgroundColor: const Color(0xFF1E3A8A),
-          child: const Icon(Icons.add),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: Text(
+            _modoAprobacion ? 'Nueva Sanción' : 'Crear Sanción',
+            style: const TextStyle(color: Colors.white),
+          ),
         );
       },
     );
@@ -1356,14 +1532,18 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.currentUser!;
 
+      print('📋 Cargando sanciones para ${user.role}...');
+
       List<SancionModel> sanciones;
 
       if (user.canViewAllSanciones && !_soloMias) {
         // Gerencia/RRHH pueden ver todas
         sanciones = await _sancionRepository.getAllSanciones();
+        print('👀 Cargadas ${sanciones.length} sanciones (todas)');
       } else {
         // Supervisores solo ven las suyas
         sanciones = await _sancionRepository.getMySanciones(user.id);
+        print('👤 Cargadas ${sanciones.length} sanciones (propias)');
       }
 
       if (mounted) {
@@ -1373,8 +1553,11 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         });
         _aplicarFiltros();
         await _updateContadores();
+        
+        print('✅ Carga de sanciones completada');
       }
     } catch (e) {
+      print('❌ Error cargando sanciones: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1519,7 +1702,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   }
 
   void _onSancionStatusChanged() {
-    _loadSanciones(); // Recargar cuando cambie el status de una sanción
+    // ✅ MEJORADO: Usar recarga inteligente también aquí
+    if (_modoAprobacion) {
+      _recargarModoAprobacion();
+    } else {
+      _loadSanciones(); // Recargar cuando cambie el status de una sanción
+    }
   }
 
   void _handleMenuAction(String action) {

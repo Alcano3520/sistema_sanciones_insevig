@@ -439,15 +439,23 @@ class SancionService {
   /// ✅ NUEVO: Obtener sanciones específicas por rol
   Future<List<SancionModel>> getSancionesByRol(String rol) async {
     try {
+      print('🔍 Consultando sanciones para rol: $rol');
+      
       switch (rol) {
         case 'gerencia':
           // Solo sanciones enviadas esperando gerencia
-          return await _getSancionesByStatus('enviado');
+          final sanciones = await _getSancionesByStatus('enviado');
+          print('👔 Sanciones para gerencia (enviadas): ${sanciones.length}');
+          return sanciones;
         case 'rrhh':
           // Sanciones aprobadas por gerencia esperando RRHH
-          return await _getSancionesAprobadaGerencia();
+          final sanciones = await _getSancionesAprobadaGerencia();
+          print('🧑‍💼 Sanciones para RRHH (aprobadas por gerencia): ${sanciones.length}');
+          return sanciones;
         default:
-          return await getAllSanciones();
+          final sanciones = await getAllSanciones();
+          print('📋 Todas las sanciones: ${sanciones.length}');
+          return sanciones;
       }
     } catch (e) {
       print('❌ Error obteniendo sanciones por rol: $e');

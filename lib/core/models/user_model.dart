@@ -86,7 +86,7 @@ class UserModel {
   bool get isAdmin => role == roleAdmin;
 
   bool get canApprove => isAprobador || isGerencia || isRrhh || isAdmin;
-  bool get canCreateSanciones => isSupervisor || isAdmin;
+  bool get canCreateSanciones => isSupervisor || isGerencia || isAdmin; // ✅ GERENCIA TAMBIÉN PUEDE CREAR
   bool get canViewAllSanciones => isGerencia || isRrhh || isAdmin;
   bool get canChangeStatus => canApprove;
 
