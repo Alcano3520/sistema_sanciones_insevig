@@ -21,7 +21,7 @@ class AprobacionGerenciaDialog extends StatefulWidget {
 }
 
 class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
-  String _codigoSeleccionado = 'D05%';
+  String _codigoSeleccionado = 'LIBRE'; // ✅ LIBRE POR DEFECTO
   final _comentarioController = TextEditingController();
   bool _aprobar = true;
 
@@ -50,16 +50,17 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
         ],
       ),
       content: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(), // ✅ AGREGADO
         child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.9,
+          width: MediaQuery.of(context).size.width * 0.75, // ✅ REDUCIDO de 0.9 a 0.75
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min, // ✅ AGREGADO
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Resumen de sanción
               _buildResumenSancion(),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 12), // ✅ REDUCIDO de 20 a 12
 
               // Toggle Aprobar/Rechazar
               const Text(
@@ -95,7 +96,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 12), // ✅ REDUCIDO de 20 a 12
 
               // Si aprueba: selector de código descuento
               if (_aprobar) ...[
@@ -116,41 +117,28 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                     value: _codigoSeleccionado,
                     decoration: const InputDecoration(
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8), // ✅ REDUCIDO vertical de 12 a 8
                     ),
                     items: codigosDescuento.entries.map((entry) =>
                         DropdownMenuItem(
                           value: entry.key,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                entry.key,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E3A8A),
-                                ),
-                              ),
-                              Text(
-                                entry.value,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
+                          child: Text( // ✅ SIMPLIFICADO: eliminado Column, solo Text
+                            '${entry.key} - ${entry.value}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF1E3A8A),
+                            ),
                           ),
                         )).toList(),
                     onChanged: (value) => setState(() => _codigoSeleccionado = value!),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12), // ✅ REDUCIDO de 16 a 12
 
                 // Vista previa del código seleccionado
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8), // ✅ REDUCIDO de 12 a 8
                   decoration: BoxDecoration(
                     color: Colors.blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -176,7 +164,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12), // ✅ REDUCIDO de 16 a 12
               ],
 
               // Campo comentarios
@@ -203,7 +191,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
               if (_aprobar) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8), // ✅ REDUCIDO de 12 a 8
                   decoration: BoxDecoration(
                     color: Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -367,13 +355,21 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
 
   /// Obtener formato final del comentario
   String _getFormatoFinal() {
-    if (!_aprobar) return _comentarioController.text.isEmpty ? '[motivo del rechazo]' : _comentarioController.text;
-
-    if (_codigoSeleccionado == 'LIBRE') {
-      return _comentarioController.text.isEmpty ? '[su comentario libre]' : _comentarioController.text;
+    if (!_aprobar) {
+      return _comentarioController.text.isEmpty 
+          ? '[motivo del rechazo]' 
+          : _comentarioController.text;
     }
 
-    final comentario = _comentarioController.text.isEmpty ? '[su comentario]' : _comentarioController.text;
+    if (_codigoSeleccionado == 'LIBRE') {
+      return _comentarioController.text.isEmpty 
+          ? '[escriba su comentario libre]' 
+          : _comentarioController.text;
+    }
+
+    final comentario = _comentarioController.text.isEmpty 
+        ? '[escriba su comentario]' 
+        : _comentarioController.text;
     return '$_codigoSeleccionado - $comentario';
   }
 
@@ -396,9 +392,26 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
       return;
     }
 
+    // ✅ NUEVA VALIDACIÓN PARA MODO LIBRE
+    if (_aprobar && _codigoSeleccionado == 'LIBRE' && _comentarioController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.white),
+              SizedBox(width: 8),
+              Text('En modo libre, los comentarios son obligatorios'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     // Validar comentarios para códigos específicos (opcional pero recomendado)
     if (_aprobar && _codigoSeleccionado != 'LIBRE' && _comentarioController.text.trim().isEmpty) {
-      final shouldContinue = showDialog<bool>(
+      showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Confirmar sin comentarios'),
@@ -409,16 +422,23 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () {
+                Navigator.pop(context, true);
+                _finalizarAprobacion();
+              },
               child: const Text('Continuar'),
             ),
           ],
         ),
       );
-
-      if (shouldContinue != true) return;
+      return;
     }
 
+    _finalizarAprobacion();
+  }
+
+  /// ✅ NUEVO: Finalizar el proceso de aprobación
+  void _finalizarAprobacion() {
     Navigator.pop(context);
 
     if (_aprobar) {
