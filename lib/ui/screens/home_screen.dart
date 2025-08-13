@@ -43,6 +43,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ✅ AGREGADO: Listener para recargar cuando regrese de otras pantallas
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Solo recargar si no es la primera vez (evitar doble carga inicial)
+    if (!_isLoading) {
+      print('🔄 didChangeDependencies: Recargando estadísticas...');
+      _loadEstadisticas();
+    }
+  }
+
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
@@ -130,6 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ✅ RENOMBRADO Y MEJORADO: Método principal de carga
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
@@ -149,6 +162,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Actualizar estado de conectividad
       _isOnline = ConnectivityService.instance.isConnected;
+      
+      print('📊 Estadísticas cargadas: $_stats');
     } catch (e) {
       print('❌ Error cargando datos: $e');
 
@@ -161,6 +176,52 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // ✅ MÉTODO MEJORADO: Cargar estadísticas específicas por rol
+  Future<void> _loadEstadisticas() async {
+    try {
+      print('📊 Recargando estadísticas...');
+      
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser!;
+
+      // ✅ NUEVO: Usar método específico por rol
+      Map<String, dynamic> newStats;
+      try {
+        newStats = await _sancionRepository.getEstadisticasParaRol(
+          user.role,
+          userId: user.isSupervisor ? user.id : null,
+        );
+      } catch (e) {
+        // Fallback al método original si el nuevo no existe
+        print('⚠️ Usando método de estadísticas original');
+        if (user.isSupervisor) {
+          newStats = await _sancionRepository.getEstadisticas(
+            supervisorId: user.id,
+          );
+        } else {
+          newStats = await _sancionRepository.getEstadisticas();
+        }
+      }
+
+      final newEmpleadoStats = await _empleadoRepository.getEstadisticasEmpleados();
+
+      if (mounted) {
+        setState(() {
+          _stats = newStats;
+          _empleadoStats = newEmpleadoStats;
+        });
+        
+        print('✅ Estadísticas actualizadas para ${user.role}:');
+        print('   - Enviadas: ${_stats['enviadas'] ?? 0}');
+        print('   - Aprobadas: ${_stats['aprobadas'] ?? 0}');
+        print('   - Pendientes: ${_stats['pendientes'] ?? 0}');
+        print('   - Título pendientes: ${_stats['titulo_pendientes'] ?? 'N/A'}');
+      }
+    } catch (e) {
+      print('❌ Error recargando estadísticas: $e');
     }
   }
 
@@ -179,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
-                    onRefresh: _loadData,
+                    onRefresh: _loadEstadisticas, // ✅ CAMBIADO: usar método específico
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16),
@@ -289,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.orange),
-            onPressed: _loadData,
+            onPressed: _loadEstadisticas, // ✅ CAMBIADO: usar método específico
             tooltip: 'Intentar reconectar',
           ),
         ],
@@ -314,6 +375,12 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: _syncPendingData,
             tooltip: 'Sincronizar ahora',
           ),
+        // ✅ BOTÓN DE REFRESH MANUAL MEJORADO
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _loadEstadisticas, // ✅ CAMBIADO: usar método específico
+          tooltip: 'Actualizar estadísticas',
+        ),
         // Menú con más opciones
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
@@ -456,13 +523,25 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Estadísticas',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E3A8A),
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Estadísticas',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+            // ✅ NUEVO: Botón de debug para ver detalles
+            if (kDebugMode)
+              IconButton(
+                icon: const Icon(Icons.info_outline, size: 20),
+                onPressed: _mostrarDebugEstadisticas,
+                tooltip: 'Debug estadísticas',
+              ),
+          ],
         ),
         const SizedBox(height: 12),
 
@@ -498,8 +577,11 @@ class _HomeScreenState extends State<HomeScreen> {
         Row(
           children: [
             Expanded(
-                child: _buildStatCard('⚠️', 'Pendientes',
-                    _stats['pendientes'] ?? 0, Colors.amber)),
+                child: _buildStatCard(
+                    '⚠️', 
+                    _stats['titulo_pendientes'] ?? 'Pendientes',
+                    _stats['pendientes'] ?? 0, 
+                    Colors.amber)),
             const SizedBox(width: 12),
             Expanded(
                 child: _buildStatCard('👥', 'Empleados',
@@ -738,18 +820,26 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ).then((result) {
       if (result == true) {
-        _loadData();
+        print('🔄 Regresó de crear sanción, recargando estadísticas...');
+        _loadEstadisticas(); // ✅ CAMBIADO: usar método específico
       }
     });
   }
 
+  // ✅ MÉTODO CRÍTICO MODIFICADO: Navegación al historial con recarga
   void _viewHistory() {
+    print('🔄 Navegando al historial...');
+    
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const HistorialSancionesScreen(),
       ),
-    );
+    ).then((_) {
+      // ✅ AGREGADO: Recargar estadísticas al volver del historial
+      print('🔄 Regresó del historial, recargando estadísticas...');
+      _loadEstadisticas();
+    });
   }
 
   void _viewReports() {
@@ -773,7 +863,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _handleMenuSelection(String value) {
     switch (value) {
       case 'refresh':
-        _loadData();
+        _loadEstadisticas(); // ✅ CAMBIADO: usar método específico
         break;
       case 'profile':
         _showProfile();
@@ -840,6 +930,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       backgroundColor: success ? Colors.green : Colors.red,
                     ),
                   );
+                  
+                  // ✅ AGREGADO: Recargar estadísticas después de sincronizar
+                  if (success) {
+                    _loadEstadisticas();
+                  }
                 },
               ),
               if (kDebugMode) ...[
@@ -904,7 +999,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-    );
+    ).then((_) {
+      // ✅ AGREGADO: Recargar al volver de configuración
+      print('🔄 Regresó de configuración, recargando estadísticas...');
+      _loadEstadisticas();
+    });
   }
 
   void _showProfile() {
@@ -934,6 +1033,102 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  // ✅ NUEVO: Método para mostrar debug de estadísticas
+  void _mostrarDebugEstadisticas() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser!;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.bug_report, color: Colors.purple),
+            SizedBox(width: 8),
+            Text('Debug Estadísticas'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Usuario: ${user.fullName}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('Rol: ${user.role}'),
+              Text('Es supervisor: ${user.isSupervisor}'),
+              Text('Puede ver todas: ${user.canViewAllSanciones}'),
+              
+              const Divider(),
+              
+              const Text(
+                'Estadísticas calculadas:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              
+              ..._stats.entries.map((entry) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('${entry.key}:'),
+                    Text(
+                      '${entry.value}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              )),
+              
+              const Divider(),
+              
+              const Text(
+                'Explicación de "Pendientes":',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              
+              Text(
+                _getExplicacionPendientes(user.role),
+                style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadEstadisticas(); // Recargar
+            },
+            child: const Text('Recargar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NUEVO: Explicación contextual de qué significa "pendientes" por rol
+  String _getExplicacionPendientes(String role) {
+    switch (role.toLowerCase()) {
+      case 'gerencia':
+        return 'Para gerencia: Sanciones con status "enviado" que esperan tu aprobación.';
+      case 'rrhh':
+        return 'Para RRHH: Sanciones con status "aprobado" que esperan procesamiento.';
+      case 'supervisor':
+        return 'Para supervisor: Tus sanciones enviadas que están en proceso (enviado + aprobado).';
+      default:
+        return 'Pendientes generales: Suma de todas las sanciones que esperan alguna acción.';
+    }
   }
 
   void _logout() {
@@ -1117,7 +1312,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final offline = OfflineManager.instance;
 
     print('\n📊 VERIFICACIÓN DETALLADA DEL CACHE:');
-    print('════════════════════════════════════════');
+    print('╔═══════════════════════════════════════╗');
 
     final todosEmpleados = offline.database.getEmpleados();
     print('📦 Total empleados en cache: ${todosEmpleados.length}');
@@ -1152,7 +1347,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('   $key: $value');
     });
 
-    print('════════════════════════════════════════\n');
+    print('╚═══════════════════════════════════════╝\n');
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

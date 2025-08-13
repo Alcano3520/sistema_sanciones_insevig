@@ -71,8 +71,8 @@ class SancionRepository {
       if (!kIsWeb && success) {
         // En móvil: actualizar cache local también
         await _updateLocalSancionAfterApproval(
-          sancionId, 
-          'aprobado', 
+          sancionId,
+          'aprobado',
           '$codigo - $comentarios',
           reviewedBy,
         );
@@ -94,11 +94,11 @@ class SancionRepository {
         // Actualizar localmente
         await _updateLocalSancionAfterApproval(
           sancionId,
-          'aprobado', 
+          'aprobado',
           '$codigo - $comentarios',
           reviewedBy,
         );
-        
+
         return true; // Exitoso localmente
       }
 
@@ -157,7 +157,7 @@ class SancionRepository {
           reviewedBy,
           nuevosComentariosGerencia,
         );
-        
+
         return true; // Exitoso localmente
       }
 
@@ -212,7 +212,8 @@ class SancionRepository {
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
+      final sancionIndex =
+          sancionesLocales.indexWhere((s) => s.id == sancionId);
 
       if (sancionIndex != -1) {
         final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
@@ -243,11 +244,12 @@ class SancionRepository {
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
+      final sancionIndex =
+          sancionesLocales.indexWhere((s) => s.id == sancionId);
 
       if (sancionIndex != -1) {
         final sancionOriginal = sancionesLocales[sancionIndex];
-        
+
         // Determinar nuevo status según acción
         String newStatus = sancionOriginal.status;
         if (accion == 'anular') {
@@ -257,7 +259,8 @@ class SancionRepository {
         final sancionActualizada = sancionOriginal.copyWith(
           status: newStatus,
           comentariosRrhh: comentariosRrhh,
-          comentariosGerencia: nuevosComentariosGerencia ?? sancionOriginal.comentariosGerencia,
+          comentariosGerencia:
+              nuevosComentariosGerencia ?? sancionOriginal.comentariosGerencia,
           reviewedBy: reviewedBy,
           fechaRevision: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -277,24 +280,27 @@ class SancionRepository {
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      
+
       switch (rol) {
         case 'gerencia':
           // ✅ CORREGIDO: Solo sanciones enviadas esperando gerencia
-          final sancionesEnviadas = sancionesLocales.where((s) => s.status == 'enviado').toList();
-          print('📱 Local - Sanciones enviadas para gerencia: ${sancionesEnviadas.length}');
+          final sancionesEnviadas =
+              sancionesLocales.where((s) => s.status == 'enviado').toList();
+          print(
+              '📱 Local - Sanciones enviadas para gerencia: ${sancionesEnviadas.length}');
           return sancionesEnviadas;
-          
+
         case 'rrhh':
           // Sanciones aprobadas por gerencia esperando RRHH
-          final sancionesParaRrhh = sancionesLocales.where((s) => 
-              s.status == 'aprobado' && 
-              s.comentariosGerencia != null && 
-              s.comentariosRrhh == null
-          ).toList();
+          final sancionesParaRrhh = sancionesLocales
+              .where((s) =>
+                  s.status == 'aprobado' &&
+                  s.comentariosGerencia != null &&
+                  s.comentariosRrhh == null)
+              .toList();
           print('📱 Local - Sanciones para RRHH: ${sancionesParaRrhh.length}');
           return sancionesParaRrhh;
-          
+
         default:
           return sancionesLocales;
       }
@@ -306,11 +312,12 @@ class SancionRepository {
 
   /// Calcular contadores locales por rol
   Future<Map<String, int>> _getLocalContadoresByRol(String rol) async {
-    if (kIsWeb) return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+    if (kIsWeb)
+      return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      
+
       final contadores = <String, int>{
         'pendientes_gerencia': 0,
         'pendientes_rrhh': 0,
@@ -319,16 +326,15 @@ class SancionRepository {
 
       switch (rol) {
         case 'gerencia':
-          contadores['pendientes_gerencia'] = sancionesLocales
-              .where((s) => s.status == 'enviado')
-              .length;
+          contadores['pendientes_gerencia'] =
+              sancionesLocales.where((s) => s.status == 'enviado').length;
           break;
-          
+
         case 'rrhh':
           contadores['pendientes_rrhh'] = sancionesLocales
-              .where((s) => 
-                  s.status == 'aprobado' && 
-                  s.comentariosGerencia != null && 
+              .where((s) =>
+                  s.status == 'aprobado' &&
+                  s.comentariosGerencia != null &&
                   s.comentariosRrhh == null)
               .length;
           break;
@@ -668,83 +674,146 @@ class SancionRepository {
   /// Obtener estadísticas de sanciones
   Future<Map<String, dynamic>> getEstadisticas({String? supervisorId}) async {
     try {
-      return await _sancionService.getEstadisticas(supervisorId: supervisorId);
-    } catch (e) {
-      print('❌ Error obteniendo estadísticas: $e');
+      print(
+          '📊 Calculando estadísticas${supervisorId != null ? ' para supervisor $supervisorId' : ' globales'}...');
 
-      if (!kIsWeb) {
-        // Fallback: calcular estadísticas de cache local
-        var sanciones = _offlineManager.database.getSanciones();
-
-        if (supervisorId != null) {
-          sanciones =
-              sanciones.where((s) => s.supervisorId == supervisorId).toList();
-        }
-
-        final stats = {
-          'total': sanciones.length,
-          'borradores': 0,
-          'enviadas': 0,
-          'aprobadas': 0,
-          'rechazadas': 0,
-          'pendientes': 0,
-          'resueltas': 0,
-          'porTipo': <String, int>{},
-          'ultimoMes': 0,
-        };
-
-        final ahora = DateTime.now();
-        final hace30Dias = ahora.subtract(const Duration(days: 30));
-
-        for (var sancion in sanciones) {
-          // Contar por status
-          switch (sancion.status) {
-            case 'borrador':
-              stats['borradores'] = (stats['borradores'] as int) + 1;
-              break;
-            case 'enviado':
-              stats['enviadas'] = (stats['enviadas'] as int) + 1;
-              break;
-            case 'aprobado':
-              stats['aprobadas'] = (stats['aprobadas'] as int) + 1;
-              break;
-            case 'rechazado':
-              stats['rechazadas'] = (stats['rechazadas'] as int) + 1;
-              break;
-          }
-
-          // Contar pendientes
-          if (sancion.pendiente) {
-            stats['pendientes'] = (stats['pendientes'] as int) + 1;
-          } else {
-            stats['resueltas'] = (stats['resueltas'] as int) + 1;
-          }
-
-          // Contar por tipo
-          final porTipo = stats['porTipo'] as Map<String, int>;
-          porTipo[sancion.tipoSancion] =
-              (porTipo[sancion.tipoSancion] ?? 0) + 1;
-
-          // Último mes
-          if (sancion.createdAt.isAfter(hace30Dias)) {
-            stats['ultimoMes'] = (stats['ultimoMes'] as int) + 1;
-          }
-        }
-
-        return stats;
+      // Obtener todas las sanciones
+      List<SancionModel> sanciones;
+      if (supervisorId != null) {
+        sanciones = await getMySanciones(supervisorId);
+      } else {
+        sanciones = await getAllSanciones();
       }
 
+      print('📋 Total sanciones para estadísticas: ${sanciones.length}');
+
+      // ✅ CONTADORES CORREGIDOS CON LÓGICA CLARA
+      int borradores = 0;
+      int enviadas = 0;
+      int aprobadas = 0;
+      int rechazadas = 0;
+      int procesadas = 0;
+      int anuladas = 0;
+
+      // ✅ NUEVO: Contadores específicos por rol
+      int pendientesGerencia = 0; // Status 'enviado'
+      int pendientesRrhh = 0; // Status 'aprobado'
+      int totalPendientes = 0; // Suma de ambos
+
+      // Contar por status exacto
+      for (var sancion in sanciones) {
+        switch (sancion.status.toLowerCase()) {
+          case 'borrador':
+            borradores++;
+            break;
+          case 'enviado':
+            enviadas++;
+            pendientesGerencia++; // ✅ Estos esperan gerencia
+            break;
+          case 'aprobado':
+            aprobadas++;
+            pendientesRrhh++; // ✅ Estos esperan RRHH
+            break;
+          case 'rechazado':
+            rechazadas++;
+            break;
+          case 'procesado':
+            procesadas++;
+            break;
+          case 'anulado':
+            anuladas++;
+            break;
+          default:
+            print('⚠️ Status desconocido: ${sancion.status}');
+        }
+      }
+
+      // ✅ CÁLCULO CORREGIDO: Pendientes = los que esperan acción
+      totalPendientes = pendientesGerencia + pendientesRrhh;
+
+      print('📈 Estadísticas calculadas:');
+      print('   - Borradores: $borradores');
+      print('   - Enviadas (esperando gerencia): $enviadas');
+      print('   - Aprobadas (esperando RRHH): $aprobadas');
+      print('   - Rechazadas: $rechazadas');
+      print('   - Procesadas: $procesadas');
+      print('   - Anuladas: $anuladas');
+      print('   - Pendientes Gerencia: $pendientesGerencia');
+      print('   - Pendientes RRHH: $pendientesRrhh');
+      print('   - Total Pendientes: $totalPendientes');
+
       return {
-        'total': 0,
-        'borradores': 0,
-        'enviadas': 0,
-        'aprobadas': 0,
-        'rechazadas': 0,
-        'pendientes': 0,
-        'resueltas': 0,
-        'porTipo': <String, int>{},
-        'ultimoMes': 0,
+        'borradores': borradores,
+        'enviadas': enviadas,
+        'aprobadas': aprobadas,
+        'rechazadas': rechazadas,
+        'procesadas': procesadas,
+        'anuladas': anuladas,
+
+        // ✅ NUEVO: Pendientes específicos por contexto
+        'pendientes': totalPendientes, // Para vista general
+        'pendientes_gerencia': pendientesGerencia, // Para gerencia específica
+        'pendientes_rrhh': pendientesRrhh, // Para RRHH específica
+
+        // Estadísticas adicionales
+        'total': sanciones.length,
+        'finalizadas': procesadas + anuladas,
+        'en_proceso': totalPendientes,
       };
+    } catch (e) {
+      print('❌ Error calculando estadísticas: $e');
+      throw Exception('Error al calcular estadísticas: $e');
+    }
+  }
+
+  /// ✅ NUEVO: Método específico para obtener estadísticas por rol del usuario
+  Future<Map<String, dynamic>> getEstadisticasParaRol(String userRole,
+      {String? userId}) async {
+    try {
+      print('📊 Calculando estadísticas específicas para rol: $userRole');
+
+      final stats = await getEstadisticas(supervisorId: userId);
+
+      // ✅ PERSONALIZAR según el rol del usuario
+      switch (userRole.toLowerCase()) {
+        case 'gerencia':
+          return {
+            ...stats,
+            'pendientes': stats[
+                'pendientes_gerencia'], // Solo las que gerencia debe aprobar
+            'titulo_pendientes': 'Esperando Mi Aprobación',
+          };
+
+        case 'rrhh':
+          return {
+            ...stats,
+            'pendientes':
+                stats['pendientes_rrhh'], // Solo las que RRHH debe procesar
+            'titulo_pendientes': 'Esperando Procesamiento',
+          };
+
+        case 'supervisor':
+          // Para supervisores, "pendientes" son sus propias sanciones en proceso
+          final misSanciones = await getMySanciones(userId!);
+          final misPendientes = misSanciones
+              .where((s) => s.status == 'enviado' || s.status == 'aprobado')
+              .length;
+
+          return {
+            ...stats,
+            'pendientes': misPendientes,
+            'titulo_pendientes': 'Mis Sanciones en Proceso',
+          };
+
+        default:
+          return {
+            ...stats,
+            'titulo_pendientes': 'Pendientes Generales',
+          };
+      }
+    } catch (e) {
+      print('❌ Error en estadísticas por rol: $e');
+      return await getEstadisticas(supervisorId: userId);
     }
   }
 
