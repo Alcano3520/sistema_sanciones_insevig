@@ -12,6 +12,7 @@ import 'create_sancion_screen.dart';
 import 'historial_sanciones_screen.dart';
 
 /// Pantalla principal después del login
+/// 🔥 MEJORADA: Estadísticas por rol y manejo de pendientes
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -130,25 +131,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// 🔥 MEJORADO: Cargar datos con rol del usuario
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.currentUser!;
 
-      // Usar repositories
-      if (authProvider.currentUser!.isSupervisor) {
+      // 🔥 ACTUALIZADO: Pasar el rol del usuario para estadísticas correctas
+      if (currentUser.isSupervisor && !currentUser.isAdmin) {
+        // Supervisor normal: solo ve sus sanciones
         _stats = await _sancionRepository.getEstadisticas(
-          supervisorId: authProvider.currentUser!.id,
+          supervisorId: currentUser.id,
+          userRole: currentUser.role, // 🔥 NUEVO: Pasar el rol
         );
       } else {
-        _stats = await _sancionRepository.getEstadisticas();
+        // Gerencia, RRHH, Admin: ven todas las sanciones
+        _stats = await _sancionRepository.getEstadisticas(
+          userRole: currentUser.role, // 🔥 NUEVO: Pasar el rol
+        );
       }
 
       _empleadoStats = await _empleadoRepository.getEstadisticasEmpleados();
 
       // Actualizar estado de conectividad
       _isOnline = ConnectivityService.instance.isConnected;
+
+      // 🔥 NUEVO: Log para debug
+      print('📊 Estadísticas cargadas para ${currentUser.role}:');
+      print('   Pendientes: ${_stats['pendientes']}');
+      print('   Enviadas: ${_stats['enviadas']}');
+      print('   Aprobadas: ${_stats['aprobadas']}');
+      
     } catch (e) {
       print('❌ Error cargando datos: $e');
 
@@ -452,62 +467,257 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// 🔥 MEJORADO: Widget de estadísticas con tooltips y ayuda por rol
   Widget _buildStatsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Estadísticas',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E3A8A),
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        final user = authProvider.currentUser!;
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Estadísticas',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+                // 🔥 NUEVO: Botón de ayuda
+                IconButton(
+                  icon: const Icon(Icons.help_outline, size: 20),
+                  color: Colors.grey,
+                  onPressed: () => _showStatsHelp(user.role),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Estadísticas de sanciones
+            Row(
+              children: [
+                Expanded(
+                    child: _buildStatCard('📝', 'Borradores',
+                        _stats['borradores'] ?? 0, Colors.orange)),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _buildStatCard(
+                        '📤', 'Enviadas', _stats['enviadas'] ?? 0, Colors.blue)),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                    child: _buildStatCard(
+                        '✅', 'Aprobadas', _stats['aprobadas'] ?? 0, Colors.green)),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _buildStatCard(
+                        '❌', 'Rechazadas', _stats['rechazadas'] ?? 0, Colors.red)),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                    child: _buildStatCardWithTooltip(
+                      '⚠️', 
+                      _getPendientesLabel(user.role),
+                      _stats['pendientes'] ?? 0, 
+                      Colors.amber,
+                      _getPendientesTooltip(user.role)
+                    )),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _buildStatCard('👥', 'Empleados',
+                        _empleadoStats['total'] ?? 0, Colors.indigo)),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 🔥 NUEVO: Obtener etiqueta de pendientes según rol
+  String _getPendientesLabel(String role) {
+    switch (role) {
+      case 'supervisor':
+        return 'Por Corregir';
+      case 'gerencia':
+        return 'Por Aprobar';
+      case 'rrhh':
+        return 'Por Revisar';
+      default:
+        return 'Pendientes';
+    }
+  }
+
+  // 🔥 NUEVO: Obtener tooltip de pendientes según rol
+  String _getPendientesTooltip(String role) {
+    switch (role) {
+      case 'supervisor':
+        return 'Borradores y rechazadas que debes corregir';
+      case 'gerencia':
+        return 'Sanciones enviadas esperando tu aprobación';
+      case 'rrhh':
+        return 'Sanciones aprobadas por gerencia para revisión final';
+      case 'admin':
+        return 'Todas las sanciones sin decisión final';
+      default:
+        return 'Sanciones que requieren acción';
+    }
+  }
+
+  // 🔥 NUEVO: Widget de estadística con tooltip
+  Widget _buildStatCardWithTooltip(String emoji, String label, int count, Color color, String tooltip) {
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 24)),
+                const SizedBox(width: 4),
+                Icon(Icons.info_outline, size: 12, color: Colors.grey.shade400),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🔥 NUEVO: Mostrar ayuda sobre estadísticas
+  void _showStatsHelp(String role) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('📊 Explicación de Estadísticas'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Para tu rol de ${_getRoleDescription(role)}:',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              
+              _buildHelpItem('📝 Borradores', 
+                'Sanciones guardadas pero no enviadas${role == 'supervisor' ? ' (puedes editarlas)' : ''}'),
+              
+              _buildHelpItem('📤 Enviadas', 
+                'Sanciones enviadas a gerencia para aprobación'),
+              
+              _buildHelpItem('✅ Aprobadas', 
+                'Sanciones aprobadas por gerencia'),
+              
+              _buildHelpItem('❌ Rechazadas', 
+                'Sanciones rechazadas${role == 'supervisor' ? ' (debes corregirlas)' : ''}'),
+              
+              const Divider(),
+              
+              _buildHelpItem(
+                '⚠️ ${_getPendientesLabel(role)}',
+                _getPendientesTooltip(role),
+                highlight: true
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-
-        // Estadísticas de sanciones
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard('📝', 'Borradores',
-                    _stats['borradores'] ?? 0, Colors.orange)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard(
-                    '📤', 'Enviadas', _stats['enviadas'] ?? 0, Colors.blue)),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard(
-                    '✅', 'Aprobadas', _stats['aprobadas'] ?? 0, Colors.green)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard(
-                    '❌', 'Rechazadas', _stats['rechazadas'] ?? 0, Colors.red)),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard('⚠️', 'Pendientes',
-                    _stats['pendientes'] ?? 0, Colors.amber)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard('👥', 'Empleados',
-                    _empleadoStats['total'] ?? 0, Colors.indigo)),
-          ],
-        ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _buildHelpItem(String title, String description, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: highlight ? Colors.amber.shade700 : null,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              description,
+              style: TextStyle(
+                fontSize: 14,
+                color: highlight ? Colors.amber.shade700 : Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getRoleDescription(String role) {
+    switch (role) {
+      case 'supervisor':
+        return 'Supervisor';
+      case 'gerencia':
+        return 'Gerencia';
+      case 'rrhh':
+        return 'Recursos Humanos';
+      case 'admin':
+        return 'Administrador';
+      default:
+        return role;
+    }
   }
 
   Widget _buildStatCard(String emoji, String label, int count, Color color) {
@@ -1117,7 +1327,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final offline = OfflineManager.instance;
 
     print('\n📊 VERIFICACIÓN DETALLADA DEL CACHE:');
-    print('════════════════════════════════════════');
+    print('═══════════════════════════════════════════════════════════');
 
     final todosEmpleados = offline.database.getEmpleados();
     print('📦 Total empleados en cache: ${todosEmpleados.length}');
@@ -1152,7 +1362,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('   $key: $value');
     });
 
-    print('════════════════════════════════════════\n');
+    print('═══════════════════════════════════════════════════════════\n');
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

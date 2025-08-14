@@ -12,6 +12,7 @@ import '../services/image_compression_service.dart'; // 🆕 NUEVO IMPORT
 /// Incluye funcionalidad offline como tu app Kivy
 /// 🆕 COMPATIBLE WEB + ANDROID
 /// ✅ CORREGIDO: Getter público para Supabase + métodos jerárquicos
+/// 🔥 MEJORADO: Estadísticas por rol y manejo de pendientes
 class SancionService {
   /// ✅ CORREGIDO: Getter público para que sea accesible desde otros servicios
   SupabaseClient get supabase => SupabaseConfig.sancionesClient;
@@ -69,7 +70,7 @@ class SancionService {
   Future<String?> _uploadFotoCompressed(File fotoFile, String sancionId) async {
     try {
       print(
-          '🔄 [${kIsWeb ? 'WEB' : 'MOBILE'}] Procesando foto para sanción $sancionId...');
+          '📄 [${kIsWeb ? 'WEB' : 'MOBILE'}] Procesando foto para sanción $sancionId...');
 
       // 1. Comprimir imagen usando el servicio universal
       final compressedFile =
@@ -149,7 +150,7 @@ class SancionService {
   Future<String?> _uploadFotoOriginalFallback(
       File fotoFile, String sancionId) async {
     try {
-      print('🔄 Intentando subida sin compresión como fallback...');
+      print('📄 Intentando subida sin compresión como fallback...');
 
       final fileName =
           '${sancionId}_${DateTime.now().millisecondsSinceEpoch}_original.jpg';
@@ -203,7 +204,7 @@ class SancionService {
     SignatureController? nuevaFirma,
   }) async {
     try {
-      print('🔄 Actualizando sanción ${sancion.id}...');
+      print('📄 Actualizando sanción ${sancion.id}...');
 
       String? fotoUrl = sancion.fotoUrl;
       String? firmaPath = sancion.firmaPath;
@@ -269,7 +270,7 @@ class SancionService {
     SignatureController? nuevaFirma,
   }) async {
     try {
-      print('🔄 Actualizando sanción con archivos ${sancion.id}...');
+      print('📄 Actualizando sanción con archivos ${sancion.id}...');
 
       String? fotoUrl = sancion.fotoUrl;
       String? firmaPath = sancion.firmaPath;
@@ -304,8 +305,8 @@ class SancionService {
   /// 🔥 MÉTODO SIMPLIFICADO PARA DEBUG
   Future<bool> updateSancionSimple(SancionModel sancion) async {
     try {
-      print('🔄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
-      print('🔄 [DEBUG] Datos a actualizar:');
+      print('📄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
+      print('📄 [DEBUG] Datos a actualizar:');
       print('   - Empleado: ${sancion.empleadoNombre}');
       print('   - Puesto: ${sancion.puesto}');
       print('   - Agente: ${sancion.agente}');
@@ -332,7 +333,7 @@ class SancionService {
         updateData['horas_extras'] = sancion.horasExtras;
       }
 
-      print('🔄 [DEBUG] Datos preparados para Supabase:');
+      print('📄 [DEBUG] Datos preparados para Supabase:');
       updateData.forEach((key, value) {
         print('   $key: $value');
       });
@@ -361,7 +362,7 @@ class SancionService {
   /// ✅ NUEVOS MÉTODOS PARA SISTEMA JERÁRQUICO
   /// ============================================= 
 
-  /// ✅ NUEVO: Aprobar sanción por gerencia con código de descuento
+  /// ✅ ACTUALIZADO: Aprobar sanción por gerencia con código de descuento
   Future<bool> aprobarConCodigoGerencia(
     String sancionId,
     String codigo,
@@ -375,6 +376,7 @@ class SancionService {
         ? comentarios
         : '$codigo - $comentarios';
         
+      // 🔥 El campo 'pendiente' se actualizará a false automáticamente
       return await changeStatus(
         sancionId,
         'aprobado',
@@ -387,7 +389,7 @@ class SancionService {
     }
   }
 
-  /// ✅ NUEVO: Revisión RRHH con capacidad de modificar decisión gerencia
+  /// ✅ ACTUALIZADO: Revisión RRHH con capacidad de modificar decisión gerencia
   Future<bool> revisionRrhh(
     String sancionId,
     String accion,
@@ -409,17 +411,22 @@ class SancionService {
       switch (accion) {
         case 'confirmar':
           // Mantener status actual, solo agregar comentarios RRHH
+          // 🔥 Marcar como no pendiente al confirmar RRHH
+          updateData['pendiente'] = false;
           break;
         case 'modificar':
           if (nuevosComentariosGerencia != null) {
             updateData['comentarios_gerencia'] = nuevosComentariosGerencia;
           }
+          updateData['pendiente'] = false;
           break;
         case 'anular':
           updateData['status'] = 'rechazado';
+          updateData['pendiente'] = false;
           break;
         case 'procesar':
           // Procesar sin cambios, solo comentarios RRHH
+          updateData['pendiente'] = false;
           break;
       }
 
@@ -429,6 +436,7 @@ class SancionService {
           .eq('id', sancionId);
 
       print('✅ Revisión RRHH completada exitosamente');
+      print('   Pendiente actualizado a: false');
       return true;
     } catch (e) {
       print('❌ Error en revisión RRHH: $e');
@@ -643,7 +651,7 @@ class SancionService {
     }
   }
 
-  /// Cambiar status de sanción (borrador -> enviado -> aprobado/rechazado)
+  /// 🔥 MEJORADO: Cambiar status de sanción con lógica mejorada para pendientes
   Future<bool> changeStatus(
     String sancionId,
     String newStatus, {
@@ -651,13 +659,41 @@ class SancionService {
     String? reviewedBy,
   }) async {
     try {
-      final updateData = {
+      final updateData = <String, dynamic>{
         'status': newStatus,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
+      // 🔥 ACTUALIZADO: Lógica mejorada para el campo 'pendiente'
+      switch (newStatus) {
+        case 'enviado':
+          // Enviado: pendiente de aprobación por gerencia
+          updateData['pendiente'] = true;
+          break;
+          
+        case 'aprobado':
+          // Aprobado: ya no pendiente (aunque RRHH puede revisar)
+          updateData['pendiente'] = false;
+          break;
+          
+        case 'rechazado':
+          // 🔥 Rechazado: pendiente de corrección por el supervisor
+          updateData['pendiente'] = true;
+          break;
+          
+        case 'borrador':
+          // Borrador: no pendiente hasta que se envíe
+          updateData['pendiente'] = false;
+          break;
+      }
+
       if (comentarios != null) {
-        updateData['comentarios_gerencia'] = comentarios;
+        // Si es rechazo, guardar en comentarios_gerencia el motivo
+        if (newStatus == 'rechazado') {
+          updateData['comentarios_gerencia'] = 'RECHAZADO - $comentarios';
+        } else {
+          updateData['comentarios_gerencia'] = comentarios;
+        }
       }
 
       if (reviewedBy != null) {
@@ -668,9 +704,33 @@ class SancionService {
       await _supabase.from('sanciones').update(updateData).eq('id', sancionId);
 
       print('✅ Status cambiado a $newStatus para sanción $sancionId');
+      print('   Pendiente actualizado a: ${updateData['pendiente']}');
+      print('   Comentarios: ${updateData['comentarios_gerencia'] ?? 'N/A'}');
+      
       return true;
     } catch (e) {
       print('❌ Error cambiando status: $e');
+      return false;
+    }
+  }
+
+  /// 🔥 NUEVO: Método auxiliar para rechazar sanción con motivo
+  Future<bool> rechazarSancion(
+    String sancionId,
+    String motivoRechazo,
+    String reviewedBy,
+  ) async {
+    try {
+      print('❌ Rechazando sanción $sancionId...');
+      
+      return await changeStatus(
+        sancionId,
+        'rechazado',
+        comentarios: motivoRechazo,
+        reviewedBy: reviewedBy,
+      );
+    } catch (e) {
+      print('❌ Error rechazando sanción: $e');
       return false;
     }
   }
@@ -708,12 +768,13 @@ class SancionService {
     }
   }
 
-  /// Obtener estadísticas de sanciones
-  Future<Map<String, dynamic>> getEstadisticas({String? supervisorId}) async {
+  /// 🔥 MEJORADO: Obtener estadísticas de sanciones mejoradas por rol
+  Future<Map<String, dynamic>> getEstadisticas({String? supervisorId, String? userRole}) async {
     try {
       var query = _supabase.from('sanciones').select('*');
 
-      if (supervisorId != null) {
+      if (supervisorId != null && userRole == 'supervisor') {
+        // Para supervisores: solo sus sanciones
         query = query.eq('supervisor_id', supervisorId);
       }
 
@@ -736,7 +797,6 @@ class SancionService {
 
       for (var sancion in response) {
         final status = sancion['status'];
-        final pendiente = sancion['pendiente'] ?? false;
         final fecha = DateTime.tryParse(sancion['created_at'] ?? '');
         final tipo = sancion['tipo_sancion'];
 
@@ -756,13 +816,6 @@ class SancionService {
             break;
         }
 
-        // Contar pendientes
-        if (pendiente) {
-          stats['pendientes'] = (stats['pendientes'] as int) + 1;
-        } else {
-          stats['resueltas'] = (stats['resueltas'] as int) + 1;
-        }
-
         // Contar por tipo
         final porTipo = stats['porTipo'] as Map<String, int>;
         porTipo[tipo] = (porTipo[tipo] ?? 0) + 1;
@@ -772,6 +825,20 @@ class SancionService {
           stats['ultimoMes'] = (stats['ultimoMes'] as int) + 1;
         }
       }
+
+      // 🔥 NUEVO: Calcular "pendientes" según el rol del usuario
+      stats['pendientes'] = _calcularPendientesPorRol(response, userRole, supervisorId);
+      
+      // Resueltas = aprobadas + rechazadas (sanciones con decisión final)
+      stats['resueltas'] = (stats['aprobadas'] as int) + (stats['rechazadas'] as int);
+
+      print('📊 Estadísticas calculadas para rol $userRole:');
+      print('   Total: ${stats['total']}');
+      print('   Pendientes: ${stats['pendientes']}');
+      print('   Borradores: ${stats['borradores']}');
+      print('   Enviadas: ${stats['enviadas']}');
+      print('   Aprobadas: ${stats['aprobadas']}');
+      print('   Rechazadas: ${stats['rechazadas']}');
 
       return stats;
     } catch (e) {
@@ -788,6 +855,66 @@ class SancionService {
         'ultimoMes': 0,
       };
     }
+  }
+
+  /// 🔥 NUEVO: Calcular pendientes según el rol
+  int _calcularPendientesPorRol(List<dynamic> sanciones, String? userRole, String? supervisorId) {
+    int pendientes = 0;
+
+    switch (userRole) {
+      case 'supervisor':
+        // Para supervisores: sus borradores y rechazadas que debe corregir
+        for (var sancion in sanciones) {
+          if (sancion['supervisor_id'] == supervisorId) {
+            final status = sancion['status'];
+            if (status == 'borrador' || status == 'rechazado') {
+              pendientes++;
+            }
+          }
+        }
+        break;
+
+      case 'gerencia':
+        // Para gerencia: sanciones enviadas esperando su aprobación
+        for (var sancion in sanciones) {
+          if (sancion['status'] == 'enviado') {
+            pendientes++;
+          }
+        }
+        break;
+
+      case 'rrhh':
+        // Para RRHH: sanciones aprobadas por gerencia que necesitan revisión
+        for (var sancion in sanciones) {
+          if (sancion['status'] == 'aprobado' && 
+              sancion['comentarios_gerencia'] != null && 
+              sancion['comentarios_rrhh'] == null) {
+            pendientes++;
+          }
+        }
+        break;
+
+      case 'admin':
+        // Para admin: todas las sanciones no finalizadas
+        for (var sancion in sanciones) {
+          final status = sancion['status'];
+          if (status == 'borrador' || status == 'enviado') {
+            pendientes++;
+          }
+        }
+        break;
+
+      default:
+        // Por defecto: contar borradores y enviadas
+        for (var sancion in sanciones) {
+          final status = sancion['status'];
+          if (status == 'borrador' || status == 'enviado') {
+            pendientes++;
+          }
+        }
+    }
+
+    return pendientes;
   }
 
   /// Obtener sanción por ID

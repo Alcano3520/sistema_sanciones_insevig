@@ -14,6 +14,7 @@ import '../widgets/empleado_search_field.dart';
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
 /// ACTUALIZADA con compresión automática de imágenes
 /// 🔥 ACTUALIZADA para usar repositories con funcionalidad offline
+/// 🔥 MEJORADA: Manejo correcto del campo 'pendiente'
 class CreateSancionScreen extends StatefulWidget {
   const CreateSancionScreen({super.key});
 
@@ -40,7 +41,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
   TimeOfDay _hora = TimeOfDay.now();
   File? _fotoSeleccionada;
   int? _horasExtras;
-  bool _pendiente = true;
+  // 🔥 REMOVIDO: bool _pendiente ya que se calcula automáticamente
   bool _isLoading = false;
   bool _isProcessingImage = false; // 🆕 Para mostrar estado de compresión
 
@@ -332,7 +333,33 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
                     const SizedBox(height: 16),
 
-                    // Switch de Pendiente (NUEVO CAMPO que pediste)
+                    // 🔥 NUEVO: Información sobre pendientes
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline,
+                              color: Colors.green, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'El estado pendiente se maneja automáticamente:\n'
+                              '• Borrador: No pendiente\n'
+                              '• Enviada: Pendiente de aprobación',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1036,6 +1063,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     return '${(bytes / (1 << (i * 10))).toStringAsFixed(1)} ${suffixes[i]}';
   }
 
+  /// 🔥 MEJORADO: Guardar sanción con manejo correcto del campo 'pendiente'
   Future<void> _guardarSancion(String status) async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -1049,6 +1077,9 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
+
+      // 🔥 IMPORTANTE: Establecer 'pendiente' según el status inicial
+      final bool isPendiente = status == 'enviado'; // Solo es pendiente si se envía
 
       final sancion = SancionModel(
         supervisorId: authProvider.currentUser!.id,
@@ -1067,10 +1098,14 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
             _observacionesAdicionalesController.text.trim().isEmpty
                 ? null
                 : _observacionesAdicionalesController.text.trim(),
-        pendiente: _pendiente,
+        pendiente: isPendiente, // 🔥 ACTUALIZADO: true solo si se envía
         horasExtras: _horasExtras,
         status: status,
       );
+
+      print('📋 Creando sanción:');
+      print('   Status: $status');
+      print('   Pendiente: $isPendiente');
 
       // 🔥 CAMBIO: Usar el repository ACTUALIZADO con compresión automática
       await sancionRepository.createSancion(
@@ -1086,32 +1121,26 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       if (mounted) {
         Navigator.pop(context, true); // Regresar con resultado exitoso
 
-        // 🔥 NUEVO: Mostrar si se guardó offline
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
                 Icon(
-                  false /* TODO: verificar offline */ ? Icons.wifi_off : Icons.check_circle,
+                  Icons.check_circle,
                   color: Colors.white,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     status == 'borrador'
-                        ? false /* TODO: verificar offline */
-                            ? '✅ Borrador guardado offline (se sincronizará cuando haya conexión)'
-                            : '✅ Borrador guardado correctamente'
-                        : false /* TODO: verificar offline */
-                            ? '📤 Sanción guardada offline (se enviará cuando haya conexión)'
-                            : '📤 Sanción enviada correctamente',
+                        ? '✅ Borrador guardado correctamente'
+                        : '📤 Sanción enviada correctamente',
                   ),
                 ),
               ],
             ),
-            backgroundColor: false /* TODO: verificar offline */ ? Colors.orange : Colors.green,
-            duration: Duration(seconds: false /* TODO: verificar offline */ ? 5 : 3),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -1153,5 +1182,3 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     }
   }
 }
-
-
