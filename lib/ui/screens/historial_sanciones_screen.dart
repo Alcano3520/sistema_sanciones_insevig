@@ -95,19 +95,20 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       _tabController?.addListener(() {
         final newIndex = _tabController!.index;
         final wasApprovalMode = _modoAprobacion;
-        
+
         setState(() {
           _modoAprobacion = newIndex > 0;
         });
-        
-        print('📑 Tab cambiado a: $newIndex, Modo aprobación: $_modoAprobacion');
-        
+
+        print(
+            '📑 Tab cambiado a: $newIndex, Modo aprobación: $_modoAprobacion');
+
         // Solo recargar si cambió de tab o entró/salió del modo aprobación
         if (wasApprovalMode != _modoAprobacion || _modoAprobacion) {
           _loadSancionesByTab();
         }
       });
-      
+
       // Cargar contadores iniciales
       _updateContadores();
     }
@@ -167,11 +168,12 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           _sanciones = sanciones;
           _isLoading = false;
         });
-        
+
         // ✅ IMPORTANTE: NO aplicar filtros adicionales en modo aprobación
         if (_modoAprobacion) {
           setState(() {
-            _sancionesFiltradas = sanciones; // Usar directamente las sanciones cargadas
+            _sancionesFiltradas =
+                sanciones; // Usar directamente las sanciones cargadas
           });
         } else {
           _aplicarFiltros(); // Solo aplicar filtros en modo "Todas"
@@ -194,7 +196,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   /// ✅ NUEVO: Actualizar contadores
   Future<void> _updateContadores() async {
     try {
-      final contadores = await _sancionRepository.getContadoresPorRol(_currentUserRole);
+      final contadores =
+          await _sancionRepository.getContadoresPorRol(_currentUserRole);
       if (mounted) {
         setState(() {
           _pendientesGerencia = contadores['pendientes_gerencia'] ?? 0;
@@ -373,7 +376,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
               SizedBox(height: 12),
               _CodigoDescuentoItem('D00%', 'Sin descuento (sanción normal)'),
               _CodigoDescuentoItem('D05%', 'Descuento 5% (falta menor)'),
-              _CodigoDescuentoItem('D10%', 'Descuento 10% (circunstancias atenuantes)'),
+              _CodigoDescuentoItem(
+                  'D10%', 'Descuento 10% (circunstancias atenuantes)'),
               _CodigoDescuentoItem('D15%', 'Descuento 15% (caso especial)'),
               _CodigoDescuentoItem('D20%', 'Descuento 20% (sancion grave)'),
               _CodigoDescuentoItem('LIBRE', 'Comentario libre sin código'),
@@ -538,14 +542,14 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   Widget _buildModoAprobacionHeader() {
     final total = _sancionesFiltradas.length;
     final roleText = _currentUserRole == 'gerencia' ? 'GERENCIA' : 'RRHH';
-    
+
     // ✅ DEBUG: Log del estado actual
     print('🎯 Header modo aprobación:');
     print('   - Role: $_currentUserRole');
     print('   - Total filtradas: $total');
     print('   - Pendientes gerencia: $_pendientesGerencia');
     print('   - Modo aprobación: $_modoAprobacion');
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -576,7 +580,9 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              _currentUserRole == 'gerencia' ? Icons.business : Icons.admin_panel_settings,
+              _currentUserRole == 'gerencia'
+                  ? Icons.business
+                  : Icons.admin_panel_settings,
               color: Colors.white,
               size: 32,
             ),
@@ -597,7 +603,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  total > 0 
+                  total > 0
                       ? '$total sanciones pendientes de revisión'
                       : '¡Excelente! No hay sanciones pendientes',
                   style: TextStyle(
@@ -692,8 +698,10 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       context: context,
       builder: (context) => AprobacionGerenciaDialog(
         sancion: sancion,
-        onApprove: (codigo, comentario) => _aprobarConCodigoGerencia(sancion, codigo, comentario),
-        onReject: (comentario) => _rechazarConComentarioGerencia(sancion, comentario),
+        onApprove: (codigo, comentario) =>
+            _aprobarConCodigoGerencia(sancion, codigo, comentario),
+        onReject: (comentario) =>
+            _rechazarConComentarioGerencia(sancion, comentario),
       ),
     );
   }
@@ -706,7 +714,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   ) async {
     try {
       print('👔 Iniciando aprobación: ${sancion.id} con código $codigo');
-      
+
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.currentUser!.id;
 
@@ -719,7 +727,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
 
       if (success && mounted) {
         print('✅ Aprobación exitosa, iniciando recarga...');
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -735,10 +743,10 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             duration: const Duration(seconds: 1), // ✅ Más rápido
           ),
         );
-        
+
         // ✅ RECARGA INMEDIATA Y ESPECÍFICA
         await _recargarModoAprobacion();
-        
+
         print('🎉 Proceso de aprobación completado');
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -791,7 +799,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             duration: Duration(seconds: 2), // ✅ Reducido para fluidez
           ),
         );
-        
+
         // ✅ AUTO-ACTUALIZACIÓN INTELIGENTE
         await _recargarModoAprobacion();
       }
@@ -827,7 +835,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       builder: (context) => RevisionRrhhDialog(
         sancion: sancion,
         onRevision: (accion, comentariosRrhh, nuevosComentariosGerencia) =>
-            _procesarRevisionRrhh(sancion, accion, comentariosRrhh ?? '', nuevosComentariosGerencia),
+            _procesarRevisionRrhh(sancion, accion, comentariosRrhh ?? '',
+                nuevosComentariosGerencia),
       ),
     );
   }
@@ -877,7 +886,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             duration: const Duration(seconds: 2), // ✅ Reducido para fluidez
           ),
         );
-        
+
         // ✅ AUTO-ACTUALIZACIÓN INTELIGENTE
         await _recargarModoAprobacion();
       }
@@ -900,7 +909,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     String hint,
   ) async {
     final controller = TextEditingController();
-    
+
     return await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -936,11 +945,11 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         _isLoading = true;
       });
     }
-    
+
     try {
       // Actualizar contadores primero
       await _updateContadores();
-      
+
       // Si está en modo aprobación, recargar por tab específico
       if (_modoAprobacion && _tabController != null) {
         print('🔄 Recargando modo aprobación - Tab: ${_tabController!.index}');
@@ -1023,7 +1032,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
-        
+
         // ✅ MEJORADO: Gerencia también puede crear sanciones
         if (user == null || !user.canCreateSanciones) {
           return const SizedBox.shrink();
@@ -1110,9 +1119,11 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
                     ),
                   ),
                   if (_filtroStatus != 'todos')
-                    Text('Filtro estado: $_filtroStatus', style: const TextStyle(fontSize: 12)),
+                    Text('Filtro estado: $_filtroStatus',
+                        style: const TextStyle(fontSize: 12)),
                   if (_soloPendientes)
-                    const Text('Solo pendientes: Sí', style: TextStyle(fontSize: 12)),
+                    const Text('Solo pendientes: Sí',
+                        style: TextStyle(fontSize: 12)),
                   if (_rangoFechas != null)
                     Text(
                       'Rango: ${_rangoFechas!.start.day}/${_rangoFechas!.start.month} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}',
@@ -1128,7 +1139,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             ListTile(
               leading: const Icon(Icons.list_alt, color: Color(0xFF1E3A8A)),
               title: const Text('Reporte Completo'),
-              subtitle: Text('${_sancionesFiltradas.length} sanciones con filtros actuales'),
+              subtitle: Text(
+                  '${_sancionesFiltradas.length} sanciones con filtros actuales'),
               onTap: () {
                 Navigator.pop(context);
                 _generarReporteCompleto();
@@ -1184,7 +1196,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   /// **Generar reporte del día actual**
   Future<void> _generarReporteDelDia() async {
     final sancionesHoy = _getSancionesHoy();
-    
+
     if (sancionesHoy.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1198,7 +1210,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     await _generarReportePDF(
       sanciones: sancionesHoy,
       titulo: 'REPORTE DIARIO DE SANCIONES',
-      descripcion: 'Sanciones del ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+      descripcion:
+          'Sanciones del ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
     );
   }
 
@@ -1222,8 +1235,9 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
 
     if (dateRange != null) {
       final sancionesEnRango = _sanciones.where((sancion) {
-        return sancion.fecha.isAfter(dateRange.start.subtract(const Duration(days: 1))) &&
-               sancion.fecha.isBefore(dateRange.end.add(const Duration(days: 1)));
+        return sancion.fecha
+                .isAfter(dateRange.start.subtract(const Duration(days: 1))) &&
+            sancion.fecha.isBefore(dateRange.end.add(const Duration(days: 1)));
       }).toList();
 
       if (sancionesEnRango.isEmpty) {
@@ -1239,7 +1253,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
       await _generarReportePDF(
         sanciones: sancionesEnRango,
         titulo: 'REPORTE PERSONALIZADO DE SANCIONES',
-        descripcion: 'Del ${dateRange.start.day}/${dateRange.start.month}/${dateRange.start.year} al ${dateRange.end.day}/${dateRange.end.month}/${dateRange.end.year}',
+        descripcion:
+            'Del ${dateRange.start.day}/${dateRange.start.month}/${dateRange.start.year} al ${dateRange.end.day}/${dateRange.end.month}/${dateRange.end.year}',
       );
     }
   }
@@ -1289,11 +1304,10 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
 
       // Mostrar opciones del PDF generado
       _showReportePDFDialog(pdfBytes, filename, sanciones.length);
-
     } catch (e) {
       // Cerrar indicador si está abierto
       if (mounted) Navigator.pop(context);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ Error generando reporte PDF: $e'),
@@ -1304,7 +1318,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   }
 
   /// **Mostrar opciones del reporte PDF generado**
-  void _showReportePDFDialog(Uint8List pdfBytes, String filename, int totalSanciones) {
+  void _showReportePDFDialog(
+      Uint8List pdfBytes, String filename, int totalSanciones) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -1329,7 +1344,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 20),
 
             // Información del reporte
@@ -1385,8 +1400,8 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
             ListTile(
               leading: const Icon(Icons.download, color: Colors.green),
               title: Text(kIsWeb ? 'Descargar' : 'Guardar'),
-              subtitle: Text(kIsWeb 
-                  ? 'Descargar a tu computadora' 
+              subtitle: Text(kIsWeb
+                  ? 'Descargar a tu computadora'
                   : 'Guardar en dispositivo'),
               onTap: () async {
                 Navigator.pop(context);
@@ -1423,7 +1438,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   Future<void> _guardarReportePDF(Uint8List pdfBytes, String filename) async {
     try {
       final savedPath = await PDFService.instance.savePDF(pdfBytes, filename);
-      
+
       if (savedPath != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1432,7 +1447,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
                 const Icon(Icons.download_done, color: Colors.white),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(kIsWeb 
+                  child: Text(kIsWeb
                       ? '🔥 Reporte descargado: $filename'
                       : '🔥 Reporte guardado en Documentos'),
                 ),
@@ -1457,7 +1472,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   Future<void> _compartirReportePDF(Uint8List pdfBytes, String filename) async {
     try {
       await PDFService.instance.sharePDF(pdfBytes, filename);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1492,31 +1507,32 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
     final hoy = DateTime.now();
     return _sanciones.where((sancion) {
       return sancion.fecha.year == hoy.year &&
-             sancion.fecha.month == hoy.month &&
-             sancion.fecha.day == hoy.day;
+          sancion.fecha.month == hoy.month &&
+          sancion.fecha.day == hoy.day;
     }).toList();
   }
 
   /// **Obtener descripción de los filtros actuales**
   String _getDescripcionFiltros() {
     final filtros = <String>[];
-    
+
     if (_filtroStatus != 'todos') {
       filtros.add('Estado: $_filtroStatus');
     }
-    
+
     if (_soloPendientes) {
       filtros.add('Solo pendientes');
     }
-    
+
     if (_rangoFechas != null) {
-      filtros.add('Rango: ${_rangoFechas!.start.day}/${_rangoFechas!.start.month} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}');
+      filtros.add(
+          'Rango: ${_rangoFechas!.start.day}/${_rangoFechas!.start.month} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}');
     }
-    
+
     if (filtros.isEmpty) {
       return 'Todas las sanciones';
     }
-    
+
     return filtros.join(' • ');
   }
 
@@ -1553,7 +1569,7 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
         });
         _aplicarFiltros();
         await _updateContadores();
-        
+
         print('✅ Carga de sanciones completada');
       }
     } catch (e) {
@@ -1759,7 +1775,8 @@ class _CodigoDescuentoItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFF1E3A8A).withOpacity(0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.3)),
+              border:
+                  Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.3)),
             ),
             child: Text(
               codigo,
