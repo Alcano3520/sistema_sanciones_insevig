@@ -187,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           // Banner de debug - SOLO EN MODO DESARROLLO
-          if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
+          //if (!kIsWeb && kDebugMode) _buildOfflineDebugBanner(),
 
           // Contenido principal
           Expanded(
