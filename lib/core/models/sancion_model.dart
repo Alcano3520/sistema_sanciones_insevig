@@ -3,9 +3,11 @@ import 'package:uuid/uuid.dart';
 /// Modelo principal de sanción - idéntico a tu aplicación Kivy
 /// Con los nuevos campos: pendiente y observaciones_adicionales
 /// ✅ CORREGIDO: Constructor con ID opcional (requerido por el sistema)
+/// 🔧 ACTUALIZADO: Agregado campo supervisorName para mostrar nombre del supervisor
 class SancionModel {
   final String id;
   final String supervisorId;
+  final String? supervisorName; // 🔧 NUEVO CAMPO: Nombre del supervisor
   final int empleadoCod;
   final String empleadoNombre;
   final String puesto;
@@ -31,6 +33,7 @@ class SancionModel {
   SancionModel({
     String? id, // ← Hacer opcional para evitar errores
     required this.supervisorId,
+    this.supervisorName, // 🔧 Nuevo parámetro opcional
     required this.empleadoCod,
     required this.empleadoNombre,
     required this.puesto,
@@ -55,11 +58,28 @@ class SancionModel {
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
-  /// Crear desde Map (desde Supabase)
+  /// 🔧 ACTUALIZADO: Crear desde Map (desde Supabase) con soporte para supervisorName
   factory SancionModel.fromMap(Map<String, dynamic> map) {
+    // 🔧 Extraer el nombre del supervisor del JOIN con profiles
+    String? supervisorName;
+    
+    // Intentar extraer desde el JOIN con profiles
+    if (map['profiles'] != null && map['profiles']['full_name'] != null) {
+      supervisorName = map['profiles']['full_name'];
+    }
+    // Fallback: buscar en supervisor_name directo (por compatibilidad)
+    else if (map['supervisor_name'] != null) {
+      supervisorName = map['supervisor_name'];
+    }
+    // Último fallback: nombre genérico
+    else {
+      supervisorName = 'Usuario desconocido';
+    }
+
     return SancionModel(
       id: map['id'] ?? const Uuid().v4(),
       supervisorId: map['supervisor_id'] ?? '',
+      supervisorName: supervisorName, // 🔧 Asignar nombre del supervisor
       empleadoCod: map['empleado_cod'] ?? 0,
       empleadoNombre: map['empleado_nombre'] ?? '',
       puesto: map['puesto'] ?? '',
@@ -86,10 +106,12 @@ class SancionModel {
   }
 
   /// Convertir a Map (para enviar a Supabase)
+  /// 🔧 NOTA: supervisorName no se envía a la BD, solo se usa para mostrar
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'supervisor_id': supervisorId,
+      // 🔧 supervisorName NO se incluye aquí porque es un campo calculado del JOIN
       'empleado_cod': empleadoCod,
       'empleado_nombre': empleadoNombre,
       'puesto': puesto,
@@ -201,6 +223,11 @@ class SancionModel {
     return '${fecha.day}/${fecha.month}/${fecha.year}';
   }
 
+  /// 🔧 NUEVO: Nombre del supervisor para mostrar (con fallback)
+  String get supervisorDisplayName {
+    return supervisorName ?? 'Usuario desconocido';
+  }
+
   /// Descripción completa para mostrar
   String get descripcionCompleta {
     final buffer = StringBuffer();
@@ -265,10 +292,11 @@ class SancionModel {
     return comentario; // Si no tiene formato de código, devolver completo
   }
 
-  /// Crear copia con modificaciones
+  /// 🔧 ACTUALIZADO: Crear copia con modificaciones (incluye supervisorName)
   SancionModel copyWith({
     String? id,
     String? supervisorId,
+    String? supervisorName, // 🔧 Nuevo parámetro
     int? empleadoCod,
     String? empleadoNombre,
     String? puesto,
@@ -293,6 +321,7 @@ class SancionModel {
     return SancionModel(
       id: id ?? this.id,
       supervisorId: supervisorId ?? this.supervisorId,
+      supervisorName: supervisorName ?? this.supervisorName, // 🔧 Incluir en copia
       empleadoCod: empleadoCod ?? this.empleadoCod,
       empleadoNombre: empleadoNombre ?? this.empleadoNombre,
       puesto: puesto ?? this.puesto,
@@ -319,7 +348,7 @@ class SancionModel {
 
   @override
   String toString() {
-    return 'SancionModel(id: $id, empleado: $empleadoNombre, tipo: $tipoSancion, status: $status)';
+    return 'SancionModel(id: $id, empleado: $empleadoNombre, tipo: $tipoSancion, status: $status, supervisor: $supervisorDisplayName)';
   }
 
   @override

@@ -13,12 +13,16 @@ import '../services/image_compression_service.dart'; // 🆕 NUEVO IMPORT
 /// 🆕 COMPATIBLE WEB + ANDROID
 /// ✅ CORREGIDO: Getter público para Supabase + métodos jerárquicos
 /// 🔥 MEJORADO: Estadísticas por rol y manejo de pendientes
+/// 🔧 ACTUALIZADO: Consultas con JOIN para mostrar nombres de supervisores
 class SancionService {
   /// ✅ CORREGIDO: Getter público para que sea accesible desde otros servicios
   SupabaseClient get supabase => SupabaseConfig.sancionesClient;
 
   // Mantenemos el getter privado para compatibilidad interna
   SupabaseClient get _supabase => SupabaseConfig.sancionesClient;
+
+  /// 🔧 NUEVA CONSTANTE: Query base con JOIN para nombres de supervisores
+  static const String _selectWithSupervisor = '*, profiles!sanciones_supervisor_id_fkey(full_name)';
 
   /// Crear nueva sanción (función principal como en Kivy)
   Future<String> createSancion({
@@ -55,7 +59,7 @@ class SancionService {
       final response = await _supabase
           .from('sanciones')
           .insert(sancionConArchivos.toMap())
-          .select()
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
           .single();
 
       print('✅ Sanción creada exitosamente: ${response['id']}');
@@ -70,7 +74,7 @@ class SancionService {
   Future<String?> _uploadFotoCompressed(File fotoFile, String sancionId) async {
     try {
       print(
-          '📄 [${kIsWeb ? 'WEB' : 'MOBILE'}] Procesando foto para sanción $sancionId...');
+          '🔄 [${kIsWeb ? 'WEB' : 'MOBILE'}] Procesando foto para sanción $sancionId...');
 
       // 1. Comprimir imagen usando el servicio universal
       final compressedFile =
@@ -150,7 +154,7 @@ class SancionService {
   Future<String?> _uploadFotoOriginalFallback(
       File fotoFile, String sancionId) async {
     try {
-      print('📄 Intentando subida sin compresión como fallback...');
+      print('🔄 Intentando subida sin compresión como fallback...');
 
       final fileName =
           '${sancionId}_${DateTime.now().millisecondsSinceEpoch}_original.jpg';
@@ -204,7 +208,7 @@ class SancionService {
     SignatureController? nuevaFirma,
   }) async {
     try {
-      print('📄 Actualizando sanción ${sancion.id}...');
+      print('🔄 Actualizando sanción ${sancion.id}...');
 
       String? fotoUrl = sancion.fotoUrl;
       String? firmaPath = sancion.firmaPath;
@@ -247,7 +251,7 @@ class SancionService {
           .from('sanciones')
           .update(updateData)
           .eq('id', sancion.id)
-          .select();
+          .select(_selectWithSupervisor);  // 🔧 ACTUALIZADO: Incluir JOIN
 
       if (response.isNotEmpty) {
         print('✅ Sanción actualizada exitosamente: ${sancion.id}');
@@ -270,7 +274,7 @@ class SancionService {
     SignatureController? nuevaFirma,
   }) async {
     try {
-      print('📄 Actualizando sanción con archivos ${sancion.id}...');
+      print('🔄 Actualizando sanción con archivos ${sancion.id}...');
 
       String? fotoUrl = sancion.fotoUrl;
       String? firmaPath = sancion.firmaPath;
@@ -305,8 +309,8 @@ class SancionService {
   /// 🔥 MÉTODO SIMPLIFICADO PARA DEBUG
   Future<bool> updateSancionSimple(SancionModel sancion) async {
     try {
-      print('📄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
-      print('📄 [DEBUG] Datos a actualizar:');
+      print('🔄 [DEBUG] Actualizando sanción simple ${sancion.id}...');
+      print('🔄 [DEBUG] Datos a actualizar:');
       print('   - Empleado: ${sancion.empleadoNombre}');
       print('   - Puesto: ${sancion.puesto}');
       print('   - Agente: ${sancion.agente}');
@@ -333,7 +337,7 @@ class SancionService {
         updateData['horas_extras'] = sancion.horasExtras;
       }
 
-      print('📄 [DEBUG] Datos preparados para Supabase:');
+      print('🔄 [DEBUG] Datos preparados para Supabase:');
       updateData.forEach((key, value) {
         print('   $key: $value');
       });
@@ -342,7 +346,7 @@ class SancionService {
           .from('sanciones')
           .update(updateData)
           .eq('id', sancion.id)
-          .select();
+          .select(_selectWithSupervisor);  // 🔧 ACTUALIZADO: Incluir JOIN
 
       if (response.isNotEmpty) {
         print('✅ [DEBUG] Sanción actualizada exitosamente');
@@ -370,7 +374,7 @@ class SancionService {
     String reviewedBy,
   ) async {
     try {
-      print('👔 Aprobando sanción $sancionId con código $codigo...');
+      print('🎯 Aprobando sanción $sancionId con código $codigo...');
       
       final comentarioFinal = codigo == 'LIBRE' 
         ? comentarios
@@ -453,7 +457,7 @@ class SancionService {
         case 'gerencia':
           // Solo sanciones enviadas esperando gerencia
           final sanciones = await _getSancionesByStatus('enviado');
-          print('👔 Sanciones para gerencia (enviadas): ${sanciones.length}');
+          print('🎯 Sanciones para gerencia (enviadas): ${sanciones.length}');
           return sanciones;
         case 'rrhh':
           // Sanciones aprobadas por gerencia esperando RRHH
@@ -475,7 +479,7 @@ class SancionService {
   Future<List<SancionModel>> _getSancionesByStatus(String status) async {
     final response = await _supabase
         .from('sanciones')
-        .select('*')
+        .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
         .eq('status', status)
         .order('created_at', ascending: true);
         
@@ -487,7 +491,7 @@ class SancionService {
     // ✅ CORREGIDO: Query simplificada para evitar errores de sintaxis
     final response = await _supabase
         .from('sanciones')
-        .select('*')
+        .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
         .eq('status', 'aprobado')
         .order('created_at', ascending: true);
     
@@ -558,12 +562,12 @@ class SancionService {
     await ImageCompressionService.cleanupTempFiles();
   }
 
-  /// Obtener sanciones del supervisor actual
+  /// 🔧 ACTUALIZADO: Obtener sanciones del supervisor actual
   Future<List<SancionModel>> getMySanciones(String supervisorId) async {
     try {
       final response = await _supabase
           .from('sanciones')
-          .select('*')
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
           .eq('supervisor_id', supervisorId)
           .order('created_at', ascending: false);
 
@@ -576,12 +580,12 @@ class SancionService {
     }
   }
 
-  /// Obtener todas las sanciones (para gerencia/RRHH)
+  /// 🔧 ACTUALIZADO: Obtener todas las sanciones (para gerencia/RRHH)
   Future<List<SancionModel>> getAllSanciones() async {
     try {
       final response = await _supabase
           .from('sanciones')
-          .select('*')
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
           .order('created_at', ascending: false);
 
       return response
@@ -593,12 +597,12 @@ class SancionService {
     }
   }
 
-  /// Obtener sanciones por empleado
+  /// 🔧 ACTUALIZADO: Obtener sanciones por empleado
   Future<List<SancionModel>> getSancionesByEmpleado(int empleadoCod) async {
     try {
       final response = await _supabase
           .from('sanciones')
-          .select('*')
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
           .eq('empleado_cod', empleadoCod)
           .order('created_at', ascending: false);
 
@@ -611,7 +615,7 @@ class SancionService {
     }
   }
 
-  /// Obtener sanciones por fechas
+  /// 🔧 ACTUALIZADO: Obtener sanciones por fechas
   Future<List<SancionModel>> getSancionesByDateRange(
     DateTime fechaInicio,
     DateTime fechaFin,
@@ -619,7 +623,7 @@ class SancionService {
     try {
       final response = await _supabase
           .from('sanciones')
-          .select('*')
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
           .gte('fecha', fechaInicio.toIso8601String().split('T')[0])
           .lte('fecha', fechaFin.toIso8601String().split('T')[0])
           .order('created_at', ascending: false);
@@ -633,12 +637,12 @@ class SancionService {
     }
   }
 
-  /// Obtener sanciones pendientes
+  /// 🔧 ACTUALIZADO: Obtener sanciones pendientes
   Future<List<SancionModel>> getSancionesPendientes() async {
     try {
       final response = await _supabase
           .from('sanciones')
-          .select('*')
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
           .eq('pendiente', true)
           .order('created_at', ascending: false);
 
@@ -771,7 +775,7 @@ class SancionService {
   /// 🔥 MEJORADO: Obtener estadísticas de sanciones mejoradas por rol
   Future<Map<String, dynamic>> getEstadisticas({String? supervisorId, String? userRole}) async {
     try {
-      var query = _supabase.from('sanciones').select('*');
+      var query = _supabase.from('sanciones').select(_selectWithSupervisor);  // 🔧 ACTUALIZADO: Incluir JOIN
 
       if (supervisorId != null && userRole == 'supervisor') {
         // Para supervisores: solo sus sanciones
@@ -917,11 +921,14 @@ class SancionService {
     return pendientes;
   }
 
-  /// Obtener sanción por ID
+  /// 🔧 ACTUALIZADO: Obtener sanción por ID
   Future<SancionModel?> getSancionById(String id) async {
     try {
-      final response =
-          await _supabase.from('sanciones').select('*').eq('id', id).single();
+      final response = await _supabase
+          .from('sanciones')
+          .select(_selectWithSupervisor)  // 🔧 ACTUALIZADO: Incluir JOIN
+          .eq('id', id)
+          .single();
 
       return SancionModel.fromMap(response);
     } catch (e) {
