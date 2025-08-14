@@ -36,7 +36,7 @@ class PDFService {
   pw.MemoryImage? _cachedLogo;
 
   // ==========================================
-  // 🖼️ GESTIÓN DEL LOGO - CORREGIDA
+  // 🖼️ GESTIÓN DEL LOGO - ORIGINAL RESTAURADO
   // ==========================================
 
   /// **🔥 MÉTODO 1: Cargar logo desde Assets (RECOMENDADO)**
@@ -50,7 +50,7 @@ class PDFService {
   ///        - assets/images/
   Future<pw.MemoryImage?> _loadLogoFromAssets() async {
     try {
-      final logoBytes = await rootBundle.load('assets/images/logo_insevig.png');
+      final logoBytes = await rootBundle.load('assets/icon.png');
       return pw.MemoryImage(logoBytes.buffer.asUint8List());
     } catch (e) {
       print('⚠️ Logo no encontrado en assets: $e');
@@ -58,7 +58,7 @@ class PDFService {
     }
   }
 
-  /// **🔥 MÉTODO 2: Cargar logo desde URL (RESPALDO)**
+  /// **🔥 MÉTODO 2: Cargar logo desde URL (RESPALDO) - ORIGINAL**
   Future<pw.MemoryImage?> _loadLogoFromUrl() async {
     try {
       print('🔥 Descargando logo desde URL...');
@@ -85,7 +85,7 @@ class PDFService {
     }
   }
 
-  /// **🔥 MÉTODO 3: Obtener logo (con cache)**
+  /// **🔥 MÉTODO 3: Obtener logo (con cache) - ORIGINAL**
   Future<pw.MemoryImage?> _getLogo() async {
     // Usar cache si está disponible
     if (_cachedLogo != null) {
@@ -101,7 +101,7 @@ class PDFService {
     return _cachedLogo;
   }
 
-  /// **🔥 MÉTODO 4: Logo de respaldo (texto)**
+  /// **🔥 MÉTODO 4: Logo de respaldo (texto) - ORIGINAL**
   pw.Widget _buildFallbackLogo() {
     return pw.Container(
       width: 80,
@@ -276,12 +276,12 @@ class PDFService {
               ),
               pw.SizedBox(height: 1),
               pw.Text(
-                'Pedro Moncayo N° 1005 y Vélez - Guayaquil',
+                'Pedro Moncayo N° 1005 y Velez - Guayaquil',
                 style:
                     const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
               ),
               pw.Text(
-                'Tel: 042326220 – 042510041',
+                'Tel: 042326220 - 042510041',
                 style:
                     const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
               ),
@@ -334,7 +334,7 @@ class PDFService {
                 ),
                 pw.SizedBox(height: 8),
                 pw.Text(
-                  'Pedro Moncayo N° 1005 y Vélez (esquina)\nEdificio Centenario 4to piso Of. N° 17\nGuayaquil - Ecuador',
+                  'Pedro Moncayo N° 1005 y Velez (esquina)\nEdificio Centenario 4to piso Of. N° 17\nGuayaquil - Ecuador',
                   style:
                       const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
                 ),
@@ -596,7 +596,7 @@ class PDFService {
   }
 
   // ==========================================
-  // 🔥 OBSERVACIONES EXTENSAS - SOLUCIÓN 1 COMPLETA
+  // 🔥 OBSERVACIONES EXTENSAS - SOLUCIÓN CORREGIDA
   // ==========================================
 
   /// **📝 Observaciones distribuidas en 3 líneas - CORREGIDO**
