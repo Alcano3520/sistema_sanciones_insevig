@@ -8,6 +8,8 @@ import '../../core/offline/sancion_repository.dart';
 import '../../core/offline/empleado_repository.dart';
 import '../../core/offline/connectivity_service.dart';
 import '../../core/offline/offline_manager.dart';
+import '../../core/models/empleado_model.dart'; // 🔥 Agregar import de EmpleadoModel
+import '../widgets/empleado_search_field.dart'; // 🔥 Agregar import del widget de búsqueda
 import 'create_sancion_screen.dart';
 import 'historial_sanciones_screen.dart';
 
@@ -890,12 +892,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // 🔥 ACTUALIZADO: Método _searchEmployees() con diálogo de búsqueda
   void _searchEmployees() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🚧 Búsqueda de empleados - Próximamente'),
-        backgroundColor: Colors.orange,
-      ),
+    showDialog(
+      context: context,
+      builder: (context) => const _EmployeeSearchDialog(),
     );
   }
 
@@ -1071,7 +1072,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final offline = OfflineManager.instance;
 
     print('\n📊 VERIFICACIÓN DETALLADA DEL CACHE:');
-    print('════════════════════════════════════════');
+    print('═══════════════════════════════════════');
 
     // Total en cache
     final todosEmpleados = offline.database.getEmpleados();
@@ -1111,7 +1112,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('   $key: $value');
     });
 
-    print('════════════════════════════════════════\n');
+    print('═══════════════════════════════════════\n');
 
     // Mostrar snackbar con resumen
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1128,6 +1129,314 @@ class _HomeScreenState extends State<HomeScreen> {
           textColor: Colors.white,
           onPressed: () {},
         ),
+      ),
+    );
+  }
+}
+
+// 🔥 NUEVO: Widget de diálogo de búsqueda de empleados
+/// Diálogo de búsqueda de empleados
+class _EmployeeSearchDialog extends StatefulWidget {
+  const _EmployeeSearchDialog();
+
+  @override
+  State<_EmployeeSearchDialog> createState() => _EmployeeSearchDialogState();
+}
+
+class _EmployeeSearchDialogState extends State<_EmployeeSearchDialog> {
+  EmpleadoModel? _empleadoSeleccionado;
+  
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        constraints: const BoxConstraints(
+          maxWidth: 500,
+          maxHeight: 600,
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(
+              children: [
+                const Icon(
+                  Icons.person_search,
+                  color: Color(0xFF1E3A8A),
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Buscar Empleado',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            
+            const Divider(),
+            const SizedBox(height: 16),
+            
+            // Campo de búsqueda
+            EmpleadoSearchField(
+              onEmpleadoSelected: (empleado) {
+                setState(() {
+                  _empleadoSeleccionado = empleado;
+                });
+              },
+            ),
+            
+            const SizedBox(height: 20),
+            
+            // Mostrar empleado seleccionado
+            if (_empleadoSeleccionado != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.blue.withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: const Color(0xFF1E3A8A),
+                          child: Text(
+                            _empleadoSeleccionado!.displayName[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _empleadoSeleccionado!.displayName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                'Código: ${_empleadoSeleccionado!.cod}',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    
+                    // Detalles del empleado
+                    _buildDetailRow(
+                      Icons.badge, 
+                      'Cédula', 
+                      _empleadoSeleccionado!.cedula ?? 'No registrada'
+                    ),
+                    _buildDetailRow(
+                      Icons.work, 
+                      'Cargo', 
+                      _empleadoSeleccionado!.nomcargo ?? 'No especificado'
+                    ),
+                    _buildDetailRow(
+                      Icons.business, 
+                      'Departamento', 
+                      _empleadoSeleccionado!.nomdep ?? 'No especificado'
+                    ),
+                    _buildDetailRow(
+                      Icons.location_on, 
+                      'Sección', 
+                      _empleadoSeleccionado!.seccion ?? 'No especificada'
+                    ),
+                    _buildDetailRow(
+                      Icons.phone, 
+                      'Teléfono', 
+                      _empleadoSeleccionado!.telefono ?? 'No registrado'
+                    ),
+                    _buildDetailRow(
+                      Icons.check_circle, 
+                      'Estado', 
+                      _empleadoSeleccionado!.estadoDisplay,
+                      color: _empleadoSeleccionado!.estadoColor,
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Botones de acción
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => HistorialSancionesScreen(
+                                    empleadoCod: _empleadoSeleccionado!.cod,
+                                    empleadoNombre: _empleadoSeleccionado!.displayName,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.history),
+                            label: const Text('Ver Historial'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Consumer<AuthProvider>(
+                            builder: (context, authProvider, child) {
+                              if (!authProvider.currentUser!.canCreateSanciones) {
+                                return const SizedBox.shrink();
+                              }
+                              
+                              return ElevatedButton.icon(
+                                onPressed: _empleadoSeleccionado!.puedeSerSancionado
+                                    ? () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => CreateSancionScreen(
+                                              empleadoPreseleccionado: _empleadoSeleccionado,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.add),
+                                label: const Text('Nueva Sanción'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1E3A8A),
+                                  foregroundColor: Colors.white,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    if (!_empleadoSeleccionado!.puedeSerSancionado) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning, color: Colors.red, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _empleadoSeleccionado!.razonNoSancionable ?? 
+                                'Este empleado no puede ser sancionado',
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            
+            // Mensaje cuando no hay empleado seleccionado
+            if (_empleadoSeleccionado == null) ...[
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.search,
+                        size: 64,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Busca un empleado por nombre,\napellido, cédula o código',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildDetailRow(IconData icon, String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                color: color ?? Colors.black87,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

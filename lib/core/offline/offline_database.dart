@@ -174,7 +174,7 @@ class OfflineDatabase {
     }
   }
 
-  /// Buscar empleados por query
+  /// Buscar empleados por query con orden por relevancia
   List<EmpleadoModel> searchEmpleados(String query) {
     if (kIsWeb || !_isInitialized) return [];
 
@@ -182,35 +182,102 @@ class OfflineDatabase {
       final empleados = getEmpleados();
 
       if (query.trim().isEmpty) {
-        return empleados.take(20).toList(); // Mostrar algunos si no hay query
+        return empleados.take(20).toList();
       }
 
       final queryLower = query.toLowerCase().trim();
 
-      // 🔥 Búsqueda más flexible
-      return empleados
-          .where((empleado) {
-            // Buscar en múltiples campos
-            final searchableText = [
-              empleado.nombresCompletos,
-              empleado.nombres,
-              empleado.apellidos,
-              empleado.cedula,
-              empleado.nomcargo,
-              empleado.nomdep,
-              empleado.cod.toString(),
-            ].where((field) => field != null).join(' ').toLowerCase();
+      // 🔥 Filtrar empleados que coincidan
+      var empleadosFiltrados = empleados.where((empleado) {
+        final searchableText = [
+          empleado.nombresCompletos,
+          empleado.nombres,
+          empleado.apellidos,
+          empleado.cedula,
+          empleado.nomcargo,
+          empleado.nomdep,
+          empleado.cod.toString(),
+        ].where((field) => field != null).join(' ').toLowerCase();
 
-            // Buscar cada palabra del query
-            final queryWords = queryLower.split(' ');
-            return queryWords.every((word) => searchableText.contains(word));
-          })
-          .take(50)
-          .toList(); // Limitar resultados
+        // Buscar cada palabra del query
+        final queryWords = queryLower.split(' ');
+        return queryWords.every((word) => searchableText.contains(word));
+      }).toList();
+
+      // 🔥 NUEVO: Ordenar por relevancia
+      empleadosFiltrados = _ordenarPorRelevancia(empleadosFiltrados, queryLower);
+
+      return empleadosFiltrados.take(50).toList();
     } catch (e) {
       print('❌ Error buscando empleados en cache: $e');
       return [];
     }
+  }
+
+  /// 🔥 NUEVO: Ordenar empleados por relevancia (mismo algoritmo que online)
+  List<EmpleadoModel> _ordenarPorRelevancia(List<EmpleadoModel> empleados, String query) {
+    // Asignar puntuación a cada empleado
+    final empleadosConPuntuacion = empleados.map((empleado) {
+      int puntuacion = 0;
+      
+      final nombresCompletos = empleado.nombresCompletos?.toLowerCase() ?? '';
+      final nombres = empleado.nombres?.toLowerCase() ?? '';
+      final apellidos = empleado.apellidos?.toLowerCase() ?? '';
+      
+      // Coincidencia exacta al inicio del nombre completo (100 puntos)
+      if (nombresCompletos.startsWith(query)) {
+        puntuacion += 100;
+      }
+      
+      // Coincidencia exacta al inicio del apellido (90 puntos)
+      if (apellidos.startsWith(query)) {
+        puntuacion += 90;
+      }
+      
+      // Coincidencia exacta al inicio del nombre (80 puntos)
+      if (nombres.startsWith(query)) {
+        puntuacion += 80;
+      }
+      
+      // Query es palabra completa en el nombre (60 puntos)
+      final palabrasNombre = nombresCompletos.split(' ');
+      if (palabrasNombre.any((palabra) => palabra == query)) {
+        puntuacion += 60;
+      }
+      
+      // Coincidencia en apellido pero no al inicio (40 puntos)
+      if (!apellidos.startsWith(query) && apellidos.contains(query)) {
+        puntuacion += 40;
+      }
+      
+      // Coincidencia en nombre pero no al inicio (30 puntos)
+      if (!nombres.startsWith(query) && nombres.contains(query)) {
+        puntuacion += 30;
+      }
+      
+      // Coincidencia en otros campos (10 puntos)
+      final cedula = empleado.cedula?.toLowerCase() ?? '';
+      final cargo = empleado.nomcargo?.toLowerCase() ?? '';
+      final departamento = empleado.nomdep?.toLowerCase() ?? '';
+      
+      if (cedula.contains(query) || cargo.contains(query) || departamento.contains(query)) {
+        puntuacion += 10;
+      }
+      
+      return MapEntry(empleado, puntuacion);
+    }).toList();
+    
+    // Ordenar por puntuación (mayor a menor) y luego alfabéticamente
+    empleadosConPuntuacion.sort((a, b) {
+      final comparacionPuntuacion = b.value.compareTo(a.value);
+      if (comparacionPuntuacion != 0) {
+        return comparacionPuntuacion;
+      }
+      return a.key.displayName.compareTo(b.key.displayName);
+    });
+    
+    // Retornar solo los empleados (sin puntuación)
+    return empleadosConPuntuacion.map((e) => e.key).toList();
   }
 
   /// Obtener empleado por código

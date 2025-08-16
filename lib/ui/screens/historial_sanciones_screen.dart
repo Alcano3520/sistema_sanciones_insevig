@@ -11,7 +11,14 @@ import 'detalle_sancion_screen.dart'; // ← ESTA LÍNEA DEBE ESTAR
 /// Pantalla de historial de sanciones - Como tu PantallaHistorial de Kivy
 /// Incluye filtros, búsqueda y visualización completa de sanciones
 class HistorialSancionesScreen extends StatefulWidget {
-  const HistorialSancionesScreen({super.key});
+  final int? empleadoCod;        // 🔥 NUEVO
+  final String? empleadoNombre;  // 🔥 NUEVO
+  
+  const HistorialSancionesScreen({
+    super.key,
+    this.empleadoCod,      // 🔥 NUEVO
+    this.empleadoNombre,   // 🔥 NUEVO
+  });
 
   @override
   State<HistorialSancionesScreen> createState() =>
@@ -75,11 +82,45 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      title: const Text('Historial de Sanciones'),
+      // 🔥 NUEVO: Mostrar nombre del empleado si hay filtro
+      title: widget.empleadoNombre != null 
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Historial de Sanciones',
+                style: TextStyle(fontSize: 18),
+              ),
+              Text(
+                widget.empleadoNombre!,
+                style: const TextStyle(
+                  fontSize: 14, 
+                  fontWeight: FontWeight.normal,
+                  color: Colors.white70,
+                ),
+              ),
+            ],
+          )
+        : const Text('Historial de Sanciones'),
       backgroundColor: const Color(0xFF1E3A8A),
       foregroundColor: Colors.white,
       elevation: 0,
       actions: [
+        // 🔥 NUEVO: Si hay filtro, botón para quitarlo
+        if (widget.empleadoCod != null)
+          IconButton(
+            icon: const Icon(Icons.clear),
+            tooltip: 'Ver todas las sanciones',
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HistorialSancionesScreen(),
+                ),
+              );
+            },
+          ),
         IconButton(
           icon: const Icon(Icons.refresh),
           onPressed: _loadSanciones,
@@ -126,6 +167,52 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
       color: Colors.white,
       child: Column(
         children: [
+          // 🔥 NUEVO: Mostrar indicador si hay filtro por empleado
+          if (widget.empleadoCod != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person, size: 16, color: Colors.blue.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Mostrando sanciones de: ${widget.empleadoNombre}',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HistorialSancionesScreen(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'Ver todas',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // Campo de búsqueda
           TextField(
             decoration: InputDecoration(
@@ -314,6 +401,10 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
       icono = Icons.search_off;
       mensaje = 'Sin resultados';
       submensaje = 'No se encontraron sanciones con: "$_searchQuery"';
+    } else if (widget.empleadoCod != null && _sanciones.isEmpty) {
+      icono = Icons.assignment_outlined;
+      mensaje = 'Sin sanciones';
+      submensaje = '${widget.empleadoNombre} no tiene sanciones registradas';
     } else if (_filtroStatus != 'todos' || _soloPendientes) {
       icono = Icons.filter_list_off;
       mensaje = 'Sin sanciones';
@@ -391,12 +482,18 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
 
       List<SancionModel> sanciones;
 
-      if (user.canViewAllSanciones && !_soloMias) {
-        // Gerencia/RRHH pueden ver todas
-        sanciones = await _sancionRepository.getAllSanciones();
+      // 🔥 NUEVO: Si hay filtro por empleado
+      if (widget.empleadoCod != null) {
+        sanciones = await _sancionRepository.getSancionesByEmpleado(widget.empleadoCod!);
       } else {
-        // Supervisores solo ven las suyas
-        sanciones = await _sancionRepository.getMySanciones(user.id);
+        // Lógica existente
+        if (user.canViewAllSanciones && !_soloMias) {
+          // Gerencia/RRHH pueden ver todas
+          sanciones = await _sancionRepository.getAllSanciones();
+        } else {
+          // Supervisores solo ven las suyas
+          sanciones = await _sancionRepository.getMySanciones(user.id);
+        }
       }
 
       if (mounted) {
@@ -583,4 +680,3 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen> {
     );
   }
 }
-

@@ -169,54 +169,10 @@ class OfflineManager {
     }
   }
 
-  // 🆕 Método auxiliar mejorado para búsqueda en cache
+  // Método auxiliar mejorado para búsqueda en cache
   List<EmpleadoModel> _buscarEnCacheLocal(String query) {
-    if (query.trim().isEmpty) {
-      return _db.getEmpleados().take(20).toList();
-    }
-
-    final queryLower = query.toLowerCase().trim();
-    final palabras = queryLower.split(' ').where((p) => p.isNotEmpty).toList();
-
-    print('🔍 [CACHE] Buscando: "$queryLower" (${palabras.length} palabras)');
-
-    // Obtener todos los empleados del cache
-    final todosEmpleados = _db.getEmpleados();
-    print('📦 [CACHE] Total en cache: ${todosEmpleados.length} empleados');
-
-    if (todosEmpleados.isEmpty) {
-      print('❌ [CACHE] Cache vacío!');
-      return [];
-    }
-
-    // Buscar coincidencias
-    final resultados = todosEmpleados.where((empleado) {
-      // Crear texto de búsqueda combinando todos los campos
-      final searchText = [
-        empleado.nombresCompletos,
-        empleado.nombres,
-        empleado.apellidos,
-        empleado.cedula,
-        empleado.nomcargo,
-        empleado.nomdep,
-        empleado.cod.toString(),
-      ].where((field) => field != null).join(' ').toLowerCase();
-
-      // Verificar que TODAS las palabras estén presentes
-      return palabras.every((palabra) => searchText.contains(palabra));
-    }).toList();
-
-    print('✅ [CACHE] Encontrados: ${resultados.length} empleados');
-
-    // Mostrar primeros 3 resultados para debug
-    if (resultados.isNotEmpty) {
-      print('📋 [CACHE] Primeros resultados:');
-      resultados.take(3).forEach((emp) {
-        print('   - ${emp.displayName} (${emp.cod})');
-      });
-    }
-
-    return resultados.take(50).toList(); // Limitar a 50 resultados
+    // 🔥 SIMPLIFICADO: Usar directamente el método de la base de datos que ya ordena por relevancia
+    return _db.searchEmpleados(query);
   }
 
   /// Obtener empleado por código
@@ -542,7 +498,7 @@ class OfflineManager {
       final pendingOperations = _db.getPendingSyncOperations();
 
       if (pendingOperations.isEmpty) {
-        print('📝 No hay operaciones pendientes de sync');
+        print('📍 No hay operaciones pendientes de sync');
         return;
       }
 

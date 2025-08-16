@@ -15,7 +15,12 @@ import '../widgets/empleado_search_field.dart';
 /// ACTUALIZADA con compresión automática de imágenes
 /// 🔥 ACTUALIZADA para usar repositories con funcionalidad offline
 class CreateSancionScreen extends StatefulWidget {
-  const CreateSancionScreen({super.key});
+  final EmpleadoModel? empleadoPreseleccionado; // 🔥 NUEVO
+  
+  const CreateSancionScreen({
+    super.key, 
+    this.empleadoPreseleccionado, // 🔥 NUEVO
+  });
 
   @override
   State<CreateSancionScreen> createState() => _CreateSancionScreenState();
@@ -43,6 +48,33 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
   bool _pendiente = true;
   bool _isLoading = false;
   bool _isProcessingImage = false; // 🆕 Para mostrar estado de compresión
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // 🔥 NUEVO: Si hay empleado preseleccionado, establecerlo
+    if (widget.empleadoPreseleccionado != null) {
+      // Usar addPostFrameCallback para asegurar que el widget esté construido
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          _empleadoSeleccionado = widget.empleadoPreseleccionado;
+          _autocompletarCampos(widget.empleadoPreseleccionado!);
+        });
+        
+        // Mostrar notificación
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Empleado preseleccionado: ${widget.empleadoPreseleccionado!.displayName}'
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -112,65 +144,120 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
               // Información del Empleado (búsqueda como tu autocompletado de Kivy)
               _buildSectionCard(
                 title: '👤 Información del Empleado',
-                child: EmpleadoSearchField(
-                  onEmpleadoSelected: (empleado) {
-                    setState(() {
-                      _empleadoSeleccionado = empleado;
-
-                      // 🔥 AUTOCOMPLETAR CAMPOS CORREGIDO
-                      _autocompletarCampos(empleado);
-                    });
-
-                    // Feedback visual mejorado y corregido
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  children: [
+                    // 🔥 ACTUALIZADO: Mostrar empleado preseleccionado si existe
+                    if (_empleadoSeleccionado != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.withOpacity(0.3)),
+                        ),
+                        child: Row(
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.check_circle,
-                                    color: Colors.white, size: 20),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  '✅ Empleado seleccionado',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
+                            const Icon(Icons.check_circle, color: Colors.green),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _empleadoSeleccionado!.displayName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  Text(
+                                    'Código: ${_empleadoSeleccionado!.cod} • ${_empleadoSeleccionado!.nomdep ?? "Sin departamento"}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '👤 ${empleado.displayName}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              '🏢 Departamento: ${empleado.nomdep ?? "No definido"}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              '📍 Puesto autocompletado: ${_puestoController.text}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              '🧑‍💼 Agente autocompletado: ${_agenteController.text}',
-                              style: const TextStyle(fontSize: 12),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                setState(() {
+                                  _empleadoSeleccionado = null;
+                                  _puestoController.clear();
+                                  _agenteController.clear();
+                                });
+                              },
+                              tooltip: 'Cambiar empleado',
                             ),
                           ],
                         ),
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 4),
-                        behavior: SnackBarBehavior.floating,
-                        margin: const EdgeInsets.all(16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
-                    );
-                  },
+                      const SizedBox(height: 12),
+                    ],
+                    
+                    // Campo de búsqueda (se oculta si ya hay empleado seleccionado)
+                    if (_empleadoSeleccionado == null)
+                      EmpleadoSearchField(
+                        onEmpleadoSelected: (empleado) {
+                          setState(() {
+                            _empleadoSeleccionado = empleado;
+                            _autocompletarCampos(empleado);
+                          });
+
+                          // Feedback visual mejorado
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.check_circle,
+                                          color: Colors.white, size: 20),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        '✅ Empleado seleccionado',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '👤 ${empleado.displayName}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    '🏢 Departamento: ${empleado.nomdep ?? "No definido"}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    '📍 Puesto autocompletado: ${_puestoController.text}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    '🧑‍💼 Agente autocompletado: ${_agenteController.text}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 4),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
                 ),
               ),
 
@@ -1153,5 +1240,3 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     }
   }
 }
-
-

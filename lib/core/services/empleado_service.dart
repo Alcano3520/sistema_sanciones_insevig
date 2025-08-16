@@ -8,42 +8,45 @@ class EmpleadoService {
   // 📊 Cliente específico del proyecto empleados-insevig
   SupabaseClient get _empleadosClient => SupabaseConfig.empleadosClient;
 
-  /// Buscar empleados por texto con autocompletado
-  /// CORREGIDO para obtener más de 1000 empleados
+  /// Buscar empleados por texto con autocompletado - MEJORADO CON ORDEN POR RELEVANCIA
   Future<List<EmpleadoModel>> searchEmpleados(String query) async {
     try {
       if (query.trim().isEmpty) {
         return [];
       }
 
-      print(
-          '🔍 [EMPLEADOS API] Buscando: "$query" en proyecto empleados-insevig');
+      print('🔍 [EMPLEADOS API] Buscando: "$query" en proyecto empleados-insevig');
 
-      // 🔥 ESTRATEGIA SIMPLIFICADA Y CORREGIDA
+      // Búsqueda original
       final response = await _empleadosClient
           .from('empleados')
-          .select('*') // Simplificado
-          .or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}') // Todo en una línea
+          .select('*')
+          .or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}')
           .eq('es_activo', true)
           .eq('es_liquidado', false)
           .neq('es_suspendido', true)
-          .order('nombres_completos')
-          .limit(100);
+          .limit(200); // Aumentar límite para tener más resultados para ordenar
 
-      print(
-          '✅ [EMPLEADOS API] Encontrados ${response.length} empleados activos');
+      print('✅ [EMPLEADOS API] Encontrados ${response.length} empleados activos');
 
-      // Filtrar y limitar en el cliente para mejor control
-      final empleadosFiltrados = response
+      // Convertir a modelos
+      var empleados = response
           .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
           .where((empleado) => empleado.puedeSerSancionado)
-          .take(100) // Límite del lado del cliente
           .toList();
 
-      print(
-          '🎯 [EMPLEADOS API] Empleados disponibles para sanción: ${empleadosFiltrados.length}');
+      // 🔥 NUEVO: Ordenar por relevancia
+      empleados = _ordenarPorRelevancia(empleados, query);
 
-      return empleadosFiltrados;
+      // Limitar a los primeros 100 después de ordenar
+      empleados = empleados.take(100).toList();
+
+      print('🎯 [EMPLEADOS API] Empleados ordenados por relevancia: ${empleados.length}');
+      if (empleados.isNotEmpty) {
+        print('   Top 3: ${empleados.take(3).map((e) => e.displayName).join(", ")}');
+      }
+
+      return empleados;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error en búsqueda: $e');
 
@@ -96,17 +99,117 @@ class EmpleadoService {
           }
         }
 
-        print(
-            '✅ [EMPLEADOS API] Búsqueda de respaldo: ${allResults.length} resultados únicos');
+        print('✅ [EMPLEADOS API] Búsqueda de respaldo: ${allResults.length} resultados únicos');
 
-        return allResults
+        var empleados = allResults
             .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
             .toList();
+
+        // 🔥 Aplicar ordenamiento por relevancia también en búsqueda de respaldo
+        empleados = _ordenarPorRelevancia(empleados, query);
+
+        return empleados;
       } catch (e2) {
         print('❌ [EMPLEADOS API] Error en búsqueda de respaldo: $e2');
         return [];
       }
     }
+  }
+
+  /// 🔥 NUEVO: Ordenar empleados por relevancia de búsqueda
+  List<EmpleadoModel> _ordenarPorRelevancia(List<EmpleadoModel> empleados, String query) {
+    final queryLower = query.toLowerCase().trim();
+    
+    // Asignar puntuación a cada empleado
+    final empleadosConPuntuacion = empleados.map((empleado) {
+      int puntuacion = 0;
+      
+      // Nombres para búsqueda
+      final nombresCompletos = empleado.nombresCompletos?.toLowerCase() ?? '';
+      final nombres = empleado.nombres?.toLowerCase() ?? '';
+      final apellidos = empleado.apellidos?.toLowerCase() ?? '';
+      final nombreDisplay = empleado.displayName.toLowerCase();
+      
+      // 🔥 PRIORIDAD 1: Coincidencia exacta al inicio del nombre completo (100 puntos)
+      if (nombresCompletos.startsWith(queryLower)) {
+        puntuacion += 100;
+      }
+      
+      // 🔥 PRIORIDAD 2: Coincidencia exacta al inicio del apellido (90 puntos)
+      if (apellidos.startsWith(queryLower)) {
+        puntuacion += 90;
+      }
+      
+      // 🔥 PRIORIDAD 3: Coincidencia exacta al inicio del nombre (80 puntos)
+      if (nombres.startsWith(queryLower)) {
+        puntuacion += 80;
+      }
+      
+      // 🔥 PRIORIDAD 4: Query es palabra completa en el nombre (60 puntos)
+      // Ejemplo: "garcia" en "Juan Garcia" (no en "Juan Garciazo")
+      final palabrasNombre = nombresCompletos.split(' ');
+      if (palabrasNombre.any((palabra) => palabra == queryLower)) {
+        puntuacion += 60;
+      }
+      
+      // 🔥 PRIORIDAD 5: Coincidencia en apellido pero no al inicio (40 puntos)
+      if (!apellidos.startsWith(queryLower) && apellidos.contains(queryLower)) {
+        puntuacion += 40;
+      }
+      
+      // 🔥 PRIORIDAD 6: Coincidencia en nombre pero no al inicio (30 puntos)
+      if (!nombres.startsWith(queryLower) && nombres.contains(queryLower)) {
+        puntuacion += 30;
+      }
+      
+      // 🔥 PRIORIDAD 7: Coincidencia en otros campos (10 puntos)
+      final cedula = empleado.cedula?.toLowerCase() ?? '';
+      final cargo = empleado.nomcargo?.toLowerCase() ?? '';
+      final departamento = empleado.nomdep?.toLowerCase() ?? '';
+      
+      if (cedula.contains(queryLower) || 
+          cargo.contains(queryLower) || 
+          departamento.contains(queryLower)) {
+        puntuacion += 10;
+      }
+      
+      // 🔥 BONUS: Si la búsqueda es muy específica (más de una palabra)
+      final palabrasQuery = queryLower.split(' ');
+      if (palabrasQuery.length > 1) {
+        // Verificar si todas las palabras están presentes
+        final todasPresentes = palabrasQuery.every((palabra) => 
+          nombreDisplay.contains(palabra)
+        );
+        if (todasPresentes) {
+          puntuacion += 50;
+        }
+      }
+      
+      return MapEntry(empleado, puntuacion);
+    }).toList();
+    
+    // Ordenar por puntuación (mayor a menor) y luego alfabéticamente
+    empleadosConPuntuacion.sort((a, b) {
+      // Primero por puntuación
+      final comparacionPuntuacion = b.value.compareTo(a.value);
+      if (comparacionPuntuacion != 0) {
+        return comparacionPuntuacion;
+      }
+      
+      // Si tienen la misma puntuación, ordenar alfabéticamente
+      return a.key.displayName.compareTo(b.key.displayName);
+    });
+    
+    // Debug: mostrar puntuaciones de los primeros resultados
+    if (empleadosConPuntuacion.isNotEmpty) {
+      print('🏆 Top 5 resultados por relevancia:');
+      empleadosConPuntuacion.take(5).forEach((entry) {
+        print('   ${entry.value} pts: ${entry.key.displayName}');
+      });
+    }
+    
+    // Retornar solo los empleados (sin puntuación)
+    return empleadosConPuntuacion.map((e) => e.key).toList();
   }
 
   /// Obtener empleado específico por código
@@ -121,8 +224,7 @@ class EmpleadoService {
           .eq('es_activo', true)
           .single();
 
-      print(
-          '✅ [EMPLEADOS API] Empleado encontrado: ${response['nombres_completos']}');
+      print('✅ [EMPLEADOS API] Empleado encontrado: ${response['nombres_completos']}');
       return EmpleadoModel.fromMap(response);
     } catch (e) {
       print('❌ [EMPLEADOS API] Error obteniendo empleado $cod: $e');
@@ -131,8 +233,7 @@ class EmpleadoService {
   }
 
   /// Obtener empleados por departamento
-  Future<List<EmpleadoModel>> getEmpleadosByDepartamento(
-      String departamento) async {
+  Future<List<EmpleadoModel>> getEmpleadosByDepartamento(String departamento) async {
     try {
       print('🔍 [EMPLEADOS API] Buscando en departamento: $departamento');
 
@@ -145,15 +246,13 @@ class EmpleadoService {
           .order('nombres_completos');
       // Sin límite para obtener todos del departamento
 
-      print(
-          '✅ [EMPLEADOS API] Encontrados ${response.length} empleados en $departamento');
+      print('✅ [EMPLEADOS API] Encontrados ${response.length} empleados en $departamento');
 
       return response
           .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
           .toList();
     } catch (e) {
-      print(
-          '❌ [EMPLEADOS API] Error obteniendo empleados por departamento: $e');
+      print('❌ [EMPLEADOS API] Error obteniendo empleados por departamento: $e');
       return [];
     }
   }
@@ -191,8 +290,7 @@ class EmpleadoService {
 
         todosLosEmpleados.addAll(empleados);
 
-        print(
-            '📊 [EMPLEADOS API] Total acumulado: ${todosLosEmpleados.length} empleados');
+        print('📊 [EMPLEADOS API] Total acumulado: ${todosLosEmpleados.length} empleados');
 
         // Si obtuvimos menos registros que el tamaño del lote, es el último
         if (response.length < batchSize) {
@@ -206,8 +304,7 @@ class EmpleadoService {
         await Future.delayed(const Duration(milliseconds: 100));
       }
 
-      print(
-          '✅ [EMPLEADOS API] TOTAL FINAL: ${todosLosEmpleados.length} empleados activos');
+      print('✅ [EMPLEADOS API] TOTAL FINAL: ${todosLosEmpleados.length} empleados activos');
       return todosLosEmpleados;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error obteniendo todos los empleados: $e');
@@ -222,8 +319,10 @@ class EmpleadoService {
 
       // 1. Test básico de conexión
       print('\n1️⃣ Probando conexión básica...');
-      final testBasic =
-          await _empleadosClient.from('empleados').select('count').limit(1);
+      final testBasic = await _empleadosClient
+          .from('empleados')
+          .select('count')
+          .limit(1);
       print('   ✅ Conexión: OK');
 
       // 2. Contar TODOS los empleados sin filtros
@@ -287,8 +386,7 @@ class EmpleadoService {
       print('\n6️⃣ ANÁLISIS DE RESULTADOS:');
       if (testNoLimit.length == test1000.length && disponibles > 1000) {
         print('   🚨 CONFIRMADO: Límite de 1000 registros por consulta');
-        print(
-            '   💡 Solución: Usar paginación con range() o múltiples consultas');
+        print('   💡 Solución: Usar paginación con range() o múltiples consultas');
       } else if (testNoLimit.length > test1000.length) {
         print('   ✅ Sin límite detectado, consulta SIN limit() funciona');
       } else {
@@ -298,8 +396,7 @@ class EmpleadoService {
       print('\n7️⃣ RECOMENDACIONES:');
       if (disponibles > 1000) {
         print('   🔧 Usar getAllEmpleadosActivos() para obtener todos');
-        print(
-            '   🔧 Implementar búsqueda sin .limit() para resultados completos');
+        print('   🔧 Implementar búsqueda sin .limit() para resultados completos');
         print('   🔧 Usar .range() para paginación controlada');
       }
     } catch (e) {
@@ -326,8 +423,7 @@ class EmpleadoService {
 
       departamentos.sort();
 
-      print(
-          '✅ [EMPLEADOS API] ${departamentos.length} departamentos encontrados');
+      print('✅ [EMPLEADOS API] ${departamentos.length} departamentos encontrados');
       return departamentos;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error obteniendo departamentos: $e');
@@ -377,8 +473,7 @@ class EmpleadoService {
 
       final puedeSerSancionado = esActivo && !esLiquidado && !esSuspendido;
 
-      print(
-          '🔍 [EMPLEADOS API] Empleado $cod - Puede ser sancionado: $puedeSerSancionado');
+      print('🔍 [EMPLEADOS API] Empleado $cod - Puede ser sancionado: $puedeSerSancionado');
       return puedeSerSancionado;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error verificando empleado $cod: $e');
@@ -397,8 +492,7 @@ class EmpleadoService {
       final stats = {
         'total': todosLosEmpleados.length,
         'activos': todosLosEmpleados.length, // Ya están filtrados como activos
-        'disponibles_sancion':
-            todosLosEmpleados.where((e) => e.puedeSerSancionado).length,
+        'disponibles_sancion': todosLosEmpleados.where((e) => e.puedeSerSancionado).length,
         'departamentos': todosLosEmpleados
             .map((e) => e.nomdep)
             .where((d) => d != null)
@@ -438,16 +532,14 @@ class EmpleadoService {
     bool soloActivos = true,
   }) async {
     try {
-      print(
-          '🔍 [EMPLEADOS API] Búsqueda avanzada: query=$query, dept=$departamento, cargo=$cargo');
+      print('🔍 [EMPLEADOS API] Búsqueda avanzada: query=$query, dept=$departamento, cargo=$cargo');
 
       var queryBuilder = _empleadosClient.from('empleados').select('*');
 
       // Filtro por texto
       if (query != null && query.trim().isNotEmpty) {
         // 🔥 ARREGLO: Todo en una sola línea sin saltos
-        queryBuilder = queryBuilder.or(
-            'nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}');
+        queryBuilder = queryBuilder.or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}');
       }
 
       // Filtros específicos
@@ -466,12 +558,18 @@ class EmpleadoService {
       final response = await queryBuilder.order('nombres_completos');
       // Sin límite para obtener todos los resultados
 
-      print(
-          '✅ [EMPLEADOS API] Búsqueda avanzada: ${response.length} resultados');
+      print('✅ [EMPLEADOS API] Búsqueda avanzada: ${response.length} resultados');
 
-      return response
+      var empleados = response
           .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
           .toList();
+
+      // 🔥 Aplicar ordenamiento por relevancia si hay query
+      if (query != null && query.trim().isNotEmpty) {
+        empleados = _ordenarPorRelevancia(empleados, query);
+      }
+
+      return empleados;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error en búsqueda avanzada: $e');
       return [];
@@ -486,8 +584,7 @@ class EmpleadoService {
   /// Probar la conexión específica con el proyecto de empleados
   Future<bool> testConnection() async {
     try {
-      print(
-          '🔄 [EMPLEADOS API] Probando conexión con proyecto empleados-insevig...');
+      print('🔄 [EMPLEADOS API] Probando conexión con proyecto empleados-insevig...');
 
       final response = await _empleadosClient
           .from('empleados')
@@ -496,8 +593,7 @@ class EmpleadoService {
           .limit(1);
 
       final isConnected = response.isNotEmpty;
-      print(
-          '${isConnected ? "✅" : "❌"} [EMPLEADOS API] Conexión: ${isConnected ? "exitosa" : "fallida"}');
+      print('${isConnected ? "✅" : "❌"} [EMPLEADOS API] Conexión: ${isConnected ? "exitosa" : "fallida"}');
 
       return isConnected;
     } catch (e) {
@@ -511,8 +607,7 @@ class EmpleadoService {
     try {
       final response = await _empleadosClient
           .from('empleados')
-          .select(
-              'cod, nombres_completos, nomcargo, nomdep, es_activo, estado, seccion')
+          .select('cod, nombres_completos, nomcargo, nomdep, es_activo, estado, seccion')
           .eq('cod', cod)
           .single();
 
@@ -533,8 +628,7 @@ class EmpleadoService {
       return true;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error de acceso: $e');
-      print(
-          '💡 [EMPLEADOS API] Verifica que las políticas RLS permitan lectura desde sanciones');
+      print('💡 [EMPLEADOS API] Verifica que las políticas RLS permitan lectura desde sanciones');
       return false;
     }
   }
