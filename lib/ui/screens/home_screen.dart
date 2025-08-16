@@ -1274,6 +1274,12 @@ class _EmployeeSearchDialogState extends State<_EmployeeSearchDialog> {
                       'Sección', 
                       _empleadoSeleccionado!.seccion ?? 'No especificada'
                     ),
+                    // 🔥 AGREGADO: Fecha de ingreso
+                    _buildDetailRow(
+                      Icons.calendar_today, 
+                      'Fecha Ingreso', 
+                      _empleadoSeleccionado!.fechaIngreso ?? 'No registrada'
+                    ),
                     _buildDetailRow(
                       Icons.phone, 
                       'Teléfono', 
