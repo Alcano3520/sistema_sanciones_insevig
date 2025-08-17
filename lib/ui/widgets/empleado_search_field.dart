@@ -229,10 +229,8 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
   }
 
   Widget _buildEmpleadoTile(EmpleadoModel empleado) {
-    // Función auxiliar para obtener iniciales de forma segura
     String getInitials(String? fullName) {
       if (fullName == null || fullName.isEmpty) return 'NN';
-
       final words = fullName.trim().split(' ');
       if (words.length >= 2) {
         return '${words[0][0]}${words[1][0]}'.toUpperCase();
@@ -252,21 +250,25 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
       ),
       title: Text(
         empleado.displayName,
-        style: const TextStyle(fontWeight: FontWeight.w500),
+        style: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 14, // Reducido de 16 (default) a 14
+        ),
+        maxLines: 2, // Permitir 2 líneas
         overflow: TextOverflow.ellipsis,
-        maxLines: 1,
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}',
+            style: const TextStyle(fontSize: 11), // Reducido
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
           Text(
             empleado.nomdep ?? 'Sin departamento',
-            style: const TextStyle(fontSize: 12),
+            style: const TextStyle(fontSize: 11), // Reducido
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
@@ -274,16 +276,17 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
               empleado.fechaIngreso!.isNotEmpty)
             Text(
               '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
-              style: const TextStyle(fontSize: 12, color: Colors.blue),
+              style: const TextStyle(fontSize: 11, color: Colors.blue),
             ),
           if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
             Text(
               'CI: ${empleado.cedulaFormateada ?? empleado.cedula}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
         ],
       ),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      trailing:
+          const Icon(Icons.arrow_forward_ios, size: 14), // Icono más pequeño
       onTap: () => _selectEmpleado(empleado),
     );
   }
