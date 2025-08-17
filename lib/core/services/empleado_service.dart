@@ -37,13 +37,29 @@ class EmpleadoService {
       final empleadosFiltrados = response
           .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
           .where((empleado) => empleado.puedeSerSancionado)
-          .take(100) // Límite del lado del cliente
           .toList();
 
-      print(
-          '🎯 [EMPLEADOS API] Empleados disponibles para sanción: ${empleadosFiltrados.length}');
+      // 🔥 NUEVO: Ordenar priorizando los que empiezan con el término buscado
+      empleadosFiltrados.sort((a, b) {
+        final queryLower = query.toLowerCase();
+        final aStartsWith = a.displayName.toLowerCase().startsWith(queryLower);
+        final bStartsWith = b.displayName.toLowerCase().startsWith(queryLower);
+        
+        // Si uno empieza con el query y el otro no, priorizar el que empieza
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        
+        // Si ambos empiezan o ambos no empiezan, ordenar alfabéticamente
+        return a.displayName.compareTo(b.displayName);
+      });
 
-      return empleadosFiltrados;
+      // Limitar después del ordenamiento
+      final resultadosFinales = empleadosFiltrados.take(100).toList();
+
+      print(
+          '🎯 [EMPLEADOS API] Empleados disponibles para sanción: ${resultadosFinales.length}');
+
+      return resultadosFinales;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error en búsqueda: $e');
 
@@ -99,9 +115,22 @@ class EmpleadoService {
         print(
             '✅ [EMPLEADOS API] Búsqueda de respaldo: ${allResults.length} resultados únicos');
 
-        return allResults
+        final empleadosRespaldo = allResults
             .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
             .toList();
+
+        // 🔥 NUEVO: Aplicar el mismo ordenamiento a la búsqueda de respaldo
+        empleadosRespaldo.sort((a, b) {
+          final queryLower = query.toLowerCase();
+          final aStartsWith = a.displayName.toLowerCase().startsWith(queryLower);
+          final bStartsWith = b.displayName.toLowerCase().startsWith(queryLower);
+          
+          if (aStartsWith && !bStartsWith) return -1;
+          if (!aStartsWith && bStartsWith) return 1;
+          return a.displayName.compareTo(b.displayName);
+        });
+
+        return empleadosRespaldo;
       } catch (e2) {
         print('❌ [EMPLEADOS API] Error en búsqueda de respaldo: $e2');
         return [];
@@ -469,9 +498,24 @@ class EmpleadoService {
       print(
           '✅ [EMPLEADOS API] Búsqueda avanzada: ${response.length} resultados');
 
-      return response
+      final empleados = response
           .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
           .toList();
+
+      // 🔥 NUEVO: Ordenar priorizando coincidencias si hay query
+      if (query != null && query.trim().isNotEmpty) {
+        empleados.sort((a, b) {
+          final queryLower = query.toLowerCase();
+          final aStartsWith = a.displayName.toLowerCase().startsWith(queryLower);
+          final bStartsWith = b.displayName.toLowerCase().startsWith(queryLower);
+          
+          if (aStartsWith && !bStartsWith) return -1;
+          if (!aStartsWith && bStartsWith) return 1;
+          return a.displayName.compareTo(b.displayName);
+        });
+      }
+
+      return empleados;
     } catch (e) {
       print('❌ [EMPLEADOS API] Error en búsqueda avanzada: $e');
       return [];

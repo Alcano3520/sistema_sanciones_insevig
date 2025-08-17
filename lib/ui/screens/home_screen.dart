@@ -10,6 +10,7 @@ import '../../core/offline/connectivity_service.dart';
 import '../../core/offline/offline_manager.dart';
 import 'create_sancion_screen.dart';
 import 'historial_sanciones_screen.dart';
+import '../widgets/empleado_search_field.dart';
 
 /// Pantalla principal después del login
 /// 🔥 MEJORADA: Estadísticas por rol y manejo de pendientes
@@ -501,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 Expanded(
-                    child: _buildStatCard('📝', 'Borradores',
+                    child: _buildStatCard('📋', 'Borradores',
                         _stats['borradores'] ?? 0, Colors.orange)),
                 const SizedBox(width: 12),
                 Expanded(
@@ -645,7 +646,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 16),
               
-              _buildHelpItem('📝 Borradores', 
+              _buildHelpItem('📋 Borradores', 
                 'Sanciones guardadas pero no enviadas${role == 'supervisor' ? ' (puedes editarlas)' : ''}'),
               
               _buildHelpItem('📤 Enviadas', 
@@ -972,10 +973,57 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _searchEmployees() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🚧 Búsqueda de empleados - Próximamente'),
-        backgroundColor: Colors.orange,
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 600),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '🔍 Buscar Empleados',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: EmpleadoSearchField(
+                  onEmpleadoSelected: (empleado) {
+                    Navigator.pop(context);
+                    // Mostrar información del empleado
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(empleado.displayName),
+                        content: Text(empleado.infoCompleta),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cerrar'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  hintText: 'Buscar por nombre, cédula o código...',
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1327,7 +1375,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final offline = OfflineManager.instance;
 
     print('\n📊 VERIFICACIÓN DETALLADA DEL CACHE:');
-    print('═══════════════════════════════════════════════════════════');
+    print('╔══════════════════════════════════════════════════════════╗');
 
     final todosEmpleados = offline.database.getEmpleados();
     print('📦 Total empleados en cache: ${todosEmpleados.length}');
@@ -1362,7 +1410,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('   $key: $value');
     });
 
-    print('═══════════════════════════════════════════════════════════\n');
+    print('╚══════════════════════════════════════════════════════════╝\n');
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

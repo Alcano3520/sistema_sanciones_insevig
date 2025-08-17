@@ -150,6 +150,8 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
                 Text(
                   'Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}',
@@ -157,6 +159,8 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
                     color: Colors.grey,
                     fontSize: 14,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
                 Text(
                   empleado.nomdep ?? 'Sin departamento',
@@ -164,7 +168,17 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
                     color: Colors.grey,
                     fontSize: 12,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
+                if (empleado.fechaIngreso != null && empleado.fechaIngreso!.isNotEmpty)
+                  Text(
+                    '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue,
+                    ),
+                  ),
                 if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
                   Text(
                     'CI: ${empleado.cedula}',
@@ -238,15 +252,28 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
       title: Text(
         empleado.displayName,
         style: const TextStyle(fontWeight: FontWeight.w500),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}'),
+          Text(
+            'Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}',
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
           Text(
             empleado.nomdep ?? 'Sin departamento',
             style: const TextStyle(fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
+          if (empleado.fechaIngreso != null && empleado.fechaIngreso!.isNotEmpty)
+            Text(
+              '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
+              style: const TextStyle(fontSize: 12, color: Colors.blue),
+            ),
           if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
             Text(
               'CI: ${empleado.cedula}',

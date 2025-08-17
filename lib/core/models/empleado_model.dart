@@ -182,6 +182,44 @@ class EmpleadoModel {
   /// Para mostrar departamento
   String get displayDepartment => nomdep ?? 'Sin departamento';
 
+  /// 🔥 NUEVO: Fecha de ingreso formateada
+  String? get fechaIngresoFormateada {
+    if (fechaIngreso == null || fechaIngreso!.isEmpty) return null;
+    
+    try {
+      // Si es formato YYYY-MM-DD, convertir a DD/MM/YYYY
+      if (fechaIngreso!.contains('-')) {
+        final partes = fechaIngreso!.split('-');
+        if (partes.length == 3) {
+          return '${partes[2]}/${partes[1]}/${partes[0]}';
+        }
+      }
+      
+      // Si es formato DD-MM-YYYY, convertir a DD/MM/YYYY
+      if (fechaIngreso!.contains('-') && fechaIngreso!.length == 10) {
+        return fechaIngreso!.replaceAll('-', '/');
+      }
+      
+      // Si ya está en formato DD/MM/YYYY, devolverlo tal cual
+      if (fechaIngreso!.contains('/')) {
+        return fechaIngreso;
+      }
+      
+      // Si es formato ISO (2024-03-15T00:00:00), extraer solo la fecha
+      if (fechaIngreso!.contains('T')) {
+        final fecha = fechaIngreso!.split('T')[0];
+        final partes = fecha.split('-');
+        if (partes.length == 3) {
+          return '${partes[2]}/${partes[1]}/${partes[0]}';
+        }
+      }
+      
+      return fechaIngreso;
+    } catch (e) {
+      return fechaIngreso;
+    }
+  }
+
   /// Texto completo para búsqueda
   String get searchText => [
         nombresCompletos,
@@ -241,7 +279,7 @@ class EmpleadoModel {
     if (telefono != null && telefono!.isNotEmpty)
       buffer.writeln('Teléfono: $telefono');
     if (fechaIngreso != null && fechaIngreso!.isNotEmpty)
-      buffer.writeln('Fecha Ingreso: $fechaIngreso');
+      buffer.writeln('Fecha Ingreso: ${fechaIngresoFormateada ?? fechaIngreso}');
     return buffer.toString();
   }
 
