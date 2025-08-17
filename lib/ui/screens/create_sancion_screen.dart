@@ -63,7 +63,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     if (empleado.nomdep != null && empleado.nomdep!.isNotEmpty) {
       puesto = empleado.nomdep!; // 🎯 PRIORIDAD 1: Departamento (nomdep)
     } else if (empleado.seccion != null && empleado.seccion!.isNotEmpty) {
-      puesto = empleado.seccion!; // Prioridad 2: Sección específica
+      //puesto = empleado.seccion!; // Prioridad 2: Sección específica
     } else if (empleado.nomcargo != null && empleado.nomcargo!.isNotEmpty) {
       puesto = 'Área ${empleado.nomcargo}'; // Prioridad 3: Basado en cargo
     } else {
@@ -339,7 +339,8 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                        border:
+                            Border.all(color: Colors.green.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
@@ -1079,7 +1080,8 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
 
       // 🔥 IMPORTANTE: Establecer 'pendiente' según el status inicial
-      final bool isPendiente = status == 'enviado'; // Solo es pendiente si se envía
+      final bool isPendiente =
+          status == 'enviado'; // Solo es pendiente si se envía
 
       final sancion = SancionModel(
         supervisorId: authProvider.currentUser!.id,

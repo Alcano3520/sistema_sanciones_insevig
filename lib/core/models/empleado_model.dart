@@ -185,35 +185,48 @@ class EmpleadoModel {
   /// 🔥 NUEVO: Fecha de ingreso formateada
   String? get fechaIngresoFormateada {
     if (fechaIngreso == null || fechaIngreso!.isEmpty) return null;
-    
+
     try {
+      // Si tiene formato ISO con tiempo (2024-03-15T10:30:00), extraer solo fecha
+      String fechaLimpia = fechaIngreso!;
+      if (fechaLimpia.contains('T')) {
+        fechaLimpia = fechaLimpia.split('T')[0];
+      }
+
+      // Si tiene espacio (posible formato con hora), tomar solo la primera parte
+      if (fechaLimpia.contains(' ')) {
+        fechaLimpia = fechaLimpia.split(' ')[0];
+      }
+
       // Si es formato YYYY-MM-DD, convertir a DD/MM/YYYY
-      if (fechaIngreso!.contains('-')) {
-        final partes = fechaIngreso!.split('-');
-        if (partes.length == 3) {
-          return '${partes[2]}/${partes[1]}/${partes[0]}';
+      if (fechaLimpia.contains('-') && fechaLimpia.length >= 10) {
+        final partes = fechaLimpia.split('-');
+        if (partes.length == 3 && partes[0].length == 4) {
+          // Es formato YYYY-MM-DD
+          final dia = partes[2].padLeft(2, '0');
+          final mes = partes[1].padLeft(2, '0');
+          final anio = partes[0];
+          return '$dia/$mes/$anio';
+        } else if (partes.length == 3 && partes[2].length == 4) {
+          // Es formato DD-MM-YYYY
+          final dia = partes[0].padLeft(2, '0');
+          final mes = partes[1].padLeft(2, '0');
+          final anio = partes[2];
+          return '$dia/$mes/$anio';
         }
       }
-      
-      // Si es formato DD-MM-YYYY, convertir a DD/MM/YYYY
-      if (fechaIngreso!.contains('-') && fechaIngreso!.length == 10) {
-        return fechaIngreso!.replaceAll('-', '/');
-      }
-      
+
       // Si ya está en formato DD/MM/YYYY, devolverlo tal cual
-      if (fechaIngreso!.contains('/')) {
-        return fechaIngreso;
-      }
-      
-      // Si es formato ISO (2024-03-15T00:00:00), extraer solo la fecha
-      if (fechaIngreso!.contains('T')) {
-        final fecha = fechaIngreso!.split('T')[0];
-        final partes = fecha.split('-');
+      if (fechaLimpia.contains('/') && fechaLimpia.length >= 8) {
+        final partes = fechaLimpia.split('/');
         if (partes.length == 3) {
-          return '${partes[2]}/${partes[1]}/${partes[0]}';
+          final dia = partes[0].padLeft(2, '0');
+          final mes = partes[1].padLeft(2, '0');
+          final anio = partes[2];
+          return '$dia/$mes/$anio';
         }
       }
-      
+
       return fechaIngreso;
     } catch (e) {
       return fechaIngreso;
@@ -279,7 +292,8 @@ class EmpleadoModel {
     if (telefono != null && telefono!.isNotEmpty)
       buffer.writeln('Teléfono: $telefono');
     if (fechaIngreso != null && fechaIngreso!.isNotEmpty)
-      buffer.writeln('Fecha Ingreso: ${fechaIngresoFormateada ?? fechaIngreso}');
+      buffer
+          .writeln('Fecha Ingreso: ${fechaIngresoFormateada ?? fechaIngreso}');
     return buffer.toString();
   }
 

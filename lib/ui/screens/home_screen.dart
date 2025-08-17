@@ -164,7 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
       print('   Pendientes: ${_stats['pendientes']}');
       print('   Enviadas: ${_stats['enviadas']}');
       print('   Aprobadas: ${_stats['aprobadas']}');
-      
     } catch (e) {
       print('❌ Error cargando datos: $e');
 
@@ -473,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser!;
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -506,8 +505,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         _stats['borradores'] ?? 0, Colors.orange)),
                 const SizedBox(width: 12),
                 Expanded(
-                    child: _buildStatCard(
-                        '📤', 'Enviadas', _stats['enviadas'] ?? 0, Colors.blue)),
+                    child: _buildStatCard('📤', 'Enviadas',
+                        _stats['enviadas'] ?? 0, Colors.blue)),
               ],
             ),
 
@@ -516,12 +515,12 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 Expanded(
-                    child: _buildStatCard(
-                        '✅', 'Aprobadas', _stats['aprobadas'] ?? 0, Colors.green)),
+                    child: _buildStatCard('✅', 'Aprobadas',
+                        _stats['aprobadas'] ?? 0, Colors.green)),
                 const SizedBox(width: 12),
                 Expanded(
-                    child: _buildStatCard(
-                        '❌', 'Rechazadas', _stats['rechazadas'] ?? 0, Colors.red)),
+                    child: _buildStatCard('❌', 'Rechazadas',
+                        _stats['rechazadas'] ?? 0, Colors.red)),
               ],
             ),
 
@@ -531,12 +530,11 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                     child: _buildStatCardWithTooltip(
-                      '⚠️', 
-                      _getPendientesLabel(user.role),
-                      _stats['pendientes'] ?? 0, 
-                      Colors.amber,
-                      _getPendientesTooltip(user.role)
-                    )),
+                        '⚠️',
+                        _getPendientesLabel(user.role),
+                        _stats['pendientes'] ?? 0,
+                        Colors.amber,
+                        _getPendientesTooltip(user.role))),
                 const SizedBox(width: 12),
                 Expanded(
                     child: _buildStatCard('👥', 'Empleados',
@@ -580,7 +578,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 🔥 NUEVO: Widget de estadística con tooltip
-  Widget _buildStatCardWithTooltip(String emoji, String label, int count, Color color, String tooltip) {
+  Widget _buildStatCardWithTooltip(
+      String emoji, String label, int count, Color color, String tooltip) {
     return Tooltip(
       message: tooltip,
       child: Container(
@@ -645,26 +644,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              
-              _buildHelpItem('📋 Borradores', 
-                'Sanciones guardadas pero no enviadas${role == 'supervisor' ? ' (puedes editarlas)' : ''}'),
-              
-              _buildHelpItem('📤 Enviadas', 
-                'Sanciones enviadas a gerencia para aprobación'),
-              
-              _buildHelpItem('✅ Aprobadas', 
-                'Sanciones aprobadas por gerencia'),
-              
-              _buildHelpItem('❌ Rechazadas', 
-                'Sanciones rechazadas${role == 'supervisor' ? ' (debes corregirlas)' : ''}'),
-              
+              _buildHelpItem('📋 Borradores',
+                  'Sanciones guardadas pero no enviadas${role == 'supervisor' ? ' (puedes editarlas)' : ''}'),
+              _buildHelpItem('📤 Enviadas',
+                  'Sanciones enviadas a gerencia para aprobación'),
+              _buildHelpItem('✅ Aprobadas', 'Sanciones aprobadas por gerencia'),
+              _buildHelpItem('❌ Rechazadas',
+                  'Sanciones rechazadas${role == 'supervisor' ? ' (debes corregirlas)' : ''}'),
               const Divider(),
-              
-              _buildHelpItem(
-                '⚠️ ${_getPendientesLabel(role)}',
-                _getPendientesTooltip(role),
-                highlight: true
-              ),
+              _buildHelpItem('⚠️ ${_getPendientesLabel(role)}',
+                  _getPendientesTooltip(role),
+                  highlight: true),
             ],
           ),
         ),
@@ -678,7 +668,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHelpItem(String title, String description, {bool highlight = false}) {
+  Widget _buildHelpItem(String title, String description,
+      {bool highlight = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
