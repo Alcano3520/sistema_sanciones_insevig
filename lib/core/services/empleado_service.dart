@@ -19,11 +19,36 @@ class EmpleadoService {
       print(
           '🔍 [EMPLEADOS API] Buscando: "$query" en proyecto empleados-insevig');
 
-      // 🔥 ESTRATEGIA SIMPLIFICADA Y CORREGIDA
+      // 🔥 ESTRATEGIA MEJORADA: Buscar palabras en cualquier orden
+      final palabras =
+          query.trim().split(' ').where((p) => p.isNotEmpty).toList();
+
+      // Si hay múltiples palabras, crear variaciones de búsqueda
+      String queryVariations = '';
+      if (palabras.length >= 2) {
+        // Búsqueda normal: "nombre apellido"
+        final normal = palabras.join(' ');
+        // Búsqueda invertida: "apellido nombre"
+        final invertida = palabras.reversed.join(' ');
+
+        // Crear query que busque ambas variaciones
+        queryVariations =
+            'nombres_completos.ilike.%$normal%,nombres_completos.ilike.%$invertida%,';
+
+        // También buscar cada palabra individualmente
+        for (var palabra in palabras) {
+          queryVariations += 'nombres_completos.ilike.%$palabra%,';
+        }
+      } else {
+        // Si es una sola palabra, buscar normalmente
+        queryVariations = 'nombres_completos.ilike.%$query%,';
+      }
+
+      // Construir la consulta completa
       final response = await _empleadosClient
           .from('empleados')
-          .select('*') // Simplificado
-          .or('nombres_completos.ilike.%$query%,nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}') // Todo en una línea
+          .select('*')
+          .or('${queryVariations}nombres.ilike.%$query%,apellidos.ilike.%$query%,cedula.ilike.%$query%,nomcargo.ilike.%$query%,nomdep.ilike.%$query%,cod.eq.${int.tryParse(query) ?? -1}')
           .eq('es_activo', true)
           .eq('es_liquidado', false)
           .neq('es_suspendido', true)
@@ -39,17 +64,36 @@ class EmpleadoService {
           .where((empleado) => empleado.puedeSerSancionado)
           .toList();
 
-      // 🔥 NUEVO: Ordenar priorizando los que empiezan con el término buscado
+      // 🔥 MEJORADO: Ordenar con mejor ranking
       empleadosFiltrados.sort((a, b) {
         final queryLower = query.toLowerCase();
-        final aStartsWith = a.displayName.toLowerCase().startsWith(queryLower);
-        final bStartsWith = b.displayName.toLowerCase().startsWith(queryLower);
-        
-        // Si uno empieza con el query y el otro no, priorizar el que empieza
+        final aName = a.displayName.toLowerCase();
+        final bName = b.displayName.toLowerCase();
+
+        // Prioridad 1: Coincidencia exacta
+        final aExact = aName == queryLower;
+        final bExact = bName == queryLower;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        // Prioridad 2: Empieza con la búsqueda completa
+        final aStartsWith = aName.startsWith(queryLower);
+        final bStartsWith = bName.startsWith(queryLower);
         if (aStartsWith && !bStartsWith) return -1;
         if (!aStartsWith && bStartsWith) return 1;
-        
-        // Si ambos empiezan o ambos no empiezan, ordenar alfabéticamente
+
+        // Prioridad 3: Contiene todas las palabras
+        if (palabras.length > 1) {
+          final aContieneTodasPalabras =
+              palabras.every((p) => aName.contains(p.toLowerCase()));
+          final bContieneTodasPalabras =
+              palabras.every((p) => bName.contains(p.toLowerCase()));
+
+          if (aContieneTodasPalabras && !bContieneTodasPalabras) return -1;
+          if (!aContieneTodasPalabras && bContieneTodasPalabras) return 1;
+        }
+
+        // Por defecto, ordenar alfabéticamente
         return a.displayName.compareTo(b.displayName);
       });
 
@@ -69,8 +113,10 @@ class EmpleadoService {
 
         // Usar múltiples consultas pequeñas en lugar de una grande
         final responses = <List<dynamic>>[];
+        final palabras =
+            query.trim().split(' ').where((p) => p.isNotEmpty).toList();
 
-        // Búsqueda por nombre
+        // Búsqueda por nombre completo
         final byName = await _empleadosClient
             .from('empleados')
             .select('*')
@@ -78,6 +124,18 @@ class EmpleadoService {
             .eq('es_activo', true)
             .limit(50);
         responses.add(byName);
+
+        // Si hay múltiples palabras, buscar en orden invertido
+        if (palabras.length >= 2) {
+          final queryInvertido = palabras.reversed.join(' ');
+          final byNameInverted = await _empleadosClient
+              .from('empleados')
+              .select('*')
+              .ilike('nombres_completos', '%$queryInvertido%')
+              .eq('es_activo', true)
+              .limit(50);
+          responses.add(byNameInverted);
+        }
 
         // Búsqueda por código si es numérico
         if (int.tryParse(query) != null) {
@@ -119,14 +177,23 @@ class EmpleadoService {
             .map<EmpleadoModel>((json) => EmpleadoModel.fromMap(json))
             .toList();
 
-        // 🔥 NUEVO: Aplicar el mismo ordenamiento a la búsqueda de respaldo
+        // Aplicar el mismo ordenamiento mejorado
         empleadosRespaldo.sort((a, b) {
           final queryLower = query.toLowerCase();
-          final aStartsWith = a.displayName.toLowerCase().startsWith(queryLower);
-          final bStartsWith = b.displayName.toLowerCase().startsWith(queryLower);
-          
-          if (aStartsWith && !bStartsWith) return -1;
-          if (!aStartsWith && bStartsWith) return 1;
+          final aName = a.displayName.toLowerCase();
+          final bName = b.displayName.toLowerCase();
+
+          // Verificar si contiene todas las palabras
+          if (palabras.length > 1) {
+            final aContieneTodasPalabras =
+                palabras.every((p) => aName.contains(p.toLowerCase()));
+            final bContieneTodasPalabras =
+                palabras.every((p) => bName.contains(p.toLowerCase()));
+
+            if (aContieneTodasPalabras && !bContieneTodasPalabras) return -1;
+            if (!aContieneTodasPalabras && bContieneTodasPalabras) return 1;
+          }
+
           return a.displayName.compareTo(b.displayName);
         });
 
@@ -506,9 +573,11 @@ class EmpleadoService {
       if (query != null && query.trim().isNotEmpty) {
         empleados.sort((a, b) {
           final queryLower = query.toLowerCase();
-          final aStartsWith = a.displayName.toLowerCase().startsWith(queryLower);
-          final bStartsWith = b.displayName.toLowerCase().startsWith(queryLower);
-          
+          final aStartsWith =
+              a.displayName.toLowerCase().startsWith(queryLower);
+          final bStartsWith =
+              b.displayName.toLowerCase().startsWith(queryLower);
+
           if (aStartsWith && !bStartsWith) return -1;
           if (!aStartsWith && bStartsWith) return 1;
           return a.displayName.compareTo(b.displayName);

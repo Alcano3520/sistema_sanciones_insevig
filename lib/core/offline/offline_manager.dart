@@ -189,7 +189,7 @@ class OfflineManager {
       return [];
     }
 
-    // Buscar coincidencias
+    // Buscar coincidencias flexibles
     final resultados = todosEmpleados.where((empleado) {
       // Crear texto de búsqueda combinando todos los campos
       final searchText = [
@@ -202,9 +202,60 @@ class OfflineManager {
         empleado.cod.toString(),
       ].where((field) => field != null).join(' ').toLowerCase();
 
-      // Verificar que TODAS las palabras estén presentes
+      // Si es una sola palabra, buscar normalmente
+      if (palabras.length == 1) {
+        return searchText.contains(queryLower);
+      }
+
+      // Para múltiples palabras, verificar que TODAS estén presentes
+      // sin importar el orden
       return palabras.every((palabra) => searchText.contains(palabra));
     }).toList();
+
+    // Ordenar los resultados por relevancia
+    resultados.sort((a, b) {
+      final aName = a.displayName.toLowerCase();
+      final bName = b.displayName.toLowerCase();
+
+      // Prioridad 1: Coincidencia exacta
+      if (aName == queryLower && bName != queryLower) return -1;
+      if (aName != queryLower && bName == queryLower) return 1;
+
+      // Prioridad 2: Empieza con la búsqueda completa
+      if (aName.startsWith(queryLower) && !bName.startsWith(queryLower))
+        return -1;
+      if (!aName.startsWith(queryLower) && bName.startsWith(queryLower))
+        return 1;
+
+      // Prioridad 3: Para búsquedas con múltiples palabras
+      if (palabras.length >= 2) {
+        // Verificar si contiene las palabras en orden normal
+        final ordenNormal = palabras.join(' ');
+        final aContieneOrdenNormal = aName.contains(ordenNormal);
+        final bContieneOrdenNormal = bName.contains(ordenNormal);
+
+        if (aContieneOrdenNormal && !bContieneOrdenNormal) return -1;
+        if (!aContieneOrdenNormal && bContieneOrdenNormal) return 1;
+
+        // Verificar si contiene las palabras en orden invertido
+        final ordenInvertido = palabras.reversed.join(' ');
+        final aContieneOrdenInvertido = aName.contains(ordenInvertido);
+        final bContieneOrdenInvertido = bName.contains(ordenInvertido);
+
+        if (aContieneOrdenInvertido && !bContieneOrdenInvertido) return -1;
+        if (!aContieneOrdenInvertido && bContieneOrdenInvertido) return 1;
+
+        // Si alguno empieza con la primera palabra de la búsqueda
+        final primeraPalabra = palabras.first;
+        if (aName.startsWith(primeraPalabra) &&
+            !bName.startsWith(primeraPalabra)) return -1;
+        if (!aName.startsWith(primeraPalabra) &&
+            bName.startsWith(primeraPalabra)) return 1;
+      }
+
+      // Por defecto, ordenar alfabéticamente
+      return a.displayName.compareTo(b.displayName);
+    });
 
     print('✅ [CACHE] Encontrados: ${resultados.length} empleados');
 
@@ -263,8 +314,9 @@ class OfflineManager {
 
       // Guardar mapa actualizado
       await _db.saveEmpleados(existingMap.values.toList());
-      
-      print('✅ Cache de empleados actualizado con ${empleados.length} nuevos registros');
+
+      print(
+          '✅ Cache de empleados actualizado con ${empleados.length} nuevos registros');
     } catch (e) {
       print('❌ Error actualizando cache empleados: $e');
     }
@@ -601,10 +653,10 @@ class OfflineManager {
       if (sancionId != null) {
         // Actualizar sanción local con ID del servidor
         final oldId = data['sancion_id'] as String;
-        
+
         // Eliminar sanción con ID temporal
         await _db.deleteSancion(oldId);
-        
+
         // Guardar con nuevo ID del servidor
         final sancionConId = sancion.copyWith(id: sancionId);
         await _db.saveSancion(sancionConId);

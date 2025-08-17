@@ -97,13 +97,17 @@ class OfflineDatabase {
       }
 
       print('📦 Todas las cajas Hive abiertas correctamente');
-      
+
       // 🔥 VERIFICAR que las boxes existen
       print('📦 Estado de las boxes:');
-      print('   - Empleados: ${empleadosBox?.isOpen ?? false} (${empleadosBox?.length ?? 0} items)');
-      print('   - Sanciones: ${sancionesBox?.isOpen ?? false} (${sancionesBox?.length ?? 0} items)');
-      print('   - SyncQueue: ${syncQueueBox?.isOpen ?? false} (${syncQueueBox?.length ?? 0} items)');
-      print('   - Metadata: ${Hive.box(metadataBoxName).isOpen} (${Hive.box(metadataBoxName).length} items)');
+      print(
+          '   - Empleados: ${empleadosBox?.isOpen ?? false} (${empleadosBox?.length ?? 0} items)');
+      print(
+          '   - Sanciones: ${sancionesBox?.isOpen ?? false} (${sancionesBox?.length ?? 0} items)');
+      print(
+          '   - SyncQueue: ${syncQueueBox?.isOpen ?? false} (${syncQueueBox?.length ?? 0} items)');
+      print(
+          '   - Metadata: ${Hive.box(metadataBoxName).isOpen} (${Hive.box(metadataBoxName).length} items)');
     } catch (e) {
       print('❌ Error abriendo cajas Hive: $e');
       rethrow;
@@ -145,7 +149,7 @@ class OfflineDatabase {
       }
 
       await box.putAll(empleadosMap);
-      
+
       // 🔥 CRÍTICO: Forzar escritura a disco
       await box.flush();
 
@@ -182,31 +186,94 @@ class OfflineDatabase {
       final empleados = getEmpleados();
 
       if (query.trim().isEmpty) {
-        return empleados.take(20).toList(); // Mostrar algunos si no hay query
+        return empleados.take(20).toList();
       }
 
       final queryLower = query.toLowerCase().trim();
+      final palabras =
+          queryLower.split(' ').where((p) => p.isNotEmpty).toList();
 
-      // 🔥 Búsqueda más flexible
-      return empleados
-          .where((empleado) {
-            // Buscar en múltiples campos
-            final searchableText = [
-              empleado.nombresCompletos,
-              empleado.nombres,
-              empleado.apellidos,
-              empleado.cedula,
-              empleado.nomcargo,
-              empleado.nomdep,
-              empleado.cod.toString(),
-            ].where((field) => field != null).join(' ').toLowerCase();
+      // 🔥 Búsqueda más flexible que funciona con cualquier orden de palabras
+      final resultados = empleados.where((empleado) {
+        // Crear texto de búsqueda combinando todos los campos
+        final searchableText = [
+          empleado.nombresCompletos,
+          empleado.nombres,
+          empleado.apellidos,
+          empleado.cedula,
+          empleado.nomcargo,
+          empleado.nomdep,
+          empleado.cod.toString(),
+        ].where((field) => field != null).join(' ').toLowerCase();
 
-            // Buscar cada palabra del query
-            final queryWords = queryLower.split(' ');
-            return queryWords.every((word) => searchableText.contains(word));
-          })
-          .take(50)
-          .toList(); // Limitar resultados
+        // Si es una sola palabra, buscar normalmente
+        if (palabras.length == 1) {
+          return searchableText.contains(queryLower);
+        }
+
+        // Si son múltiples palabras, verificar que todas estén presentes
+        // sin importar el orden
+        final todasLasPalabrasPresentes =
+            palabras.every((palabra) => searchableText.contains(palabra));
+
+        if (!todasLasPalabrasPresentes) {
+          return false;
+        }
+
+        // Verificación adicional: comprobar si las palabras están juntas
+        // en cualquier orden
+        if (palabras.length == 2) {
+          // Buscar "palabra1 palabra2" o "palabra2 palabra1"
+          final ordenNormal = palabras.join(' ');
+          final ordenInvertido = palabras.reversed.join(' ');
+
+          return searchableText.contains(ordenNormal) ||
+              searchableText.contains(ordenInvertido);
+        }
+
+        return true;
+      }).toList();
+
+      // Ordenar los resultados por relevancia
+      resultados.sort((a, b) {
+        final aName = a.displayName.toLowerCase();
+        final bName = b.displayName.toLowerCase();
+
+        // Prioridad 1: Coincidencia exacta
+        final aExact = aName == queryLower;
+        final bExact = bName == queryLower;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        // Prioridad 2: Empieza con la búsqueda
+        final aStartsWith = aName.startsWith(queryLower);
+        final bStartsWith = bName.startsWith(queryLower);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+
+        // Prioridad 3: Contiene la búsqueda completa (en cualquier orden)
+        if (palabras.length >= 2) {
+          final ordenNormal = palabras.join(' ');
+          final ordenInvertido = palabras.reversed.join(' ');
+
+          final aContieneOrdenNormal = aName.contains(ordenNormal);
+          final bContieneOrdenNormal = bName.contains(ordenNormal);
+          final aContieneOrdenInvertido = aName.contains(ordenInvertido);
+          final bContieneOrdenInvertido = bName.contains(ordenInvertido);
+
+          final aContieneAlgunOrden =
+              aContieneOrdenNormal || aContieneOrdenInvertido;
+          final bContieneAlgunOrden =
+              bContieneOrdenNormal || bContieneOrdenInvertido;
+
+          if (aContieneAlgunOrden && !bContieneAlgunOrden) return -1;
+          if (!aContieneAlgunOrden && bContieneAlgunOrden) return 1;
+        }
+
+        return a.displayName.compareTo(b.displayName);
+      });
+
+      return resultados.take(50).toList();
     } catch (e) {
       print('❌ Error buscando empleados en cache: $e');
       return [];
@@ -254,8 +321,9 @@ class OfflineDatabase {
       // 🔥 CRÍTICO: Usar await y flush
       await box.put(sancion.id, sancion);
       await box.flush(); // Forzar escritura a disco
-      
-      print('💾 Sanción ${sancion.id.substring(0, 8)} guardada y persistida en Hive');
+
+      print(
+          '💾 Sanción ${sancion.id.substring(0, 8)} guardada y persistida en Hive');
       print('   Total sanciones en cache: ${box.length}');
 
       return true;
@@ -288,8 +356,10 @@ class OfflineDatabase {
 
     try {
       final sanciones = getSanciones();
-      final filtered = sanciones.where((s) => s.supervisorId == supervisorId).toList();
-      print('📖 Encontradas ${filtered.length} sanciones del supervisor $supervisorId');
+      final filtered =
+          sanciones.where((s) => s.supervisorId == supervisorId).toList();
+      print(
+          '📖 Encontradas ${filtered.length} sanciones del supervisor $supervisorId');
       return filtered;
     } catch (e) {
       print('❌ Error obteniendo sanciones del supervisor: $e');
@@ -307,7 +377,7 @@ class OfflineDatabase {
 
       await box.delete(sancionId);
       await box.flush(); // 🔥 Forzar escritura
-      
+
       print('🗑️ Sanción $sancionId eliminada de Hive');
 
       return true;
@@ -333,7 +403,8 @@ class OfflineDatabase {
   }
 
   /// Agregar operación a la cola de sincronización
-  Future<bool> addToSyncQueue(String operation, Map<String, dynamic> data) async {
+  Future<bool> addToSyncQueue(
+      String operation, Map<String, dynamic> data) async {
     if (kIsWeb || !_isInitialized) return false;
 
     try {
@@ -351,7 +422,7 @@ class OfflineDatabase {
       final key = 'sync_${DateTime.now().millisecondsSinceEpoch}_${operation}';
       await box.put(key, queueItem);
       await box.flush(); // 🔥 Forzar escritura
-      
+
       print('📤 Operación "$operation" añadida a cola de sync');
       print('   Key: $key');
       print('   Total en cola: ${box.length}');
@@ -372,14 +443,14 @@ class OfflineDatabase {
       if (box == null) return [];
 
       final operations = <Map<String, dynamic>>[];
-      
+
       for (var value in box.values) {
         if (value is Map) {
           // Convertir a Map<String, dynamic>
           operations.add(Map<String, dynamic>.from(value));
         }
       }
-      
+
       print('📋 ${operations.length} operaciones pendientes de sync');
       return operations;
     } catch (e) {
@@ -398,7 +469,7 @@ class OfflineDatabase {
 
       await box.clear();
       await box.flush(); // 🔥 Forzar escritura
-      
+
       print('🧹 Cola de sync limpiada');
 
       return true;
@@ -420,7 +491,7 @@ class OfflineDatabase {
       final box = Hive.box(metadataBoxName);
       await box.put(key, value);
       await box.flush(); // 🔥 Forzar escritura
-      
+
       print('💾 Metadata "$key" guardada: $value');
       return true;
     } catch (e) {
@@ -471,13 +542,13 @@ class OfflineDatabase {
     try {
       await empleadosBox?.clear();
       await empleadosBox?.flush();
-      
+
       await sancionesBox?.clear();
       await sancionesBox?.flush();
-      
+
       await syncQueueBox?.clear();
       await syncQueueBox?.flush();
-      
+
       await Hive.box(metadataBoxName).clear();
       await Hive.box(metadataBoxName).flush();
 
