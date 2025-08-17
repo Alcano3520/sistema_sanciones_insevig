@@ -286,15 +286,57 @@ class EmpleadoModel {
     if (cedula != null && cedula!.isNotEmpty) buffer.writeln('Cédula: $cedula');
     buffer.writeln('Cargo: ${nomcargo ?? 'N/A'}');
     buffer.writeln('Departamento: ${nomdep ?? 'N/A'}');
-    if (seccion != null && seccion!.isNotEmpty)
-      buffer.writeln('Sección: $seccion');
+    // REMOVIDO: Sección
     buffer.writeln('Estado: $estadoDisplay');
     if (telefono != null && telefono!.isNotEmpty)
       buffer.writeln('Teléfono: $telefono');
     if (fechaIngreso != null && fechaIngreso!.isNotEmpty)
       buffer
           .writeln('Fecha Ingreso: ${fechaIngresoFormateada ?? fechaIngreso}');
+    if (fechaSalida != null && fechaSalida!.isNotEmpty)
+      buffer.writeln('Fecha Salida: ${fechaSalidaFormateada ?? fechaSalida}');
     return buffer.toString();
+  }
+
+  /// 🔥 NUEVO: Fecha de salida formateada
+  String? get fechaSalidaFormateada {
+    if (fechaSalida == null || fechaSalida!.isEmpty) return null;
+
+    try {
+      // Usar la misma lógica que fechaIngresoFormateada
+      String fechaLimpia = fechaSalida!;
+      if (fechaLimpia.contains('T')) {
+        fechaLimpia = fechaLimpia.split('T')[0];
+      }
+
+      if (fechaLimpia.contains(' ')) {
+        fechaLimpia = fechaLimpia.split(' ')[0];
+      }
+
+      if (fechaLimpia.contains('-') && fechaLimpia.length >= 10) {
+        final partes = fechaLimpia.split('-');
+        if (partes.length == 3 && partes[0].length == 4) {
+          final dia = partes[2].padLeft(2, '0');
+          final mes = partes[1].padLeft(2, '0');
+          final anio = partes[0];
+          return '$dia/$mes/$anio';
+        }
+      }
+
+      if (fechaLimpia.contains('/') && fechaLimpia.length >= 8) {
+        final partes = fechaLimpia.split('/');
+        if (partes.length == 3) {
+          final dia = partes[0].padLeft(2, '0');
+          final mes = partes[1].padLeft(2, '0');
+          final anio = partes[2];
+          return '$dia/$mes/$anio';
+        }
+      }
+
+      return fechaSalida;
+    } catch (e) {
+      return fechaSalida;
+    }
   }
 
   /// Validar si el empleado puede ser sancionado

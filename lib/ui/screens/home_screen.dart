@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -994,13 +995,70 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: EmpleadoSearchField(
                   onEmpleadoSelected: (empleado) {
                     Navigator.pop(context);
-                    // Mostrar información del empleado
+                    // Mostrar información del empleado con opción de copiar
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: Text(empleado.displayName),
-                        content: Text(empleado.infoCompleta),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                empleado.displayName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // Botón de copiar
+                            IconButton(
+                              icon: const Icon(Icons.copy, size: 20),
+                              onPressed: () {
+                                // Importar esto al inicio del archivo:
+                                // import 'package:flutter/services.dart';
+                                Clipboard.setData(
+                                  ClipboardData(text: empleado.infoCompleta),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        '✅ Información copiada al portapapeles'),
+                                    duration: Duration(seconds: 2),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              },
+                              tooltip: 'Copiar información',
+                            ),
+                          ],
+                        ),
+                        content: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Información seleccionable
+                              SelectableText(
+                                empleado.infoCompleta,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
                         actions: [
+                          TextButton.icon(
+                            icon: const Icon(Icons.copy, size: 16),
+                            label: const Text('Copiar'),
+                            onPressed: () {
+                              Clipboard.setData(
+                                ClipboardData(text: empleado.infoCompleta),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('✅ Información copiada'),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            },
+                          ),
                           TextButton(
                             onPressed: () => Navigator.pop(context),
                             child: const Text('Cerrar'),
