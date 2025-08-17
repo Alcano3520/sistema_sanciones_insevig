@@ -279,11 +279,42 @@ class EmpleadoModel {
   }
 
   /// Información completa para mostrar en detalles
+  String? get cedulaFormateada {
+    if (cedula == null || cedula!.isEmpty) return null;
+
+    try {
+      String cedulaLimpia = cedula!.trim();
+
+      // Si termina con .0 (viene como decimal), quitarlo
+      if (cedulaLimpia.endsWith('.0')) {
+        cedulaLimpia = cedulaLimpia.substring(0, cedulaLimpia.length - 2);
+      }
+
+      // Eliminar cualquier punto decimal
+      if (cedulaLimpia.contains('.')) {
+        cedulaLimpia = cedulaLimpia.split('.')[0];
+      }
+
+      // Asegurar que tenga 10 dígitos (cédula ecuatoriana)
+      // Si tiene menos de 10 dígitos, agregar ceros a la izquierda
+      if (cedulaLimpia.length < 10 && cedulaLimpia.isNotEmpty) {
+        cedulaLimpia = cedulaLimpia.padLeft(10, '0');
+      }
+
+      return cedulaLimpia;
+    } catch (e) {
+      return cedula;
+    }
+  }
+
+  /// Información completa para mostrar en detalles (ACTUALIZADO)
   String get infoCompleta {
     final buffer = StringBuffer();
     buffer.writeln('Código: $cod');
     buffer.writeln('Nombre: $displayName');
-    if (cedula != null && cedula!.isNotEmpty) buffer.writeln('Cédula: $cedula');
+    if (cedula != null && cedula!.isNotEmpty)
+      buffer.writeln(
+          'Cédula: ${cedulaFormateada ?? cedula}'); // Usar cedulaFormateada
     buffer.writeln('Cargo: ${nomcargo ?? 'N/A'}');
     buffer.writeln('Departamento: ${nomdep ?? 'N/A'}');
     // REMOVIDO: Sección

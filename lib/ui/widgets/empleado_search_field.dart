@@ -171,7 +171,8 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
-                if (empleado.fechaIngreso != null && empleado.fechaIngreso!.isNotEmpty)
+                if (empleado.fechaIngreso != null &&
+                    empleado.fechaIngreso!.isNotEmpty)
                   Text(
                     '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
                     style: const TextStyle(
@@ -181,7 +182,7 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
                   ),
                 if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
                   Text(
-                    'CI: ${empleado.cedula}',
+                    'CI: ${empleado.cedulaFormateada ?? empleado.cedula}', // Usar cedulaFormateada
                     style: const TextStyle(
                       color: Colors.grey,
                       fontSize: 12,
@@ -269,14 +270,15 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
-          if (empleado.fechaIngreso != null && empleado.fechaIngreso!.isNotEmpty)
+          if (empleado.fechaIngreso != null &&
+              empleado.fechaIngreso!.isNotEmpty)
             Text(
               '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
               style: const TextStyle(fontSize: 12, color: Colors.blue),
             ),
           if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
             Text(
-              'CI: ${empleado.cedula}',
+              'CI: ${empleado.cedulaFormateada ?? empleado.cedula}',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
         ],
