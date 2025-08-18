@@ -41,12 +41,36 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   hive_generator: ^2.0.1
   build_runner: ^2.4.8
-  flutter_launcher_icons: ^0.13.1   # 📌 Agregado para los íconos
+  flutter_launcher_icons: ^0.13.1
 
-flutter_icons:
+# 🎯 CONFIGURACIÓN DE ÍCONOS PARA TODAS LAS PLATAFORMAS
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon.png"  # 📌 Pon aquí tu ícono 1024x1024
+  windows: true
+  web: true
+  macos: true
+  image_path: "assets/icon.png"
+  
+  # 🤖 Android específico
+  android_gravity: "center"
+  android_adaptive_icon_background: "#1E3A8A"  # Color de fondo INSEVIG
+  android_adaptive_icon_foreground: "assets/icon.png"
+  android_12:
+    image_path: "assets/icon.png"
+    icon_background_color: "#1E3A8A"
+  
+  # 🍎 iOS específico
+  ios_marketing_icon: true
+  remove_alpha_ios: true
+  
+  # 🪟 Windows específico
+  windows_icon_size: 48  # Tamaño del ícono en Windows
+  
+  # 🌐 Web específico
+  web_favicon_path: "assets/icon.png"
+  
+  # Configuración mínima de Android
   min_sdk_android: 21
 
 flutter:

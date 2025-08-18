@@ -22,50 +22,50 @@ class CodigoDescuentoDialog extends StatefulWidget {
 class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
   final _comentariosController = TextEditingController();
   final _porcentajeCustomController = TextEditingController();
-  
+
   String _codigoSeleccionado = 'D05%';
   bool _usarCustom = false;
-  
+
   // 📋 CÓDIGOS PREDEFINIDOS DEL SISTEMA
   final List<Map<String, dynamic>> _codigosPredefinidos = [
     {
-      'codigo': 'SIN_DESC', 
-      'label': '✅ Sin descuento', 
+      'codigo': 'SIN_DESC',
+      'label': '✅ Sin descuento',
       'descripcion': 'Aprobar sin descuento salarial',
       'color': Colors.blue,
       'icon': Icons.check_circle,
     },
     {
-      'codigo': 'D05%', 
-      'label': '💰 5% descuento', 
+      'codigo': 'D05%',
+      'label': '💰 5% descuento',
       'descripcion': 'Descuento del 5% del sueldo mensual',
       'color': Colors.orange,
       'icon': Icons.percent,
     },
     {
-      'codigo': 'D10%', 
-      'label': '💰 10% descuento', 
+      'codigo': 'D10%',
+      'label': '💰 10% descuento',
       'descripcion': 'Descuento del 10% del sueldo mensual',
       'color': Colors.deepOrange,
       'icon': Icons.percent,
     },
     {
-      'codigo': 'D15%', 
-      'label': '💰 15% descuento', 
+      'codigo': 'D15%',
+      'label': '💰 15% descuento',
       'descripcion': 'Descuento del 15% del sueldo mensual',
       'color': Colors.red,
       'icon': Icons.percent,
     },
     {
-      'codigo': 'D20%', 
-      'label': '💰 20% descuento', 
+      'codigo': 'D20%',
+      'label': '💰 20% descuento',
       'descripcion': 'Descuento del 20% del sueldo mensual',
       'color': Colors.redAccent,
       'icon': Icons.percent,
     },
     {
-      'codigo': 'CUSTOM', 
-      'label': '🎯 Personalizado', 
+      'codigo': 'CUSTOM',
+      'label': '🎯 Personalizado',
       'descripcion': 'Definir porcentaje específico',
       'color': Colors.purple,
       'icon': Icons.tune,
@@ -74,114 +74,117 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      title: Row(
-        children: [
-          Icon(
-            widget.aprobar ? Icons.approval : Icons.cancel,
-            color: widget.aprobar ? Colors.green : Colors.red,
-            size: 28,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              widget.aprobar ? 'Aprobar con Código' : 'Rechazar Sanción',
-              style: const TextStyle(fontSize: 18),
+    return Material(
+      type: MaterialType.transparency,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              widget.aprobar ? Icons.approval : Icons.cancel,
+              color: widget.aprobar ? Colors.green : Colors.red,
+              size: 28,
             ),
-          ),
-        ],
-      ),
-      
-      content: Container(
-        width: double.maxFinite,
-        constraints: const BoxConstraints(maxHeight: 600),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 📄 RESUMEN DE LA SANCIÓN
-              _buildResumenSancion(),
-              
-              const SizedBox(height: 20),
-              
-              if (widget.aprobar) ...[
-                // 🎯 SELECTOR DE CÓDIGOS DE DESCUENTO
-                const Text(
-                  '💼 Seleccionar código de descuento:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Color(0xFF1E3A8A),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                widget.aprobar ? 'Aprobar con Código' : 'Rechazar Sanción',
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Container(
+          width: double.maxFinite,
+          constraints: const BoxConstraints(maxHeight: 600),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildResumenSancion(),
+                const SizedBox(height: 20),
+                if (widget.aprobar) ...[
+                  const Text(
+                    '💼 Seleccionar código de descuento:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF1E3A8A),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                
-                _buildSelectorCodigos(),
-                
-                const SizedBox(height: 16),
-                
-                // 🎛️ CAMPO PERSONALIZADO SI ES NECESARIO
-                if (_usarCustom) _buildCampoPersonalizado(),
-                
-                const SizedBox(height: 16),
-              ],
-              
-              // 💬 CAMPO DE COMENTARIOS
-              _buildCampoComentarios(),
-              
-              if (!widget.aprobar) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning, color: Colors.red, size: 16),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Los comentarios son obligatorios para rechazar',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
+                  const SizedBox(height: 12),
+                  _buildSelectorCodigos(),
+                  const SizedBox(height: 16),
+                  if (_usarCustom) _buildCampoPersonalizado(),
+                  const SizedBox(height: 16),
+                ],
+                _buildCampoComentarios(),
+                if (!widget.aprobar) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.red, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Los comentarios son obligatorios para rechazar',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final result = await showMenu<String>(
+                context: context,
+                position: RelativeRect.fromLTRB(100, 100, 100, 100),
+                items: _codigosPredefinidos.map((item) {
+                  return PopupMenuItem<String>(
+                    value: item['codigo'] as String,
+                    child: Text(item['label'] as String),
+                  );
+                }).toList(),
+              );
+
+              if (result != null) {
+                setState(() {
+                  _codigoSeleccionado = result;
+                  _usarCustom = result == 'CUSTOM';
+                });
+              }
+            },
+            icon: Icon(Icons.arrow_drop_down),
+            label: Text(_codigosPredefinidos.firstWhere(
+              (item) => item['codigo'] == _codigoSeleccionado,
+            )['label'] as String),
+          )
+        ],
       ),
-      
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        
-        ElevatedButton.icon(
-          onPressed: _confirmarAccion,
-          icon: Icon(widget.aprobar ? Icons.check_circle : Icons.cancel),
-          label: Text(widget.aprobar ? 'Aprobar' : 'Rechazar'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: widget.aprobar ? Colors.green : Colors.red,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-        ),
-      ],
     );
   }
 
@@ -215,7 +218,7 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
                 child: Text(
                   widget.sancion.tipoSancion,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold, 
+                    fontWeight: FontWeight.bold,
                     fontSize: 16,
                     color: Color(0xFF1E3A8A),
                   ),
@@ -224,14 +227,14 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
             ],
           ),
           const SizedBox(height: 12),
-          
           _buildInfoRow('👤', 'Empleado', widget.sancion.empleadoNombre),
           _buildInfoRow('🆔', 'Código', widget.sancion.empleadoCod.toString()),
           _buildInfoRow('🏢', 'Puesto', widget.sancion.puesto),
           _buildInfoRow('🧑‍💼', 'Agente', widget.sancion.agente),
-          _buildInfoRow('📅', 'Fecha', '${widget.sancion.fechaFormateada} ${widget.sancion.hora}'),
-          
-          if (widget.sancion.observaciones != null && widget.sancion.observaciones!.isNotEmpty) ...[
+          _buildInfoRow('📅', 'Fecha',
+              '${widget.sancion.fechaFormateada} ${widget.sancion.hora}'),
+          if (widget.sancion.observaciones != null &&
+              widget.sancion.observaciones!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(8),
@@ -248,7 +251,8 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
                   ),
                   Text(
                     widget.sancion.observaciones!,
-                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                    style: const TextStyle(
+                        fontSize: 12, fontStyle: FontStyle.italic),
                   ),
                 ],
               ),
@@ -284,65 +288,36 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
 
   /// 🎯 SELECTOR DE CÓDIGOS DE DESCUENTO
   Widget _buildSelectorCodigos() {
-    return Column(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: _codigosPredefinidos.map((item) {
         final codigo = item['codigo'] as String;
         final isSelected = _codigoSeleccionado == codigo;
         final color = item['color'] as Color;
-        final icon = item['icon'] as IconData;
-        
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected ? color : Colors.grey.shade300,
-              width: isSelected ? 2 : 1,
+        final label = item['label'] as String;
+
+        return ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _codigoSeleccionado = codigo;
+              _usarCustom = codigo == 'CUSTOM';
+            });
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isSelected ? color : Colors.grey.shade200,
+            foregroundColor: isSelected ? Colors.white : Colors.black87,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
-            borderRadius: BorderRadius.circular(12),
-            color: isSelected ? color.withOpacity(0.1) : null,
-            boxShadow: isSelected ? [
-              BoxShadow(
-                color: color.withOpacity(0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ] : null,
+            elevation: isSelected ? 4 : 1,
           ),
-          child: RadioListTile<String>(
-            value: codigo,
-            groupValue: _codigoSeleccionado,
-            onChanged: (value) {
-              setState(() {
-                _codigoSeleccionado = value!;
-                _usarCustom = value == 'CUSTOM';
-              });
-            },
-            title: Row(
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? color : Colors.grey,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  item['label'],
-                  style: TextStyle(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? color : null,
-                  ),
-                ),
-              ],
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
-            subtitle: Text(
-              item['descripcion'],
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? color.withOpacity(0.8) : Colors.grey.shade600,
-              ),
-            ),
-            activeColor: color,
-            dense: true,
           ),
         );
       }).toList(),
@@ -423,9 +398,9 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          widget.aprobar 
-            ? '💬 Comentarios de gerencia:'
-            : '❌ Motivo del rechazo:',
+          widget.aprobar
+              ? '💬 Comentarios de gerencia:'
+              : '❌ Motivo del rechazo:',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 14,
@@ -445,8 +420,8 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
               borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 2),
             ),
             hintText: widget.aprobar
-              ? 'Justificación del código aplicado...\nEj: "Aplicando D10% por reincidencia en atrasos"'
-              : 'Explica detalladamente por qué se rechaza la sanción...',
+                ? 'Justificación del código aplicado...\nEj: "Aplicando D10% por reincidencia en atrasos"'
+                : 'Explica detalladamente por qué se rechaza la sanción...',
             alignLabelWithHint: true,
             contentPadding: const EdgeInsets.all(12),
           ),
@@ -462,17 +437,17 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
       _showError('Los comentarios son obligatorios para rechazar');
       return;
     }
-    
+
     if (widget.aprobar && _comentariosController.text.trim().isEmpty) {
       _showError('Los comentarios son obligatorios para aprobar');
       return;
     }
-    
+
     if (_usarCustom && _porcentajeCustomController.text.trim().isEmpty) {
       _showError('Debe especificar el porcentaje personalizado');
       return;
     }
-    
+
     if (_usarCustom) {
       final porcentaje = int.tryParse(_porcentajeCustomController.text.trim());
       if (porcentaje == null || porcentaje < 0 || porcentaje > 100) {
@@ -488,7 +463,8 @@ class _CodigoDescuentoDialogState extends State<CodigoDescuentoDialog> {
         final porcentaje = _porcentajeCustomController.text.trim();
         codigoFinal = 'D${porcentaje}%|${_comentariosController.text.trim()}';
       } else {
-        codigoFinal = '$_codigoSeleccionado|${_comentariosController.text.trim()}';
+        codigoFinal =
+            '$_codigoSeleccionado|${_comentariosController.text.trim()}';
       }
     } else {
       codigoFinal = 'RECHAZADO|${_comentariosController.text.trim()}';
