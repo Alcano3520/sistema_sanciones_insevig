@@ -4,8 +4,7 @@ import '../../core/models/empleado_model.dart';
 import '../../core/offline/empleado_repository.dart';
 import '../../core/offline/offline_manager.dart';
 
-/// Widget de búsqueda de empleados con autocompletado
-/// 🔥 SOLUCIONADO: Fix para overflow cuando aparece el teclado
+/// Widget funcional - muestra DEPARTAMENTO
 class EmpleadoSearchField extends StatefulWidget {
   final Function(EmpleadoModel) onEmpleadoSelected;
   final String? hintText;
@@ -26,7 +25,6 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
 
   List<EmpleadoModel> _resultados = [];
   bool _isSearching = false;
-  bool _showResults = false;
   EmpleadoModel? _empleadoSeleccionado;
 
   @override
@@ -37,311 +35,93 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 SOLUCIÓN: Usar SingleChildScrollView para evitar overflow
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Campo de búsqueda
-          TextFormField(
-            controller: _controller,
-            decoration: InputDecoration(
-              labelText: 'Buscar empleado',
-              hintText:
-                  widget.hintText ?? 'Nombre, cédula, cargo o departamento...',
-              prefixIcon: _isSearching
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: Padding(
-                        padding: EdgeInsets.all(12),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : const Icon(Icons.search, color: Color(0xFF1E3A8A)),
-              suffixIcon: _controller.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: _clearSearch,
-                    )
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide:
-                    const BorderSide(color: Color(0xFF1E3A8A), width: 2),
-              ),
-            ),
-            onChanged: _onSearchChanged,
-            validator: (value) {
-              if (_empleadoSeleccionado == null) {
-                return 'Debe seleccionar un empleado';
-              }
-              return null;
-            },
-          ),
-
-          // Empleado seleccionado
-          if (_empleadoSeleccionado != null) ...[
-            const SizedBox(height: 12),
-            _buildEmpleadoSeleccionado(),
-          ],
-
-          // Resultados de búsqueda
-          if (_showResults && _resultados.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _buildResultsList(),
-          ],
-
-          // Mensaje cuando no hay resultados
-          if (_showResults &&
-              _resultados.isEmpty &&
-              !_isSearching &&
-              _controller.text.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _buildNoResults(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmpleadoSeleccionado() {
-    final empleado = _empleadoSeleccionado!;
-
-    String getInitials(String? fullName) {
-      if (fullName == null || fullName.isEmpty) return 'NN';
-
-      final words = fullName.trim().split(' ');
-      if (words.length >= 2) {
-        return '${words[0][0]}${words[1][0]}'.toUpperCase();
-      } else if (words.isNotEmpty && words[0].isNotEmpty) {
-        return words[0][0].toUpperCase();
-      }
-      return 'NN';
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.green,
-            child: Text(
-              getInitials(empleado.displayName),
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  empleado.displayName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                Text(
-                  'Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}',
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                Text(
-                  empleado.nomdep ?? 'Sin departamento',
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                if (empleado.fechaIngreso != null &&
-                    empleado.fechaIngreso!.isNotEmpty)
-                  Text(
-                    '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _controller,
+          decoration: InputDecoration(
+            hintText: 'Buscar empleado...',
+            prefixIcon: _isSearching 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                  ),
-                if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
-                  Text(
-                    'CI: ${empleado.cedulaFormateada ?? empleado.cedula}',
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 12,
-                    ),
-                  ),
-              ],
+                  )
+                : const Icon(Icons.search),
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: _onSearchChanged,
+        ),
+
+        if (_empleadoSeleccionado != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              border: Border.all(color: Colors.green),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.red),
-            onPressed: _clearSelection,
-            tooltip: 'Quitar selección',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResultsList() {
-    // 🔥 SOLUCIÓN: Calcular altura disponible dinámicamente
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenHeight = MediaQuery.of(context).size.height;
-        final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-        final appBarHeight = AppBar().preferredSize.height;
-        final statusBarHeight = MediaQuery.of(context).padding.top;
-
-        // Calcular altura disponible restando elementos fijos
-        final availableHeight = screenHeight -
-            keyboardHeight -
-            appBarHeight -
-            statusBarHeight -
-            200; // Espacio para otros elementos (campo de búsqueda, padding, etc.)
-
-        // Altura máxima más conservadora
-        final maxHeight = availableHeight.clamp(150.0, 250.0);
-
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: maxHeight,
-            minHeight: 150,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.check_circle, color: Colors.green),
+              title: Text(
+                _empleadoSeleccionado!.displayName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-            ],
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics:
-                const AlwaysScrollableScrollPhysics(), // 🔥 Permitir scroll siempre
-            itemCount: _resultados.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final empleado = _resultados[index];
-              return _buildEmpleadoTile(empleado);
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildEmpleadoTile(EmpleadoModel empleado) {
-    String getInitials(String? fullName) {
-      if (fullName == null || fullName.isEmpty) return 'NN';
-      final words = fullName.trim().split(' ');
-      if (words.length >= 2) {
-        return '${words[0][0]}${words[1][0]}'.toUpperCase();
-      } else if (words.isNotEmpty && words[0].isNotEmpty) {
-        return words[0][0].toUpperCase();
-      }
-      return 'NN';
-    }
-
-    return ListTile(
-      dense: true, // 🔥 Hacer tiles más compactos
-      leading: CircleAvatar(
-        radius: 20, // 🔥 Avatar más pequeño
-        backgroundColor: const Color(0xFF1E3A8A),
-        child: Text(
-          getInitials(empleado.displayName),
-          style: const TextStyle(color: Colors.white, fontSize: 11),
-        ),
-      ),
-      title: Text(
-        empleado.displayName,
-        style: const TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 13, // 🔥 Texto más pequeño
-        ),
-        maxLines: 1, // 🔥 Solo una línea para el título
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}',
-            style: const TextStyle(fontSize: 10), // 🔥 Texto más pequeño
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-          Text(
-            empleado.nomdep ?? 'Sin departamento',
-            style: const TextStyle(fontSize: 10),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-          // 🔥 Información adicional más compacta
-          if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
-            Text(
-              'CI: ${empleado.cedulaFormateada ?? empleado.cedula}',
-              style: const TextStyle(fontSize: 9, color: Colors.grey),
-            ),
-        ],
-      ),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 12),
-      onTap: () => _selectEmpleado(empleado),
-    );
-  }
-
-  Widget _buildNoResults() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search_off, color: Colors.orange),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Sin resultados',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'No se encontraron empleados con: "${_controller.text}"',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    _empleadoSeleccionado = null;
+                    _controller.clear();
+                    _resultados = [];
+                  });
+                },
+              ),
             ),
           ),
         ],
-      ),
+
+        if (_resultados.isNotEmpty && _empleadoSeleccionado == null) ...[
+          const SizedBox(height: 8),
+          Container(
+            height: 120,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ListView.builder(
+              itemCount: _resultados.length,
+              itemBuilder: (context, index) {
+                final empleado = _resultados[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(empleado.displayName),
+                  subtitle: empleado.nomdep != null ? Text(empleado.nomdep!) : null,
+                  onTap: () {
+                    setState(() {
+                      _empleadoSeleccionado = empleado;
+                      _controller.text = empleado.displayName;
+                      _resultados = [];
+                    });
+                    FocusScope.of(context).unfocus();
+                    widget.onEmpleadoSelected(empleado);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+
+        if (_resultados.isEmpty && !_isSearching && _controller.text.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          const Text('No se encontraron empleados'),
+        ],
+      ],
     );
   }
 
@@ -350,55 +130,25 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
       _searchEmpleados(query);
     } else {
       setState(() {
-        _showResults = false;
         _resultados = [];
       });
     }
   }
 
   Future<void> _searchEmpleados(String query) async {
+    if (!mounted) return;
+
     setState(() {
       _isSearching = true;
-      _showResults = true;
     });
 
     try {
       final resultados = await _empleadoRepository.searchEmpleados(query);
-
       if (mounted) {
         setState(() {
           _resultados = resultados;
           _isSearching = false;
         });
-
-        // 🆕 Mostrar fuente de datos
-        if (!kIsWeb) {
-          final offlineManager = OfflineManager.instance;
-          final isOffline = offlineManager.isOfflineMode;
-
-          // Solo mostrar si encontró resultados
-          if (resultados.isNotEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Icon(
-                      isOffline ? Icons.cloud_off : Icons.cloud_done,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(isOffline
-                        ? '📱 Mostrando empleados guardados (sin conexión)'
-                        : '☁️ Mostrando empleados actualizados'),
-                  ],
-                ),
-                backgroundColor: isOffline ? Colors.orange : Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -406,46 +156,193 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
           _resultados = [];
           _isSearching = false;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error buscando empleados: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }
+}
 
-  void _selectEmpleado(EmpleadoModel empleado) {
-    setState(() {
-      _empleadoSeleccionado = empleado;
-      _controller.text = empleado.displayName;
-      _showResults = false;
-      _resultados = [];
-    });
+// Widget para debuggear overflow
+class OverflowDebugger extends StatelessWidget {
+  final Widget child;
+  final String label;
 
-    // Ocultar el teclado
-    FocusScope.of(context).unfocus();
+  const OverflowDebugger({
+    super.key,
+    required this.child,
+    required this.label,
+  });
 
-    // Notificar al widget padre
-    widget.onEmpleadoSelected(empleado);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.red, width: 1),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            color: Colors.red,
+            width: double.infinity,
+            padding: const EdgeInsets.all(2),
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 8),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// Versión ultra simple para comparar
+class EmpleadoSearchSimple extends StatefulWidget {
+  final Function(EmpleadoModel) onEmpleadoSelected;
+
+  const EmpleadoSearchSimple({
+    super.key,
+    required this.onEmpleadoSelected,
+  });
+
+  @override
+  State<EmpleadoSearchSimple> createState() => _EmpleadoSearchSimpleState();
+}
+
+class _EmpleadoSearchSimpleState extends State<EmpleadoSearchSimple> {
+  final TextEditingController _controller = TextEditingController();
+  final EmpleadoRepository _empleadoRepository = EmpleadoRepository.instance;
+  List<EmpleadoModel> _resultados = [];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              hintText: 'Buscar...',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (query) {
+              if (query.length >= 2) {
+                _search(query);
+              } else {
+                setState(() => _resultados = []);
+              }
+            },
+          ),
+          
+          if (_resultados.isNotEmpty)
+            SizedBox(
+              height: 100,
+              child: ListView(
+                children: _resultados.map((empleado) => 
+                  TextButton(
+                    onPressed: () => widget.onEmpleadoSelected(empleado),
+                    child: Text(empleado.displayName),
+                  )
+                ).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
-  void _clearSearch() {
-    setState(() {
-      _controller.clear();
-      _showResults = false;
-      _resultados = [];
-    });
+  Future<void> _search(String query) async {
+    try {
+      final resultados = await _empleadoRepository.searchEmpleados(query);
+      if (mounted) setState(() => _resultados = resultados);
+    } catch (e) {
+      if (mounted) setState(() => _resultados = []);
+    }
+  }
+}
+
+// Contenedores que NO dan overflow
+class EmpleadoSearchDialog {
+  static Future<EmpleadoModel?> showBottomSheet(BuildContext context) {
+    return showModalBottomSheet<EmpleadoModel>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        builder: (context, scrollController) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 16,
+            left: 16,
+            right: 16,
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              Row(
+                children: [
+                  const Icon(Icons.search),
+                  const SizedBox(width: 8),
+                  const Text('Buscar Empleados', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              Expanded(
+                child: EmpleadoSearchField(
+                  onEmpleadoSelected: (empleado) => Navigator.pop(context, empleado),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  void _clearSelection() {
-    setState(() {
-      _empleadoSeleccionado = null;
-      _controller.clear();
-      _showResults = false;
-      _resultados = [];
-    });
+  static Future<EmpleadoModel?> showAlert(BuildContext context) {
+    return showDialog<EmpleadoModel>(
+      context: context,
+      builder: (context) => AlertDialog(
+        contentPadding: const EdgeInsets.all(16),
+        title: const Text('Buscar Empleados'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: EmpleadoSearchField(
+            onEmpleadoSelected: (empleado) => Navigator.pop(context, empleado),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
   }
 }
