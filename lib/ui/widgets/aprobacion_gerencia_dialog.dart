@@ -46,7 +46,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
             size: 28,
           ),
           const SizedBox(width: 12),
-          const Text('Aprobación Gerencia'),
+          const Text('Aprobación G.'),
         ],
       ),
       content: SizedBox(
