@@ -12,10 +12,10 @@ class SancionCard extends StatelessWidget {
   final SancionModel sancion;
   final VoidCallback? onTap;
   final VoidCallback? onStatusChanged;
-  
+
   // ✅ NUEVOS CALLBACKS PARA SISTEMA JERÁRQUICO
   final VoidCallback? onApprobar;
-  final VoidCallback? onRechazar; 
+  final VoidCallback? onRechazar;
   final VoidCallback? onRevisionRrhh;
 
   const SancionCard({
@@ -102,10 +102,12 @@ class SancionCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildInfoColumn('Empleado', '${sancion.empleadoNombre} (#${sancion.empleadoCod})'),
+                        child: _buildInfoColumn('Empleado',
+                            '${sancion.empleadoNombre} (#${sancion.empleadoCod})'),
                       ),
                       Expanded(
-                        child: _buildInfoColumn('Fecha', sancion.fechaFormateada),
+                        child:
+                            _buildInfoColumn('Fecha', sancion.fechaFormateada),
                       ),
                     ],
                   ),
@@ -126,7 +128,8 @@ class SancionCard extends StatelessWidget {
                   // 🔧 NUEVO: Mostrar nombre del supervisor que creó la sanción
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.grey.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
@@ -140,15 +143,22 @@ class SancionCard extends StatelessWidget {
                           color: Colors.grey.shade600,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          'Creado por: ${sancion.supervisorDisplayName}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontStyle: FontStyle.italic,
+                        // ✅ FIX: Usar Expanded para el texto del supervisor
+                        Expanded(
+                          child: Text(
+                            'Creado por: ${sancion.supervisorDisplayName}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1, // ✅ Limitar a 1 línea
+                            overflow:
+                                TextOverflow.ellipsis, // ✅ Agregar ellipsis
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(
+                            width: 8), // ✅ Cambiar Spacer por SizedBox fijo
                         Text(
                           sancion.hora,
                           style: TextStyle(
@@ -162,18 +172,21 @@ class SancionCard extends StatelessWidget {
                   ),
 
                   // Observaciones si existen
-                  if (sancion.observaciones != null && sancion.observaciones!.isNotEmpty) ...[
+                  if (sancion.observaciones != null &&
+                      sancion.observaciones!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: Colors.orange.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                        border:
+                            Border.all(color: Colors.orange.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.note, size: 16, color: Colors.orange),
+                          const Icon(Icons.note,
+                              size: 16, color: Colors.orange),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -200,7 +213,8 @@ class SancionCard extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.business, size: 16, color: Colors.blue),
+                          const Icon(Icons.business,
+                              size: 16, color: Colors.blue),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -223,11 +237,13 @@ class SancionCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                        border:
+                            Border.all(color: Colors.green.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.admin_panel_settings, size: 16, color: Colors.green),
+                          const Icon(Icons.admin_panel_settings,
+                              size: 16, color: Colors.green),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -263,7 +279,9 @@ class SancionCard extends StatelessWidget {
     // Si es modo aprobación y hay callbacks específicos, mostrar botones jerárquicos
     if (canApprove) {
       // Para GERENCIA: botones de aprobar/rechazar si está en modo aprobación
-      if (role == 'gerencia' && onApprobar != null && sancion.canBeApprovedByGerencia) {
+      if (role == 'gerencia' &&
+          onApprobar != null &&
+          sancion.canBeApprovedByGerencia) {
         return Row(
           children: [
             Expanded(
@@ -295,7 +313,9 @@ class SancionCard extends StatelessWidget {
       }
 
       // Para RRHH: botón de revisión si está en modo aprobación
-      if (role == 'rrhh' && onRevisionRrhh != null && sancion.canBeReviewedByRrhh) {
+      if (role == 'rrhh' &&
+          onRevisionRrhh != null &&
+          sancion.canBeReviewedByRrhh) {
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -317,9 +337,11 @@ class SancionCard extends StatelessWidget {
 
   /// Botones de acción estándar (los que ya existían)
   Widget _buildStandardActionButtons(dynamic currentUser) {
-    final canEdit = sancion.supervisorId == currentUser.id && sancion.status == 'borrador';
+    final canEdit =
+        sancion.supervisorId == currentUser.id && sancion.status == 'borrador';
     final canChangeStatus = currentUser.canChangeStatus;
-    final canTogglePendiente = currentUser.canApprove || sancion.supervisorId == currentUser.id;
+    final canTogglePendiente =
+        currentUser.canApprove || sancion.supervisorId == currentUser.id;
 
     final buttons = <Widget>[];
 
@@ -361,7 +383,8 @@ class SancionCard extends StatelessWidget {
             sancion.pendiente ? Icons.check_circle : Icons.pending,
             size: 16,
           ),
-          label: Text(sancion.pendiente ? 'Marcar Resuelto' : 'Marcar Pendiente'),
+          label:
+              Text(sancion.pendiente ? 'Marcar Resuelto' : 'Marcar Pendiente'),
           style: OutlinedButton.styleFrom(
             foregroundColor: sancion.pendiente ? Colors.green : Colors.orange,
           ),
@@ -464,7 +487,7 @@ class SancionCard extends StatelessWidget {
   Future<void> _changeStatus(String newStatus) async {
     try {
       final repository = SancionRepository.instance;
-      
+
       final success = await repository.changeStatus(
         sancion.id,
         newStatus,
@@ -482,7 +505,7 @@ class SancionCard extends StatelessWidget {
   Future<void> _togglePendiente() async {
     try {
       final repository = SancionRepository.instance;
-      
+
       final success = await repository.togglePendiente(
         sancion.id,
         !sancion.pendiente,
