@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/models/empleado_model.dart';
-import '../../core/offline/empleado_repository.dart'; // 🔥 CAMBIO: Repository en vez de Service
+import '../../core/offline/empleado_repository.dart';
 import '../../core/offline/offline_manager.dart';
 
 /// Widget de búsqueda de empleados con autocompletado
-/// Replica la funcionalidad de búsqueda de tu app Kivy
-/// 🔥 ACTUALIZADO para usar EmpleadoRepository con funcionalidad offline
+/// 🔥 SOLUCIONADO: Fix para overflow cuando aparece el teclado
 class EmpleadoSearchField extends StatefulWidget {
   final Function(EmpleadoModel) onEmpleadoSelected;
   final String? hintText;
@@ -23,8 +22,7 @@ class EmpleadoSearchField extends StatefulWidget {
 
 class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
   final TextEditingController _controller = TextEditingController();
-  final EmpleadoRepository _empleadoRepository =
-      EmpleadoRepository.instance; // 🔥 CAMBIO
+  final EmpleadoRepository _empleadoRepository = EmpleadoRepository.instance;
 
   List<EmpleadoModel> _resultados = [];
   bool _isSearching = false;
@@ -39,77 +37,80 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Campo de búsqueda
-        TextFormField(
-          controller: _controller,
-          decoration: InputDecoration(
-            labelText: 'Buscar empleado',
-            hintText:
-                widget.hintText ?? 'Nombre, cédula, cargo o departamento...',
-            prefixIcon: _isSearching
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : const Icon(Icons.search, color: Color(0xFF1E3A8A)),
-            suffixIcon: _controller.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: _clearSearch,
-                  )
-                : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+    // 🔥 SOLUCIÓN: Usar SingleChildScrollView para evitar overflow
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Campo de búsqueda
+          TextFormField(
+            controller: _controller,
+            decoration: InputDecoration(
+              labelText: 'Buscar empleado',
+              hintText:
+                  widget.hintText ?? 'Nombre, cédula, cargo o departamento...',
+              prefixIcon: _isSearching
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : const Icon(Icons.search, color: Color(0xFF1E3A8A)),
+              suffixIcon: _controller.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: _clearSearch,
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: Color(0xFF1E3A8A), width: 2),
+              ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 2),
-            ),
+            onChanged: _onSearchChanged,
+            validator: (value) {
+              if (_empleadoSeleccionado == null) {
+                return 'Debe seleccionar un empleado';
+              }
+              return null;
+            },
           ),
-          onChanged: _onSearchChanged,
-          validator: (value) {
-            if (_empleadoSeleccionado == null) {
-              return 'Debe seleccionar un empleado';
-            }
-            return null;
-          },
-        ),
 
-        // Empleado seleccionado
-        if (_empleadoSeleccionado != null) ...[
-          const SizedBox(height: 12),
-          _buildEmpleadoSeleccionado(),
-        ],
+          // Empleado seleccionado
+          if (_empleadoSeleccionado != null) ...[
+            const SizedBox(height: 12),
+            _buildEmpleadoSeleccionado(),
+          ],
 
-        // Resultados de búsqueda
-        if (_showResults && _resultados.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _buildResultsList(),
-        ],
+          // Resultados de búsqueda
+          if (_showResults && _resultados.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildResultsList(),
+          ],
 
-        // Mensaje cuando no hay resultados
-        if (_showResults &&
-            _resultados.isEmpty &&
-            !_isSearching &&
-            _controller.text.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _buildNoResults(),
+          // Mensaje cuando no hay resultados
+          if (_showResults &&
+              _resultados.isEmpty &&
+              !_isSearching &&
+              _controller.text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildNoResults(),
+          ],
         ],
-      ],
+      ),
     );
   }
 
   Widget _buildEmpleadoSeleccionado() {
     final empleado = _empleadoSeleccionado!;
 
-    // Función auxiliar para obtener iniciales de forma segura
     String getInitials(String? fullName) {
       if (fullName == null || fullName.isEmpty) return 'NN';
 
@@ -182,7 +183,7 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
                   ),
                 if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
                   Text(
-                    'CI: ${empleado.cedulaFormateada ?? empleado.cedula}', // Usar cedulaFormateada
+                    'CI: ${empleado.cedulaFormateada ?? empleado.cedula}',
                     style: const TextStyle(
                       color: Colors.grey,
                       fontSize: 12,
@@ -202,29 +203,54 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
   }
 
   Widget _buildResultsList() {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 300),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+    // 🔥 SOLUCIÓN: Calcular altura disponible dinámicamente
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+        final appBarHeight = AppBar().preferredSize.height;
+        final statusBarHeight = MediaQuery.of(context).padding.top;
+
+        // Calcular altura disponible restando elementos fijos
+        final availableHeight = screenHeight -
+            keyboardHeight -
+            appBarHeight -
+            statusBarHeight -
+            200; // Espacio para otros elementos (campo de búsqueda, padding, etc.)
+
+        // Altura máxima más conservadora
+        final maxHeight = availableHeight.clamp(150.0, 250.0);
+
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: maxHeight,
+            minHeight: 150,
           ),
-        ],
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: _resultados.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final empleado = _resultados[index];
-          return _buildEmpleadoTile(empleado);
-        },
-      ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics:
+                const AlwaysScrollableScrollPhysics(), // 🔥 Permitir scroll siempre
+            itemCount: _resultados.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final empleado = _resultados[index];
+              return _buildEmpleadoTile(empleado);
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -241,20 +267,22 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
     }
 
     return ListTile(
+      dense: true, // 🔥 Hacer tiles más compactos
       leading: CircleAvatar(
+        radius: 20, // 🔥 Avatar más pequeño
         backgroundColor: const Color(0xFF1E3A8A),
         child: Text(
           getInitials(empleado.displayName),
-          style: const TextStyle(color: Colors.white, fontSize: 12),
+          style: const TextStyle(color: Colors.white, fontSize: 11),
         ),
       ),
       title: Text(
         empleado.displayName,
         style: const TextStyle(
           fontWeight: FontWeight.w500,
-          fontSize: 14, // Reducido de 16 (default) a 14
+          fontSize: 13, // 🔥 Texto más pequeño
         ),
-        maxLines: 2, // Permitir 2 líneas
+        maxLines: 1, // 🔥 Solo una línea para el título
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Column(
@@ -262,31 +290,25 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
         children: [
           Text(
             'Cód: ${empleado.cod} • ${empleado.nomcargo ?? 'Sin cargo'}',
-            style: const TextStyle(fontSize: 11), // Reducido
+            style: const TextStyle(fontSize: 10), // 🔥 Texto más pequeño
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
           Text(
             empleado.nomdep ?? 'Sin departamento',
-            style: const TextStyle(fontSize: 11), // Reducido
+            style: const TextStyle(fontSize: 10),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
-          if (empleado.fechaIngreso != null &&
-              empleado.fechaIngreso!.isNotEmpty)
-            Text(
-              '📅 Ingreso: ${empleado.fechaIngresoFormateada ?? empleado.fechaIngreso}',
-              style: const TextStyle(fontSize: 11, color: Colors.blue),
-            ),
+          // 🔥 Información adicional más compacta
           if (empleado.cedula != null && empleado.cedula!.isNotEmpty)
             Text(
               'CI: ${empleado.cedulaFormateada ?? empleado.cedula}',
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              style: const TextStyle(fontSize: 9, color: Colors.grey),
             ),
         ],
       ),
-      trailing:
-          const Icon(Icons.arrow_forward_ios, size: 14), // Icono más pequeño
+      trailing: const Icon(Icons.arrow_forward_ios, size: 12),
       onTap: () => _selectEmpleado(empleado),
     );
   }
@@ -398,8 +420,7 @@ class _EmpleadoSearchFieldState extends State<EmpleadoSearchField> {
   void _selectEmpleado(EmpleadoModel empleado) {
     setState(() {
       _empleadoSeleccionado = empleado;
-      _controller.text =
-          empleado.displayName; // Usa displayName que siempre retorna String
+      _controller.text = empleado.displayName;
       _showResults = false;
       _resultados = [];
     });
