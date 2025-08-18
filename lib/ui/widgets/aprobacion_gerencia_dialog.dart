@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/sancion_model.dart';
 
 /// Widget especializado para aprobación de sanciones por parte de Gerencia
-/// Incluye sistema de códigos de descuento predefinidos
-/// Flujo: Supervisor crea → **GERENCIA APRUEBA CON CÓDIGO** → RRHH procesa
+/// ✅ FIXED: Solucionado problema de renderizado en Windows Desktop
 class AprobacionGerenciaDialog extends StatefulWidget {
   final SancionModel sancion;
   final Function(String codigo, String comentario) onApprove;
@@ -21,7 +20,7 @@ class AprobacionGerenciaDialog extends StatefulWidget {
 }
 
 class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
-  String _codigoSeleccionado = 'LIBRE'; // ✅ LIBRE POR DEFECTO
+  String _codigoSeleccionado = 'LIBRE';
   final _comentarioController = TextEditingController();
   bool _aprobar = true;
 
@@ -32,248 +31,375 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
     'D10%': 'Descuento 10%',
     'D15%': 'Descuento 15%',
     'D20%': 'Descuento 20%',
-    'LIBRE': 'Comentario libre', // ✅ TEXTO MÁS CORTO
+    'LIBRE': 'Comentario libre',
   };
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        children: [
-          Icon(
-            _aprobar ? Icons.check_circle : Icons.cancel,
-            color: _aprobar ? Colors.green : Colors.red,
-            size: 28,
+    return Theme(
+      // 🛠️ FORZAR TEMA MATERIAL PARA WINDOWS
+      data: Theme.of(context).copyWith(
+        // Asegurar colores para desktop
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+          primary: const Color(0xFF1E3A8A),
+          onPrimary: Colors.white,
+          surface: Colors.white,
+          onSurface: Colors.black87,
+        ),
+        // Tema específico para dropdown
+        dropdownMenuTheme: DropdownMenuThemeData(
+          textStyle: const TextStyle(
+            color: Colors.black87,
+            fontSize: 14,
           ),
-          const SizedBox(width: 12),
-          const Text('Aprobación Gerencia'),
-        ],
+          menuStyle: MenuStyle(
+            backgroundColor: WidgetStateProperty.all(Colors.white),
+            surfaceTintColor: WidgetStateProperty.all(Colors.white),
+          ),
+        ),
       ),
-      content: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7, // ✅ ALTURA MÁXIMA FIJA
-        width: MediaQuery.of(context).size.width * 0.75,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(), // ✅ AGREGADO
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // ✅ AGREGADO
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Resumen de sanción
-              _buildResumenSancion(),
+      child: AlertDialog(
+        backgroundColor: Colors.white, // 🛠️ FORZAR FONDO BLANCO
+        surfaceTintColor: Colors.white, // 🛠️ QUITAR TINT EN WINDOWS
+        title: Row(
+          children: [
+            Icon(
+              _aprobar ? Icons.check_circle : Icons.cancel,
+              color: _aprobar ? Colors.green : Colors.red,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Aprobación Gerencia',
+              style: TextStyle(color: Colors.black87), // 🛠️ FORZAR COLOR
+            ),
+          ],
+        ),
+        content: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          width: MediaQuery.of(context).size.width * 0.75,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildResumenSancion(),
+                const SizedBox(height: 8),
 
-              const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
-
-              // Toggle Aprobar/Rechazar
-              const Text(
-                'Decisión:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6), // ✅ REDUCIDO de 8 a 6
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(
-                    value: true,
-                    label: Text('Aprobar'),
-                    icon: Icon(Icons.check_circle),
-                  ),
-                  ButtonSegment(
-                    value: false,
-                    label: Text('Rechazar'),
-                    icon: Icon(Icons.cancel),
-                  ),
-                ],
-                selected: {_aprobar},
-                onSelectionChanged: (Set<bool> newSelection) {
-                  setState(() => _aprobar = newSelection.first);
-                },
-                style: SegmentedButton.styleFrom(
-                  selectedBackgroundColor: _aprobar 
-                      ? Colors.green.withOpacity(0.2) 
-                      : Colors.red.withOpacity(0.2),
-                  selectedForegroundColor: _aprobar ? Colors.green : Colors.red,
-                ),
-              ),
-
-              const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
-
-              // Si aprueba: selector de código descuento
-              if (_aprobar) ...[
+                // Toggle Aprobar/Rechazar
                 const Text(
-                  'Código de Descuento:',
+                  'Decisión:',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
+                    color: Colors.black87, // 🛠️ FORZAR COLOR
                   ),
                 ),
-                const SizedBox(height: 6), // ✅ REDUCIDO de 8 a 6
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DropdownButtonFormField<String>(
-                    value: _codigoSeleccionado,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8), // ✅ REDUCIDO vertical de 12 a 8
+                const SizedBox(height: 6),
+                
+                // 🛠️ REEMPLAZAR SegmentedButton POR CUSTOM BUTTONS PARA WINDOWS
+                _buildDecisionButtons(),
+
+                const SizedBox(height: 8),
+
+                // Si aprueba: selector de código descuento
+                if (_aprobar) ...[
+                  const Text(
+                    'Código de Descuento:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.black87, // 🛠️ FORZAR COLOR
                     ),
-                    items: codigosDescuento.entries.map((entry) =>
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Flexible( // ✅ ENVUELTO EN FLEXIBLE
-                            child: Text(
-                              '${entry.key} - ${entry.value}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF1E3A8A),
-                              ),
-                              overflow: TextOverflow.ellipsis, // ✅ AGREGADO OVERFLOW
-                            ),
-                          ),
-                        )).toList(),
-                    onChanged: (value) => setState(() => _codigoSeleccionado = value!),
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  
+                  // 🛠️ DROPDOWN PERSONALIZADO PARA WINDOWS
+                  _buildDropdownPersonalizado(),
 
-                const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
+                  const SizedBox(height: 8),
 
-                // Vista previa del código seleccionado
-                Container(
-                  padding: const EdgeInsets.all(6), // ✅ REDUCIDO de 8 a 6
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6), // ✅ REDUCIDO de 8 a 6
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min, // ✅ AGREGADO
-                    children: [
-                      Text(
-                        _codigoSeleccionado == 'LIBRE' 
-                            ? 'Modalidad seleccionada:' // ✅ TEXTO DIFERENTE PARA LIBRE
-                            : 'Código seleccionado:',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11, // ✅ REDUCIDO de 12 a 11
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 2), // ✅ REDUCIDO de 4 a 2
-                      Flexible( // ✅ ENVUELTO EN FLEXIBLE
-                        child: Text(
-                          codigosDescuento[_codigoSeleccionado]!,
-                          style: const TextStyle(fontSize: 12), // ✅ REDUCIDO de 14 a 12
-                          maxLines: 1, // ✅ REDUCIDO de 2 a 1
-                          overflow: TextOverflow.ellipsis, // ✅ AGREGADO
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                  // Vista previa del código seleccionado
+                  _buildVistaPrevia(),
 
-                const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
-              ],
+                  const SizedBox(height: 8),
+                ],
 
-              // Campo comentarios
-              Text(
-                _aprobar 
-                    ? (_codigoSeleccionado == 'LIBRE' 
-                        ? 'Comentarios (opcional):' // ✅ NUEVO: específico para modo libre
-                        : 'Comentarios adicionales:')
-                    : 'Motivo del rechazo (obligatorio):',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14, // ✅ REDUCIDO de 16 a 14
-                ),
-              ),
-              const SizedBox(height: 6), // ✅ REDUCIDO de 8 a 6
-              TextField(
-                controller: _comentarioController,
-                maxLines: 2, // ✅ REDUCIDO de 3 a 2
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  hintText: _aprobar
+                // Campo comentarios
+                Text(
+                  _aprobar 
                       ? (_codigoSeleccionado == 'LIBRE' 
-                          ? 'Comentario libre (opcional)...' // ✅ NUEVO: específico para modo libre
-                          : 'Justificación del código seleccionado...')
-                      : 'Explique por qué se rechaza...',
-                  hintStyle: TextStyle(color: Colors.grey.shade500),
-                  contentPadding: const EdgeInsets.all(8), // ✅ AGREGADO PADDING REDUCIDO
+                          ? 'Comentarios (opcional):' 
+                          : 'Comentarios adicionales:')
+                      : 'Motivo del rechazo (obligatorio):',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.black87, // 🛠️ FORZAR COLOR
+                  ),
                 ),
-              ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _comentarioController,
+                  maxLines: 2,
+                  style: const TextStyle(color: Colors.black87), // 🛠️ FORZAR COLOR
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    hintText: _aprobar
+                        ? (_codigoSeleccionado == 'LIBRE' 
+                            ? 'Comentario libre (opcional)...' 
+                            : 'Justificación del código seleccionado...')
+                        : 'Explique por qué se rechaza...',
+                    hintStyle: TextStyle(color: Colors.grey.shade500),
+                    contentPadding: const EdgeInsets.all(8),
+                    fillColor: Colors.white, // 🛠️ FORZAR FONDO BLANCO
+                    filled: true,
+                  ),
+                ),
 
-              if (_aprobar) ...[
-                const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
-                Container(
-                  padding: const EdgeInsets.all(6), // ✅ REDUCIDO de 8 a 6
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6), // ✅ REDUCIDO de 8 a 6
-                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                if (_aprobar) ...[
+                  const SizedBox(height: 8),
+                  _buildFormatoFinal(),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black87, // 🛠️ FORZAR COLOR
+            ),
+            child: const Text('Cancelar'),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: _procesarAprobacion,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _aprobar ? Colors.green : Colors.red,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: Text(_aprobar ? 'Aprobar' : 'Rechazar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🛠️ BOTONES PERSONALIZADOS PARA DECISIÓN (REEMPLAZO DE SegmentedButton)
+  Widget _buildDecisionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () => setState(() => _aprobar = true),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: _aprobar ? Colors.green.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+                border: Border.all(
+                  color: _aprobar ? Colors.green : Colors.grey,
+                  width: _aprobar ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    color: _aprobar ? Colors.green : Colors.grey,
+                    size: 20,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min, // ✅ AGREGADO PARA EVITAR OVERFLOW
-                    children: [
-                      const Text(
-                        'Formato final:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11, // ✅ REDUCIDO de 12 a 11
-                          color: Colors.green,
-                        ),
-                      ),
-                      const SizedBox(height: 2), // ✅ REDUCIDO de 4 a 2
-                      Flexible( // ✅ ENVUELTO EN FLEXIBLE
-                        child: Text(
-                          _getFormatoFinal(),
-                          style: const TextStyle(
-                            fontSize: 11, // ✅ REDUCIDO de 12 a 11
-                            fontFamily: 'monospace',
-                          ),
-                          maxLines: 2, // ✅ REDUCIDO de 3 a 2
-                          overflow: TextOverflow.ellipsis, // ✅ AGREGADO OVERFLOW
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  Text(
+                    'Aprobar',
+                    style: TextStyle(
+                      color: _aprobar ? Colors.green : Colors.grey,
+                      fontWeight: _aprobar ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: InkWell(
+            onTap: () => setState(() => _aprobar = false),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: !_aprobar ? Colors.red.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+                border: Border.all(
+                  color: !_aprobar ? Colors.red : Colors.grey,
+                  width: !_aprobar ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.cancel,
+                    color: !_aprobar ? Colors.red : Colors.grey,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Rechazar',
+                    style: TextStyle(
+                      color: !_aprobar ? Colors.red : Colors.grey,
+                      fontWeight: !_aprobar ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 🛠️ DROPDOWN PERSONALIZADO PARA WINDOWS
+  Widget _buildDropdownPersonalizado() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white, // 🛠️ FORZAR FONDO BLANCO
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          canvasColor: Colors.white, // 🛠️ FONDO DEL DROPDOWN
+        ),
+        child: DropdownButtonFormField<String>(
+          value: _codigoSeleccionado,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+          style: const TextStyle(
+            color: Colors.black87, // 🛠️ FORZAR COLOR DEL TEXTO
+            fontSize: 14,
+          ),
+          dropdownColor: Colors.white, // 🛠️ FONDO DEL MENU
+          items: codigosDescuento.entries.map((entry) =>
+              DropdownMenuItem(
+                value: entry.key,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    '${entry.key} - ${entry.value}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF1E3A8A), // 🛠️ FORZAR COLOR
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ],
-            ],
+              )).toList(),
+          onChanged: (value) => setState(() => _codigoSeleccionado = value!),
+          icon: const Icon(
+            Icons.arrow_drop_down,
+            color: Color(0xFF1E3A8A), // 🛠️ FORZAR COLOR DEL ICONO
           ),
         ),
       ),
+    );
+  }
 
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton( // ✅ CAMBIADO: eliminado .icon
-          onPressed: _procesarAprobacion,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _aprobar ? Colors.green : Colors.red,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // ✅ REDUCIDO PADDING
+  // 🛠️ VISTA PREVIA MEJORADA
+  Widget _buildVistaPrevia() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _codigoSeleccionado == 'LIBRE' 
+                ? 'Modalidad seleccionada:' 
+                : 'Código seleccionado:',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              color: Colors.blue,
+            ),
           ),
-          child: Text(_aprobar ? 'Aprobar' : 'Rechazar'),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            codigosDescuento[_codigoSeleccionado]!,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87, // 🛠️ FORZAR COLOR
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🛠️ FORMATO FINAL MEJORADO
+  Widget _buildFormatoFinal() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.green.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Formato final:',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              color: Colors.green,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _getFormatoFinal(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: Colors.black87, // 🛠️ FORZAR COLOR
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
   /// Construir resumen visual de la sanción
   Widget _buildResumenSancion() {
     return Container(
-      padding: const EdgeInsets.all(12), // ✅ REDUCIDO de 16 a 12
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8), // ✅ REDUCIDO de 12 a 8
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
@@ -282,17 +408,17 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(6), // ✅ REDUCIDO de 8 a 6
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E3A8A).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6), // ✅ REDUCIDO de 8 a 6
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   widget.sancion.tipoSancionEmoji,
-                  style: const TextStyle(fontSize: 18), // ✅ REDUCIDO de 20 a 18
+                  style: const TextStyle(fontSize: 18),
                 ),
               ),
-              const SizedBox(width: 8), // ✅ REDUCIDO de 12 a 8
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,14 +427,15 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
                       widget.sancion.tipoSancion,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 14, // ✅ REDUCIDO de 16 a 14
+                        fontSize: 14,
+                        color: Colors.black87, // 🛠️ FORZAR COLOR
                       ),
                     ),
                     Text(
                       widget.sancion.empleadoNombre,
                       style: TextStyle(
                         color: Colors.grey.shade700,
-                        fontSize: 12, // ✅ REDUCIDO de 14 a 12
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -317,9 +444,8 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
             ],
           ),
 
-          const SizedBox(height: 8), // ✅ REDUCIDO de 12 a 8
+          const SizedBox(height: 8),
 
-          // Detalles de la sanción (solo los esenciales)
           _buildDetalleItem(Icons.person, 'Empleado', widget.sancion.empleadoNombre),
           _buildDetalleItem(Icons.calendar_today, 'Fecha', widget.sancion.fechaFormateada),
           _buildDetalleItem(Icons.access_time, 'Hora', widget.sancion.hora),
@@ -354,6 +480,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
+                color: Colors.black87, // 🛠️ FORZAR COLOR
               ),
             ),
           ),
@@ -372,8 +499,8 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
 
     if (_codigoSeleccionado == 'LIBRE') {
       return _comentarioController.text.isEmpty 
-          ? '(sin comentarios)' // ✅ CAMBIADO: mensaje más claro para modo libre vacío
-          : _comentarioController.text; // ✅ Solo el comentario, sin "LIBRE -"
+          ? '(sin comentarios)' 
+          : _comentarioController.text;
     }
 
     final comentario = _comentarioController.text.isEmpty 
@@ -384,7 +511,6 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
 
   /// Procesar la aprobación o rechazo
   void _procesarAprobacion() {
-    // Validar comentarios obligatorios para rechazo
     if (!_aprobar && _comentarioController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -401,19 +527,24 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
       return;
     }
 
-    // ✅ ELIMINADA: Validación de comentarios obligatorios para modo LIBRE
-    // Ahora el modo LIBRE permite guardar sin comentarios
-
-    // Validar comentarios para códigos específicos (opcional pero recomendado)
     if (_aprobar && _codigoSeleccionado != 'LIBRE' && _comentarioController.text.trim().isEmpty) {
       showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Confirmar sin comentarios'),
-          content: Text('¿Está seguro de aprobar con código $_codigoSeleccionado sin comentarios adicionales?'),
+          backgroundColor: Colors.white, // 🛠️ FORZAR FONDO
+          surfaceTintColor: Colors.white,
+          title: const Text(
+            'Confirmar sin comentarios',
+            style: TextStyle(color: Colors.black87),
+          ),
+          content: Text(
+            '¿Está seguro de aprobar con código $_codigoSeleccionado sin comentarios adicionales?',
+            style: const TextStyle(color: Colors.black87),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
+              style: TextButton.styleFrom(foregroundColor: Colors.black87),
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
@@ -432,7 +563,7 @@ class _AprobacionGerenciaDialogState extends State<AprobacionGerenciaDialog> {
     _finalizarAprobacion();
   }
 
-  /// ✅ NUEVO: Finalizar el proceso de aprobación
+  /// Finalizar el proceso de aprobación
   void _finalizarAprobacion() {
     Navigator.pop(context);
 
