@@ -10,6 +10,7 @@ import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
 import '../../core/offline/sancion_repository.dart'; // 📥 Repository
 import '../widgets/empleado_search_field.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
 /// ACTUALIZADA con compresión automática de imágenes
@@ -1082,10 +1083,25 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       final sancionRepository = SancionRepository.instance; // 📥 CAMBIO
 
       // 🆕 OBTENER NOMBRE DEL SUPERVISOR EN LUGAR DEL ID
-      final supervisorNombre = authProvider.currentUser?.displayName ??
-          authProvider.currentUser?.email?.split('@').first ??
-          'Supervisor';
+      String supervisorNombre = 'Supervisor'; // valor por defecto
 
+      try {
+        // Obtener el nombre desde la tabla profiles
+        final response = await Supabase.instance.client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', authProvider.currentUser!.id)
+            .single();
+
+        if (response != null && response['full_name'] != null) {
+          supervisorNombre = response['full_name'];
+        }
+      } catch (e) {
+        print('Error obteniendo nombre del supervisor: $e');
+        // Usar email como fallback
+        supervisorNombre =
+            authProvider.currentUser?.email?.split('@').first ?? 'Supervisor';
+      }
       // 📥 IMPORTANTE: Establecer 'pendiente' según el status inicial
       final bool isPendiente =
           status == 'enviado'; // Solo es pendiente si se envía
