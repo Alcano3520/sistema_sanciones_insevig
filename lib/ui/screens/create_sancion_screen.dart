@@ -8,13 +8,14 @@ import 'package:flutter/foundation.dart'; // Para kIsWeb
 import '../../core/providers/auth_provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/models/empleado_model.dart';
-import '../../core/offline/sancion_repository.dart'; // 🔥 CAMBIO: Repository
+import '../../core/offline/sancion_repository.dart'; // 📥 Repository
 import '../widgets/empleado_search_field.dart';
 
 /// Pantalla para crear nueva sanción - EXACTAMENTE como tu PantallaSancion de Kivy
 /// ACTUALIZADA con compresión automática de imágenes
-/// 🔥 ACTUALIZADA para usar repositories con funcionalidad offline
-/// 🔥 MEJORADA: Manejo correcto del campo 'pendiente'
+/// 📥 ACTUALIZADA para usar repositories con funcionalidad offline
+/// 📥 MEJORADA: Manejo correcto del campo 'pendiente'
+/// 🆕 ACTUALIZADA: Usar nombre del supervisor en lugar del ID
 class CreateSancionScreen extends StatefulWidget {
   const CreateSancionScreen({super.key});
 
@@ -41,7 +42,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
   TimeOfDay _hora = TimeOfDay.now();
   File? _fotoSeleccionada;
   int? _horasExtras;
-  // 🔥 REMOVIDO: bool _pendiente ya que se calcula automáticamente
+  // 📥 REMOVIDO: bool _pendiente ya que se calcula automáticamente
   bool _isLoading = false;
   bool _isProcessingImage = false; // 🆕 Para mostrar estado de compresión
 
@@ -57,7 +58,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
   /// Autocompletar campos cuando se selecciona un empleado - CORREGIDO
   void _autocompletarCampos(EmpleadoModel empleado) {
-    // 🔥 PUESTO: Usar DEPARTAMENTO (nomdep) como prioridad principal
+    // 📥 PUESTO: Usar DEPARTAMENTO (nomdep) como prioridad principal
     String puesto = '';
 
     if (empleado.nomdep != null && empleado.nomdep!.isNotEmpty) {
@@ -72,7 +73,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
     _puestoController.text = puesto;
 
-    // 🔥 AGENTE: Usar el NOMBRE DEL EMPLEADO SELECCIONADO, no el supervisor
+    // 📥 AGENTE: Usar el NOMBRE DEL EMPLEADO SELECCIONADO, no el supervisor
     String agente =
         empleado.displayName; // 🎯 El empleado es quien comete la falta
     _agenteController.text = agente;
@@ -118,7 +119,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                     setState(() {
                       _empleadoSeleccionado = empleado;
 
-                      // 🔥 AUTOCOMPLETAR CAMPOS CORREGIDO
+                      // 📥 AUTOCOMPLETAR CAMPOS CORREGIDO
                       _autocompletarCampos(empleado);
                     });
 
@@ -149,7 +150,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
                               style: const TextStyle(fontSize: 12),
                             ),
                             Text(
-                              '🏢 Departamento: ${empleado.nomdep ?? "No definido"}',
+                              '🢢 Departamento: ${empleado.nomdep ?? "No definido"}',
                               style: const TextStyle(fontSize: 12),
                             ),
                             Text(
@@ -333,7 +334,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
                     const SizedBox(height: 16),
 
-                    // 🔥 NUEVO: Información sobre pendientes
+                    // 📥 NUEVO: Información sobre pendientes
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -590,7 +591,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     );
   }
 
-  // 🔥 MÉTODO _buildFotoSection() COMPLETAMENTE REEMPLAZADO - SOLUCIÓN DEFINITIVA
+  // 📥 MÉTODO _buildFotoSection() COMPLETAMENTE REEMPLAZADO - SOLUCIÓN DEFINITIVA
   Widget _buildFotoSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -874,7 +875,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       final picker = ImagePicker();
       XFile? foto;
 
-      // 🔥 DETECTAR PLATAFORMA
+      // 📥 DETECTAR PLATAFORMA
       if (kIsWeb) {
         // EN WEB: Seleccionar archivo
         foto = await picker.pickImage(
@@ -938,7 +939,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
         final file = File(foto.path);
 
         // Pre-validar la imagen
-        final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
+        final sancionRepository = SancionRepository.instance; // 📥 CAMBIO
         final validation = await sancionRepository.validateImage(file);
 
         if (validation['valid']) {
@@ -1064,7 +1065,8 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
     return '${(bytes / (1 << (i * 10))).toStringAsFixed(1)} ${suffixes[i]}';
   }
 
-  /// 🔥 MEJORADO: Guardar sanción con manejo correcto del campo 'pendiente'
+  /// 📥 MEJORADO: Guardar sanción con manejo correcto del campo 'pendiente'
+  /// 🆕 ACTUALIZADO: Usar nombre del supervisor en lugar del ID
   Future<void> _guardarSancion(String status) async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -1077,14 +1079,19 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final sancionRepository = SancionRepository.instance; // 🔥 CAMBIO
+      final sancionRepository = SancionRepository.instance; // 📥 CAMBIO
 
-      // 🔥 IMPORTANTE: Establecer 'pendiente' según el status inicial
+      // 🆕 OBTENER NOMBRE DEL SUPERVISOR EN LUGAR DEL ID
+      final supervisorNombre = authProvider.currentUser?.displayName ??
+          authProvider.currentUser?.email?.split('@').first ??
+          'Supervisor';
+
+      // 📥 IMPORTANTE: Establecer 'pendiente' según el status inicial
       final bool isPendiente =
           status == 'enviado'; // Solo es pendiente si se envía
 
       final sancion = SancionModel(
-        supervisorId: authProvider.currentUser!.id,
+        supervisorId: supervisorNombre, // 🆕 USAR NOMBRE en vez de ID
         empleadoCod: _empleadoSeleccionado!.cod,
         empleadoNombre: _empleadoSeleccionado!
             .displayName, // Usa displayName que siempre retorna String
@@ -1100,16 +1107,17 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
             _observacionesAdicionalesController.text.trim().isEmpty
                 ? null
                 : _observacionesAdicionalesController.text.trim(),
-        pendiente: isPendiente, // 🔥 ACTUALIZADO: true solo si se envía
+        pendiente: isPendiente, // 📥 ACTUALIZADO: true solo si se envía
         horasExtras: _horasExtras,
         status: status,
       );
 
       print('📋 Creando sanción:');
+      print('   Supervisor: $supervisorNombre'); // 🆕 MOSTRAR NOMBRE
       print('   Status: $status');
       print('   Pendiente: $isPendiente');
 
-      // 🔥 CAMBIO: Usar el repository ACTUALIZADO con compresión automática
+      // 📥 CAMBIO: Usar el repository ACTUALIZADO con compresión automática
       await sancionRepository.createSancion(
         sancion: sancion,
         fotoFile: _fotoSeleccionada, // Se comprime automáticamente
@@ -1157,7 +1165,7 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
   void _mostrarError(String mensaje) {
     if (mounted) {
-      // 🔥 NUEVO: Detectar si es un error de conexión
+      // 📥 NUEVO: Detectar si es un error de conexión
       final isConnectionError = mensaje.contains('SocketException') ||
           mensaje.contains('offline') ||
           mensaje.contains('conexión');

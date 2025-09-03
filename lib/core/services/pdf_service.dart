@@ -8,20 +8,20 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:http/http.dart'
-    as http; // 🆕 AGREGADO para cargar logo desde URL
+import 'package:http/http.dart' as http;
 
 import '../models/sancion_model.dart';
 import '../models/empleado_model.dart';
 
-/// 📄 **PDFService - Con Logo INSEVIG Integrado - CORREGIDO**
+/// 📄 **PDFService - Con Logo INSEVIG y Firma Digital**
 ///
 /// **✅ Funcionalidades:**
 /// - Logo desde assets (recomendado)
 /// - Logo desde URL (respaldo)
 /// - Formato comprobante compacto
 /// - Header profesional con logo
-/// - 🔥 OBSERVACIONES EXTENSAS SOLUCIONADAS
+/// - 🔥 FIRMA DIGITAL DEL SANCIONADO
+/// - 📥 OBSERVACIONES EXTENSAS SOLUCIONADAS
 class PDFService {
   static PDFService? _instance;
   static PDFService get instance => _instance ??= PDFService._();
@@ -39,15 +39,7 @@ class PDFService {
   // 🖼️ GESTIÓN DEL LOGO - ORIGINAL RESTAURADO
   // ==========================================
 
-  /// **🔥 MÉTODO 1: Cargar logo desde Assets (RECOMENDADO)**
-  ///
-  /// **📝 PASOS PARA USAR ASSETS:**
-  /// 1. Descarga el logo: https://insevig.ec/wp-content/uploads/2018/12/logo-insevig-v1.png
-  /// 2. Guárdalo en: assets/images/logo_insevig.png
-  /// 3. Agrega en pubspec.yaml:
-  ///    flutter:
-  ///      assets:
-  ///        - assets/images/
+  /// **📥 MÉTODO 1: Cargar logo desde Assets (RECOMENDADO)**
   Future<pw.MemoryImage?> _loadLogoFromAssets() async {
     try {
       final logoBytes = await rootBundle.load('assets/icon.png');
@@ -58,10 +50,10 @@ class PDFService {
     }
   }
 
-  /// **🔥 MÉTODO 2: Cargar logo desde URL (RESPALDO) - ORIGINAL**
+  /// **📥 MÉTODO 2: Cargar logo desde URL (RESPALDO)**
   Future<pw.MemoryImage?> _loadLogoFromUrl() async {
     try {
-      print('🔥 Descargando logo desde URL...');
+      print('📥 Descargando logo desde URL...');
       final response = await http.get(
         Uri.parse(
             'https://insevig.ec/wp-content/uploads/2018/12/logo-insevig-v1.png'),
@@ -85,7 +77,7 @@ class PDFService {
     }
   }
 
-  /// **🔥 MÉTODO 3: Obtener logo (con cache) - ORIGINAL**
+  /// **📥 MÉTODO 3: Obtener logo (con cache)**
   Future<pw.MemoryImage?> _getLogo() async {
     // Usar cache si está disponible
     if (_cachedLogo != null) {
@@ -101,7 +93,7 @@ class PDFService {
     return _cachedLogo;
   }
 
-  /// **🔥 MÉTODO 4: Logo de respaldo (texto) - ORIGINAL**
+  /// **📥 MÉTODO 4: Logo de respaldo (texto)**
   pw.Widget _buildFallbackLogo() {
     return pw.Container(
       width: 80,
@@ -136,12 +128,16 @@ class PDFService {
   }
 
   // ==========================================
-  // 📄 MÉTODOS PRINCIPALES - CORREGIDOS
+  // 📄 MÉTODOS PRINCIPALES - CON FIRMA DIGITAL
   // ==========================================
 
-  /// **MÉTODO PRINCIPAL:** Generar PDF comprobante con logo
-  Future<Uint8List> generateSancionPDF(SancionModel sancion) async {
-    // 🔥 CARGAR LOGO ANTES DE CREAR EL PDF
+  /// **MÉTODO PRINCIPAL:** Generar PDF comprobante con logo y firma
+  /// 🆕 ACTUALIZADO: Ahora recibe firma digital opcional
+  Future<Uint8List> generateSancionPDF(
+    SancionModel sancion, {
+    Uint8List? firmaSancionado, // 🆕 PARÁMETRO DE FIRMA DIGITAL
+  }) async {
+    // 📥 CARGAR LOGO ANTES DE CREAR EL PDF
     final logo = await _getLogo();
 
     final pdf = pw.Document();
@@ -150,7 +146,11 @@ class PDFService {
       pw.Page(
         pageFormat: PdfPageFormat.a5,
         margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) => _buildComprobanteConLogo(sancion, logo),
+        build: (pw.Context context) => _buildComprobanteConLogo(
+          sancion,
+          logo,
+          firmaSancionado, // 🆕 PASAR LA FIRMA AL BUILDER
+        ),
       ),
     );
 
@@ -164,7 +164,7 @@ class PDFService {
     String? filtros,
     String? generadoPor,
   }) async {
-    // 🔥 CARGAR LOGO ANTES DE CREAR EL PDF
+    // 📥 CARGAR LOGO ANTES DE CREAR EL PDF
     final logo = await _getLogo();
 
     final pdf = pw.Document();
@@ -185,12 +185,16 @@ class PDFService {
   }
 
   // ==========================================
-  // 🎫 COMPROBANTE CON LOGO - CORREGIDO
+  // 🎫 COMPROBANTE CON LOGO Y FIRMA - ACTUALIZADO
   // ==========================================
 
-  /// **🎫 Construir comprobante con logo - SIN FutureBuilder**
+  /// **🎫 Construir comprobante con logo y firma digital**
+  /// 🆕 ACTUALIZADO: Ahora recibe firma digital opcional
   pw.Widget _buildComprobanteConLogo(
-      SancionModel sancion, pw.MemoryImage? logo) {
+    SancionModel sancion,
+    pw.MemoryImage? logo,
+    Uint8List? firmaSancionado, // 🆕 PARÁMETRO DE FIRMA
+  ) {
     return pw.Container(
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: _borderColor, width: 1.5),
@@ -200,7 +204,7 @@ class PDFService {
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // 🏢 Header con logo
+            // 🢢 Header con logo
             _buildComprobanteHeaderConLogo(logo),
 
             pw.SizedBox(height: 6),
@@ -210,7 +214,7 @@ class PDFService {
 
             pw.SizedBox(height: 4),
 
-            // 🔢 Número de comprobante
+            // 📢 Número de comprobante
             _buildComprobanteNumber(sancion),
 
             pw.SizedBox(height: 6),
@@ -225,20 +229,20 @@ class PDFService {
 
             pw.SizedBox(height: 8),
 
-            // 📝 Observaciones - 🔥 CORREGIDAS
+            // 📝 Observaciones
             _buildObservacionesCompactas(sancion),
 
             pw.SizedBox(height: 10),
 
-            // ✏️ Firmas
-            _buildFirmasCompactas(),
+            // ✍️ Firmas con imagen digital
+            _buildFirmasCompactas(sancion, firmaSancionado), // 🆕 PASAR FIRMA
           ],
         ),
       ),
     );
   }
 
-  /// **🔥 Header CORREGIDO con logo - SIN FutureBuilder**
+  /// **📥 Header con logo**
   pw.Widget _buildComprobanteHeaderConLogo(pw.MemoryImage? logo) {
     return pw.Row(
       children: [
@@ -292,7 +296,7 @@ class PDFService {
     );
   }
 
-  /// **🔥 Header para reportes CORREGIDO - SIN FutureBuilder**
+  /// **📥 Header para reportes**
   pw.Widget _buildReporteHeader(String titulo, pw.MemoryImage? logo) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(15),
@@ -364,7 +368,7 @@ class PDFService {
   }
 
   // ==========================================
-  // 📄 MÉTODOS EXISTENTES (CORREGIDOS)
+  // 📄 MÉTODOS EXISTENTES
   // ==========================================
 
   /// **📋 Título del comprobante**
@@ -390,7 +394,7 @@ class PDFService {
     );
   }
 
-  /// **🔢 Número de comprobante**
+  /// **📢 Número de comprobante**
   pw.Widget _buildComprobanteNumber(SancionModel sancion) {
     return pw.Align(
       alignment: pw.Alignment.centerRight,
@@ -595,11 +599,7 @@ class PDFService {
     );
   }
 
-  // ==========================================
-  // 🔥 OBSERVACIONES EXTENSAS - SOLUCIÓN CORREGIDA
-  // ==========================================
-
-  /// **📝 Observaciones distribuidas en 3 líneas - CORREGIDO**
+  /// **📝 Observaciones distribuidas en 3 líneas**
   pw.Widget _buildObservacionesCompactas(SancionModel sancion) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -611,7 +611,7 @@ class PDFService {
     );
   }
 
-  /// **🔄 Dividir observaciones en 3 líneas de ~60 caracteres cada una**
+  /// **📄 Dividir observaciones en 3 líneas de ~60 caracteres cada una**
   List<pw.Widget> _buildObservacionesLines(String? observaciones) {
     const int maxCharsPerLine = 60;
     const int maxLines = 3;
@@ -707,13 +707,30 @@ class PDFService {
     );
   }
 
-  /// **✏️ Firmas compactas**
-  pw.Widget _buildFirmasCompactas() {
+  /// **✍️ Firmas compactas CON FIRMA DIGITAL**
+  /// 🆕 ACTUALIZADO: Ahora muestra la firma digital del sancionado
+  pw.Widget _buildFirmasCompactas(
+    SancionModel sancion,
+    Uint8List? firmaSancionado, // 🆕 PARÁMETRO DE FIRMA
+  ) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
       children: [
+        // SUPERVISOR - Solo nombre del supervisor
         pw.Column(
           children: [
+            pw.Container(
+              height: 30,
+              child: pw.Center(
+                child: pw.Text(
+                  sancion.supervisorId, // Nombre del supervisor
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontStyle: pw.FontStyle.italic,
+                  ),
+                ),
+              ),
+            ),
             pw.Container(
               width: 80,
               height: 1.2,
@@ -723,8 +740,29 @@ class PDFService {
             pw.Text('SUPERVISOR', style: const pw.TextStyle(fontSize: 8)),
           ],
         ),
+
+        // SANCIONADO - Con firma digital
         pw.Column(
           children: [
+            pw.Container(
+              width: 80,
+              height: 30,
+              child: firmaSancionado != null
+                  ? pw.Image(
+                      pw.MemoryImage(firmaSancionado),
+                      fit: pw.BoxFit.contain,
+                    )
+                  : pw.Center(
+                      child: pw.Text(
+                        'Sin firma',
+                        style: pw.TextStyle(
+                          fontSize: 8,
+                          color: PdfColors.grey500,
+                          fontStyle: pw.FontStyle.italic,
+                        ),
+                      ),
+                    ),
+            ),
             pw.Container(
               width: 80,
               height: 1.2,
