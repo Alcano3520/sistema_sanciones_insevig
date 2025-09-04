@@ -11,6 +11,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/services/sancion_service.dart';
 import 'edit_sancion_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 
 /// Pantalla de detalle completo de una sanción
 /// Muestra toda la información como en tu app Kivy pero con diseño moderno
@@ -1145,46 +1146,67 @@ ID: ${_sancion.id}
         }
       }
 
-      // 3️⃣ OBTENER LA FIRMA SI EXISTE
+      // 3️⃣ OBTENER LA FIRMA SI EXISTE - CÓDIGO CORREGIDO
       Uint8List? firmaSancionado;
 
       if (_sancion.firmaPath != null && _sancion.firmaPath!.isNotEmpty) {
         try {
           print('🔍 Descargando firma desde: ${_sancion.firmaPath}');
 
-          // Extraer solo el path relativo si es una URL completa
-          String firmaPath = _sancion.firmaPath!;
+          // Primero intentar descargar directamente desde la URL pública
+          if (_sancion.firmaPath!.startsWith('http')) {
+            try {
+              print('📥 Descargando directamente desde URL pública...');
 
-          // Si es una URL completa de Supabase
-          if (firmaPath.contains('/storage/v1/object/public/')) {
-            // Extraer solo la parte después de 'sanciones/'
-            final parts = firmaPath.split('sanciones/');
-            if (parts.length > 1) {
-              firmaPath = parts[1];
+              final response = await http.get(Uri.parse(_sancion.firmaPath!));
+
+              if (response.statusCode == 200) {
+                firmaSancionado = response.bodyBytes;
+                print(
+                    '✅ Firma descargada desde URL: ${firmaSancionado.length} bytes');
+              } else {
+                print('❌ Error HTTP: ${response.statusCode}');
+              }
+            } catch (e) {
+              print('❌ Error descarga directa: $e');
             }
           }
 
-          print('📥 Intentando descargar: $firmaPath');
+          // Si no funcionó la descarga directa, intentar con Supabase Storage
+          if (firmaSancionado == null) {
+            String bucketName = 'sancion-signatures'; // Tu bucket real
+            String filePath = _sancion.firmaPath!;
 
-          // Descargar desde Supabase Storage
-          final bytes = await Supabase.instance.client.storage
-              .from('sanciones')
-              .download(firmaPath);
+            // Si es una URL completa, extraer solo el path
+            if (filePath.contains('/storage/v1/object/public/')) {
+              // Extraer solo la parte después del bucket
+              if (filePath.contains('sancion-signatures/')) {
+                filePath = filePath.split('sancion-signatures/').last;
+              }
+            }
 
-          firmaSancionado = bytes;
-          print('✅ Firma descargada: ${firmaSancionado.length} bytes');
-        } catch (e) {
-          print('❌ Error descargando firma: $e');
-          // Segundo intento con path completo
-          try {
-            final bytes = await Supabase.instance.client.storage
-                .from('sanciones')
-                .download(_sancion.firmaPath!);
-            firmaSancionado = bytes;
-            print('✅ Firma descargada (segundo intento)');
-          } catch (e2) {
-            print('❌ Error final: $e2');
+            print('📦 Intentando desde Supabase Storage...');
+            print('   Bucket: $bucketName');
+            print('   Path: $filePath');
+
+            try {
+              final bytes = await Supabase.instance.client.storage
+                  .from(bucketName)
+                  .download(filePath);
+
+              firmaSancionado = bytes;
+              print(
+                  '✅ Firma descargada desde Storage: ${firmaSancionado.length} bytes');
+            } catch (e) {
+              print('❌ Error Storage: $e');
+            }
           }
+        } catch (e) {
+          print('❌ Error general descargando firma: $e');
+        }
+
+        if (firmaSancionado == null) {
+          print('⚠️ No se pudo descargar la firma por ningún método');
         }
       } else {
         print('⚠️ No hay firma guardada para esta sanción');
