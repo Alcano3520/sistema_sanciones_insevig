@@ -2,13 +2,16 @@
 import '../../core/services/pdf_service.dart';
 import 'package:printing/printing.dart';
 import 'dart:typed_data'; // 🆕 AGREGADO para Uint8List
-import 'package:flutter/foundation.dart' show kIsWeb; // 🔧 CORREGIDO - agregar show kIsWeb
+import 'package:flutter/foundation.dart'
+    show kIsWeb; // 🔧 CORREGIDO - agregar show kIsWeb
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/sancion_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/sancion_service.dart';
 import 'edit_sancion_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 
 /// Pantalla de detalle completo de una sanción
 /// Muestra toda la información como en tu app Kivy pero con diseño moderno
@@ -1096,26 +1099,138 @@ ID: ${_sancion.id}
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 15),
+                  Text('Generando PDF...'),
+                ],
+              ),
+            ),
+          ),
         ),
       );
 
-      // Generar PDF
+      // 1️⃣ CREAR COPIA DE LA SANCIÓN CON CORRECCIONES
+      SancionModel sancionCorregida = _sancion;
+
+      // 2️⃣ CORREGIR NOMBRE DEL SUPERVISOR SI ES UUID
+      if (_sancion.supervisorId.contains('-')) {
+        try {
+          print('🔍 Buscando nombre del supervisor: ${_sancion.supervisorId}');
+
+          final response = await Supabase.instance.client
+              .from('profiles')
+              .select('full_name')
+              .eq('id', _sancion.supervisorId)
+              .single();
+
+          if (response != null && response['full_name'] != null) {
+            // Crear nueva sanción con el nombre correcto
+            sancionCorregida = _sancion.copyWith(
+              supervisorId: response['full_name'], // USAR NOMBRE REAL
+            );
+            print('✅ Supervisor corregido: ${response['full_name']}');
+          }
+        } catch (e) {
+          print('❌ Error obteniendo nombre supervisor: $e');
+          // Intentar usar un nombre por defecto
+          sancionCorregida = _sancion.copyWith(
+            supervisorId: 'Supervisor',
+          );
+        }
+      }
+
+      // 3️⃣ OBTENER LA FIRMA SI EXISTE - CÓDIGO CORREGIDO
+      Uint8List? firmaSancionado;
+
+      if (_sancion.firmaPath != null && _sancion.firmaPath!.isNotEmpty) {
+        try {
+          print('🔍 Descargando firma desde: ${_sancion.firmaPath}');
+
+          // Primero intentar descargar directamente desde la URL pública
+          if (_sancion.firmaPath!.startsWith('http')) {
+            try {
+              print('📥 Descargando directamente desde URL pública...');
+
+              final response = await http.get(Uri.parse(_sancion.firmaPath!));
+
+              if (response.statusCode == 200) {
+                firmaSancionado = response.bodyBytes;
+                print(
+                    '✅ Firma descargada desde URL: ${firmaSancionado.length} bytes');
+              } else {
+                print('❌ Error HTTP: ${response.statusCode}');
+              }
+            } catch (e) {
+              print('❌ Error descarga directa: $e');
+            }
+          }
+
+          // Si no funcionó la descarga directa, intentar con Supabase Storage
+          if (firmaSancionado == null) {
+            String bucketName = 'sancion-signatures'; // Tu bucket real
+            String filePath = _sancion.firmaPath!;
+
+            // Si es una URL completa, extraer solo el path
+            if (filePath.contains('/storage/v1/object/public/')) {
+              // Extraer solo la parte después del bucket
+              if (filePath.contains('sancion-signatures/')) {
+                filePath = filePath.split('sancion-signatures/').last;
+              }
+            }
+
+            print('📦 Intentando desde Supabase Storage...');
+            print('   Bucket: $bucketName');
+            print('   Path: $filePath');
+
+            try {
+              final bytes = await Supabase.instance.client.storage
+                  .from(bucketName)
+                  .download(filePath);
+
+              firmaSancionado = bytes;
+              print(
+                  '✅ Firma descargada desde Storage: ${firmaSancionado.length} bytes');
+            } catch (e) {
+              print('❌ Error Storage: $e');
+            }
+          }
+        } catch (e) {
+          print('❌ Error general descargando firma: $e');
+        }
+
+        if (firmaSancionado == null) {
+          print('⚠️ No se pudo descargar la firma por ningún método');
+        }
+      } else {
+        print('⚠️ No hay firma guardada para esta sanción');
+      }
+
+      // 4️⃣ GENERAR PDF CON NOMBRE Y FIRMA CORREGIDOS
       final pdfService = PDFService.instance;
-      final pdfBytes = await pdfService.generateSancionPDF(_sancion);
-      final filename = pdfService.generateFileName(_sancion);
+      final pdfBytes = await pdfService.generateSancionPDF(
+        sancionCorregida,
+        firmaSancionado: firmaSancionado, // PASAR LA FIRMA
+      );
+
+      final filename = pdfService.generateFileName(sancionCorregida);
 
       // Cerrar indicador de carga
       if (mounted) Navigator.pop(context);
 
       // Mostrar opciones
       _showPDFOptionsDialog(pdfBytes, filename);
-
     } catch (e) {
       // Cerrar indicador si está abierto
       if (mounted) Navigator.pop(context);
-      
+
+      print('❌ Error completo generando PDF: $e');
       _mostrarError('Error generando PDF: $e');
     }
   }
@@ -1135,7 +1250,8 @@ ID: ${_sancion.id}
       builder: (BuildContext dialogContext) => Container(
         // 🔧 SOLUCIÓN 3: Reducir padding para evitar overflow
         padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(  // 🔧 SOLUCIÓN 2: Hacer contenido scrollable
+        child: SingleChildScrollView(
+          // 🔧 SOLUCIÓN 2: Hacer contenido scrollable
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1144,7 +1260,8 @@ ID: ${_sancion.id}
                 children: [
                   const Icon(Icons.picture_as_pdf, color: Colors.red),
                   const SizedBox(width: 12),
-                  const Expanded(  // 🔧 MEJORAR: Envolver texto en Expanded
+                  const Expanded(
+                    // 🔧 MEJORAR: Envolver texto en Expanded
                     child: Text(
                       'PDF Generado Exitosamente',
                       style: TextStyle(
@@ -1155,8 +1272,8 @@ ID: ${_sancion.id}
                   ),
                 ],
               ),
-              
-              const SizedBox(height: 16),  // 🔧 Reducir espaciado
+
+              const SizedBox(height: 16), // 🔧 Reducir espaciado
 
               // Información del archivo
               Container(
@@ -1174,9 +1291,9 @@ ID: ${_sancion.id}
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.green,
-                        fontSize: 14,  // 🔧 Reducir tamaño de fuente
+                        fontSize: 14, // 🔧 Reducir tamaño de fuente
                       ),
-                      maxLines: 2,  // 🔧 Limitar líneas
+                      maxLines: 2, // 🔧 Limitar líneas
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
@@ -1216,8 +1333,8 @@ ID: ${_sancion.id}
                 icon: Icons.download,
                 iconColor: Colors.green,
                 title: kIsWeb ? 'Descargar' : 'Guardar en Dispositivo',
-                subtitle: kIsWeb 
-                    ? 'Descargar a tu computadora' 
+                subtitle: kIsWeb
+                    ? 'Descargar a tu computadora'
                     : 'Guardar en documentos',
                 onTap: () async {
                   Navigator.pop(dialogContext);
@@ -1324,7 +1441,7 @@ ID: ${_sancion.id}
   Future<void> _guardarPDF(Uint8List pdfBytes, String filename) async {
     try {
       final savedPath = await PDFService.instance.savePDF(pdfBytes, filename);
-      
+
       if (savedPath != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1333,7 +1450,7 @@ ID: ${_sancion.id}
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(kIsWeb 
+                  child: Text(kIsWeb
                       ? '✅ PDF descargado: $filename'
                       : '✅ PDF guardado en: Documentos/$filename'),
                 ),
@@ -1341,19 +1458,22 @@ ID: ${_sancion.id}
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
-            action: !kIsWeb ? SnackBarAction(
-              label: 'Ver',
-              textColor: Colors.white,
-              onPressed: () {
-                // Aquí podrías abrir el archivo o la carpeta
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Archivo guardado en carpeta Documentos'),
-                    backgroundColor: Colors.blue,
-                  ),
-                );
-              },
-            ) : null,
+            action: !kIsWeb
+                ? SnackBarAction(
+                    label: 'Ver',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      // Aquí podrías abrir el archivo o la carpeta
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Archivo guardado en carpeta Documentos'),
+                          backgroundColor: Colors.blue,
+                        ),
+                      );
+                    },
+                  )
+                : null,
           ),
         );
       }
@@ -1366,7 +1486,7 @@ ID: ${_sancion.id}
   Future<void> _compartirPDF(Uint8List pdfBytes, String filename) async {
     try {
       await PDFService.instance.sharePDF(pdfBytes, filename);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

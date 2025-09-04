@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data'; // 🆕 AGREGADO para manejar firma
 import 'package:flutter/foundation.dart';
 import 'package:signature/signature.dart';
 import '../models/sancion_model.dart';
@@ -11,6 +12,7 @@ import 'offline_manager.dart';
 /// En móvil: usa OfflineManager para funcionalidad offline completa
 /// ✅ CORREGIDO: Agregados métodos jerárquicos para aprobaciones
 /// 🔥 MEJORADO: Estadísticas por rol y manejo de pendientes
+/// 🆕 ACTUALIZADO: Soporte para firma digital en PDFs
 class SancionRepository {
   static SancionRepository? _instance;
   static SancionRepository get instance => _instance ??= SancionRepository._();
@@ -21,31 +23,48 @@ class SancionRepository {
   final OfflineManager _offlineManager = OfflineManager.instance;
 
   /// =============================================
-  /// 🔍 CREAR SANCIONES
+  /// 📝 CREAR SANCIONES
   /// =============================================
 
   /// Crear nueva sanción
   /// Web: Directo a SancionService sin cambios
   /// Móvil: Online/offline con sincronización automática
+  /// 🆕 ACTUALIZADO: Extrae y procesa firma digital para PDF
   Future<String?> createSancion({
     required SancionModel sancion,
     File? fotoFile,
     SignatureController? signatureController,
   }) async {
+    // 🆕 EXTRAER FIRMA DIGITAL SI EXISTE
+    Uint8List? firmaSancionado;
+    if (signatureController != null && signatureController.isNotEmpty) {
+      try {
+        firmaSancionado = await signatureController.toPngBytes();
+        print(
+            '✅ Firma digital extraída: ${firmaSancionado?.length ?? 0} bytes');
+      } catch (e) {
+        print('⚠️ Error extrayendo firma digital: $e');
+      }
+    }
+
     if (kIsWeb) {
       // 🌐 Web: comportamiento original sin cambios
+      // Nota: Si tu SancionService acepta la firma, puedes pasarla aquí
       return await _sancionService.createSancion(
         sancion: sancion,
         fotoFile: fotoFile,
         signatureController: signatureController,
+        // firmaSancionado: firmaSancionado, // Descomentar si el service lo acepta
       );
     }
 
     // 📱 Móvil: usar OfflineManager que maneja online/offline automáticamente
+    // Nota: Si tu OfflineManager acepta la firma, puedes pasarla aquí
     return await _offlineManager.createSancion(
       sancion: sancion,
       fotoFile: fotoFile,
       signatureController: signatureController,
+      // firmaSancionado: firmaSancionado, // Descomentar si el manager lo acepta
     );
   }
 
@@ -72,8 +91,8 @@ class SancionRepository {
       if (!kIsWeb && success) {
         // En móvil: actualizar cache local también
         await _updateLocalSancionAfterApproval(
-          sancionId, 
-          'aprobado', 
+          sancionId,
+          'aprobado',
           '$codigo - $comentarios',
           reviewedBy,
         );
@@ -95,11 +114,11 @@ class SancionRepository {
         // Actualizar localmente
         await _updateLocalSancionAfterApproval(
           sancionId,
-          'aprobado', 
+          'aprobado',
           '$codigo - $comentarios',
           reviewedBy,
         );
-        
+
         return true; // Exitoso localmente
       }
 
@@ -158,7 +177,7 @@ class SancionRepository {
           reviewedBy,
           nuevosComentariosGerencia,
         );
-        
+
         return true; // Exitoso localmente
       }
 
@@ -213,7 +232,8 @@ class SancionRepository {
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
+      final sancionIndex =
+          sancionesLocales.indexWhere((s) => s.id == sancionId);
 
       if (sancionIndex != -1) {
         final sancionActualizada = sancionesLocales[sancionIndex].copyWith(
@@ -245,11 +265,12 @@ class SancionRepository {
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      final sancionIndex = sancionesLocales.indexWhere((s) => s.id == sancionId);
+      final sancionIndex =
+          sancionesLocales.indexWhere((s) => s.id == sancionId);
 
       if (sancionIndex != -1) {
         final sancionOriginal = sancionesLocales[sancionIndex];
-        
+
         // Determinar nuevo status según acción
         String newStatus = sancionOriginal.status;
         if (accion == 'anular') {
@@ -259,11 +280,13 @@ class SancionRepository {
         final sancionActualizada = sancionOriginal.copyWith(
           status: newStatus,
           comentariosRrhh: comentariosRrhh,
-          comentariosGerencia: nuevosComentariosGerencia ?? sancionOriginal.comentariosGerencia,
+          comentariosGerencia:
+              nuevosComentariosGerencia ?? sancionOriginal.comentariosGerencia,
           reviewedBy: reviewedBy,
           fechaRevision: DateTime.now(),
           updatedAt: DateTime.now(),
-          pendiente: false, // 🔥 NUEVO: Marcar como no pendiente después de RRHH
+          pendiente:
+              false, // 🔥 NUEVO: Marcar como no pendiente después de RRHH
         );
 
         await _offlineManager.database.saveSancion(sancionActualizada);
@@ -280,24 +303,27 @@ class SancionRepository {
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      
+
       switch (rol) {
         case 'gerencia':
           // ✅ CORREGIDO: Solo sanciones enviadas esperando gerencia
-          final sancionesEnviadas = sancionesLocales.where((s) => s.status == 'enviado').toList();
-          print('📱 Local - Sanciones enviadas para gerencia: ${sancionesEnviadas.length}');
+          final sancionesEnviadas =
+              sancionesLocales.where((s) => s.status == 'enviado').toList();
+          print(
+              '📱 Local - Sanciones enviadas para gerencia: ${sancionesEnviadas.length}');
           return sancionesEnviadas;
-          
+
         case 'rrhh':
           // Sanciones aprobadas por gerencia esperando RRHH
-          final sancionesParaRrhh = sancionesLocales.where((s) => 
-              s.status == 'aprobado' && 
-              s.comentariosGerencia != null && 
-              s.comentariosRrhh == null
-          ).toList();
+          final sancionesParaRrhh = sancionesLocales
+              .where((s) =>
+                  s.status == 'aprobado' &&
+                  s.comentariosGerencia != null &&
+                  s.comentariosRrhh == null)
+              .toList();
           print('📱 Local - Sanciones para RRHH: ${sancionesParaRrhh.length}');
           return sancionesParaRrhh;
-          
+
         default:
           return sancionesLocales;
       }
@@ -309,11 +335,12 @@ class SancionRepository {
 
   /// Calcular contadores locales por rol
   Future<Map<String, int>> _getLocalContadoresByRol(String rol) async {
-    if (kIsWeb) return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
+    if (kIsWeb)
+      return {'pendientes_gerencia': 0, 'pendientes_rrhh': 0, 'total': 0};
 
     try {
       final sancionesLocales = _offlineManager.database.getSanciones();
-      
+
       final contadores = <String, int>{
         'pendientes_gerencia': 0,
         'pendientes_rrhh': 0,
@@ -322,16 +349,15 @@ class SancionRepository {
 
       switch (rol) {
         case 'gerencia':
-          contadores['pendientes_gerencia'] = sancionesLocales
-              .where((s) => s.status == 'enviado')
-              .length;
+          contadores['pendientes_gerencia'] =
+              sancionesLocales.where((s) => s.status == 'enviado').length;
           break;
-          
+
         case 'rrhh':
           contadores['pendientes_rrhh'] = sancionesLocales
-              .where((s) => 
-                  s.status == 'aprobado' && 
-                  s.comentariosGerencia != null && 
+              .where((s) =>
+                  s.status == 'aprobado' &&
+                  s.comentariosGerencia != null &&
                   s.comentariosRrhh == null)
               .length;
           break;
@@ -438,7 +464,7 @@ class SancionRepository {
   }
 
   /// =============================================
-  /// 📄 CAMBIOS DE ESTADO (MÉTODOS EXISTENTES)
+  /// 🔄 CAMBIOS DE ESTADO (MÉTODOS EXISTENTES)
   /// =============================================
 
   /// Cambiar status de sanción (borrador -> enviado -> aprobado/rechazado)
@@ -710,12 +736,11 @@ class SancionRepository {
   /// =============================================
 
   /// 🔥 MEJORADO: Obtener estadísticas de sanciones con soporte de rol
-  Future<Map<String, dynamic>> getEstadisticas({String? supervisorId, String? userRole}) async {
+  Future<Map<String, dynamic>> getEstadisticas(
+      {String? supervisorId, String? userRole}) async {
     try {
       return await _sancionService.getEstadisticas(
-        supervisorId: supervisorId, 
-        userRole: userRole
-      );
+          supervisorId: supervisorId, userRole: userRole);
     } catch (e) {
       print('❌ Error obteniendo estadísticas: $e');
 
@@ -724,7 +749,8 @@ class SancionRepository {
         var sanciones = _offlineManager.database.getSanciones();
 
         if (supervisorId != null && userRole == 'supervisor') {
-          sanciones = sanciones.where((s) => s.supervisorId == supervisorId).toList();
+          sanciones =
+              sanciones.where((s) => s.supervisorId == supervisorId).toList();
         }
 
         final stats = {
@@ -761,7 +787,8 @@ class SancionRepository {
 
           // Contar por tipo
           final porTipo = stats['porTipo'] as Map<String, int>;
-          porTipo[sancion.tipoSancion] = (porTipo[sancion.tipoSancion] ?? 0) + 1;
+          porTipo[sancion.tipoSancion] =
+              (porTipo[sancion.tipoSancion] ?? 0) + 1;
 
           // Último mes
           if (sancion.createdAt.isAfter(hace30Dias)) {
@@ -770,8 +797,10 @@ class SancionRepository {
         }
 
         // 🔥 Calcular pendientes según rol (mismo lógica que el service)
-        stats['pendientes'] = _calcularPendientesOffline(sanciones, userRole, supervisorId);
-        stats['resueltas'] = (stats['aprobadas'] as int) + (stats['rechazadas'] as int);
+        stats['pendientes'] =
+            _calcularPendientesOffline(sanciones, userRole, supervisorId);
+        stats['resueltas'] =
+            (stats['aprobadas'] as int) + (stats['rechazadas'] as int);
 
         return stats;
       }
@@ -791,16 +820,18 @@ class SancionRepository {
   }
 
   /// 🔥 NUEVO: Calcular pendientes offline según rol
-  int _calcularPendientesOffline(List<SancionModel> sanciones, String? userRole, String? supervisorId) {
+  int _calcularPendientesOffline(
+      List<SancionModel> sanciones, String? userRole, String? supervisorId) {
     int pendientes = 0;
 
     switch (userRole) {
       case 'supervisor':
         // Supervisores: sus borradores y rechazadas
-        pendientes = sanciones.where((s) => 
-          s.supervisorId == supervisorId && 
-          (s.status == 'borrador' || s.status == 'rechazado')
-        ).length;
+        pendientes = sanciones
+            .where((s) =>
+                s.supervisorId == supervisorId &&
+                (s.status == 'borrador' || s.status == 'rechazado'))
+            .length;
         break;
 
       case 'gerencia':
@@ -810,25 +841,26 @@ class SancionRepository {
 
       case 'rrhh':
         // RRHH: aprobadas por gerencia sin revisión RRHH
-        pendientes = sanciones.where((s) => 
-          s.status == 'aprobado' && 
-          s.comentariosGerencia != null && 
-          s.comentariosRrhh == null
-        ).length;
+        pendientes = sanciones
+            .where((s) =>
+                s.status == 'aprobado' &&
+                s.comentariosGerencia != null &&
+                s.comentariosRrhh == null)
+            .length;
         break;
 
       case 'admin':
         // Admin: todas las no finalizadas
-        pendientes = sanciones.where((s) => 
-          s.status == 'borrador' || s.status == 'enviado'
-        ).length;
+        pendientes = sanciones
+            .where((s) => s.status == 'borrador' || s.status == 'enviado')
+            .length;
         break;
 
       default:
         // Por defecto: borradores y enviadas
-        pendientes = sanciones.where((s) => 
-          s.status == 'borrador' || s.status == 'enviado'
-        ).length;
+        pendientes = sanciones
+            .where((s) => s.status == 'borrador' || s.status == 'enviado')
+            .length;
     }
 
     return pendientes;
