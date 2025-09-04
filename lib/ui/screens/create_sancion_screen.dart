@@ -1080,37 +1080,18 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final sancionRepository = SancionRepository.instance; // 📥 CAMBIO
+      final sancionRepository = SancionRepository.instance;
 
-      // 🆕 OBTENER NOMBRE DEL SUPERVISOR EN LUGAR DEL ID
-      String supervisorNombre = 'Supervisor'; // valor por defecto
-
-      try {
-        // Obtener el nombre desde la tabla profiles
-        final response = await Supabase.instance.client
-            .from('profiles')
-            .select('full_name')
-            .eq('id', authProvider.currentUser!.id)
-            .single();
-
-        if (response != null && response['full_name'] != null) {
-          supervisorNombre = response['full_name'];
-        }
-      } catch (e) {
-        print('Error obteniendo nombre del supervisor: $e');
-        // Usar email como fallback
-        supervisorNombre =
-            authProvider.currentUser?.email?.split('@').first ?? 'Supervisor';
-      }
       // 📥 IMPORTANTE: Establecer 'pendiente' según el status inicial
       final bool isPendiente =
           status == 'enviado'; // Solo es pendiente si se envía
 
+      // ✅ USAR EL ID ORIGINAL (UUID) PARA GUARDAR EN LA BASE DE DATOS
       final sancion = SancionModel(
-        supervisorId: supervisorNombre, // 🆕 USAR NOMBRE en vez de ID
+        supervisorId:
+            authProvider.currentUser!.id, // ✅ USAR UUID (NO el nombre)
         empleadoCod: _empleadoSeleccionado!.cod,
-        empleadoNombre: _empleadoSeleccionado!
-            .displayName, // Usa displayName que siempre retorna String
+        empleadoNombre: _empleadoSeleccionado!.displayName,
         puesto: _puestoController.text.trim(),
         agente: _agenteController.text.trim(),
         fecha: _fecha,
@@ -1123,25 +1104,25 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
             _observacionesAdicionalesController.text.trim().isEmpty
                 ? null
                 : _observacionesAdicionalesController.text.trim(),
-        pendiente: isPendiente, // 📥 ACTUALIZADO: true solo si se envía
+        pendiente: isPendiente,
         horasExtras: _horasExtras,
         status: status,
       );
 
       print('📋 Creando sanción:');
-      print('   Supervisor: $supervisorNombre'); // 🆕 MOSTRAR NOMBRE
+      print('   Supervisor ID: ${authProvider.currentUser!.id}'); // UUID
       print('   Status: $status');
       print('   Pendiente: $isPendiente');
 
-      // 📥 CAMBIO: Usar el repository ACTUALIZADO con compresión automática
+      // Guardar la sanción con el UUID
       await sancionRepository.createSancion(
         sancion: sancion,
-        fotoFile: _fotoSeleccionada, // Se comprime automáticamente
+        fotoFile: _fotoSeleccionada,
         signatureController:
             _signatureController.isNotEmpty ? _signatureController : null,
       );
 
-      // 🆕 Limpiar archivos temporales después de guardar
+      // Limpiar archivos temporales después de guardar
       await sancionRepository.cleanupTempFiles();
 
       if (mounted) {
