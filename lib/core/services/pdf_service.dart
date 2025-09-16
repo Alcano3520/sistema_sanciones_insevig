@@ -507,8 +507,8 @@ class PDFService {
       'MAL UNIFORMADO',
       'ABANDONO DE PUESTO',
       'MAL SERVICIO DE GUARDIA',
-      'INCUMPLIMIENTO DE POLÍTICAS',
-      'MAL USO DEL EQUIPO',
+      'INCUMPLIMIENTO DE POLITICAS',
+      'MAL USO DEL EQUIPO DE DOTACIÓN',
       'HORAS EXTRAS',
       'FRANCO TRABAJADO',
     ];
@@ -925,37 +925,43 @@ class PDFService {
 
   /// **Verificar si un tipo está seleccionado**
   bool _isTipoSelected(String tipo, SancionModel sancion) {
-    final tipoSancion = sancion.tipoSancion.toLowerCase();
-    final tipoCheck = tipo.toLowerCase();
+    final tipoSancion = sancion.tipoSancion.toLowerCase().trim();
+    final tipoCheck = tipo.toLowerCase().trim();
 
-    if (tipoCheck.contains('falta') && tipoSancion.contains('falta'))
-      return true;
-    if (tipoCheck.contains('atraso') && tipoSancion.contains('atraso'))
-      return true;
-    if (tipoCheck.contains('permiso') && tipoSancion.contains('permiso'))
-      return true;
-    if (tipoCheck.contains('dormido') && tipoSancion.contains('dormido'))
-      return true;
-    if (tipoCheck.contains('urbanidad') && tipoSancion.contains('urbanidad'))
-      return true;
-    if (tipoCheck.contains('respeto') && tipoSancion.contains('respeto'))
-      return true;
-    if (tipoCheck.contains('uniformado') && tipoSancion.contains('uniforme'))
-      return true;
-    if (tipoCheck.contains('abandono') && tipoSancion.contains('abandono'))
-      return true;
-    if (tipoCheck.contains('servicio') && tipoSancion.contains('servicio'))
-      return true;
-    if (tipoCheck.contains('políticas') && tipoSancion.contains('política'))
-      return true;
-    if (tipoCheck.contains('equipo') && tipoSancion.contains('equipo'))
-      return true;
-    if (tipoCheck.contains('horas extras') && sancion.horasExtras != null)
-      return true;
-    if (tipoCheck.contains('franco') && tipoSancion.contains('franco'))
-      return true;
+    // Comparación exacta primero
+    if (tipoSancion == tipoCheck) return true;
 
-    return false;
+    // Comparaciones específicas con lógica mejorada
+    switch (tipoCheck) {
+      case 'falta':
+        return tipoSancion == 'falta';
+      case 'atraso':
+        return tipoSancion == 'atraso';
+      case 'permiso':
+        return tipoSancion == 'permiso';
+      case 'dormido':
+        return tipoSancion == 'dormido';
+      case 'mala urbanidad':
+        return tipoSancion == 'mala urbanidad';
+      case 'falta de respeto':
+        return tipoSancion == 'falta de respeto';
+      case 'mal uniformado':
+        return tipoSancion == 'mal uniformado' || tipoSancion.contains('uniforme');
+      case 'abandono de puesto':
+        return tipoSancion == 'abandono de puesto' || tipoSancion.contains('abandono');
+      case 'mal servicio de guardia':
+        return tipoSancion == 'mal servicio de guardia' || tipoSancion.contains('servicio');
+      case 'incumplimiento de politicas':
+        return tipoSancion == 'incumplimiento de politicas' || tipoSancion.contains('politica');
+      case 'mal uso del equipo de dotación':
+        return tipoSancion == 'mal uso del equipo de dotación' || tipoSancion.contains('equipo');
+      case 'horas extras':
+        return tipoSancion == 'horas extras' || sancion.horasExtras != null;
+      case 'franco trabajado':
+        return tipoSancion == 'franco trabajado' || tipoSancion.contains('franco');
+      default:
+        return false;
+    }
   }
 
   /// **Generar nombre de archivo**
