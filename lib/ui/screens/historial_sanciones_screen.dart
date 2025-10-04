@@ -504,10 +504,24 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
   Widget _buildQuickStats() {
     final total = _sanciones.length;
     final pendientes = _sanciones.where((s) => s.pendiente).length;
-    final ultimaSemana = _sanciones
-        .where((s) => s.createdAt
-            .isAfter(DateTime.now().subtract(const Duration(days: 7))))
-        .length;
+
+    // Calcular inicio de la semana actual (lunes = 1, domingo = 7)
+    final ahora = DateTime.now();
+    final inicioSemana = ahora.subtract(Duration(days: ahora.weekday - 1));
+    final inicioSemanaSinHora = DateTime(
+      inicioSemana.year,
+      inicioSemana.month,
+      inicioSemana.day,
+    );
+
+    final ultimaSemana = _sanciones.where((s) {
+      final fechaCreacion = DateTime(
+        s.createdAt.year,
+        s.createdAt.month,
+        s.createdAt.day,
+      );
+      return !fechaCreacion.isBefore(inicioSemanaSinHora);
+    }).length;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1235,9 +1249,25 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
 
     if (dateRange != null) {
       final sancionesEnRango = _sanciones.where((sancion) {
-        return sancion.fecha
-                .isAfter(dateRange.start.subtract(const Duration(days: 1))) &&
-            sancion.fecha.isBefore(dateRange.end.add(const Duration(days: 1)));
+        // Comparar solo fechas, no horas
+        final fechaSancion = DateTime(
+          sancion.fecha.year,
+          sancion.fecha.month,
+          sancion.fecha.day,
+        );
+        final inicioRango = DateTime(
+          dateRange.start.year,
+          dateRange.start.month,
+          dateRange.start.day,
+        );
+        final finRango = DateTime(
+          dateRange.end.year,
+          dateRange.end.month,
+          dateRange.end.day,
+        );
+
+        return !fechaSancion.isBefore(inicioRango) &&
+            !fechaSancion.isAfter(finRango);
       }).toList();
 
       if (sancionesEnRango.isEmpty) {
@@ -1622,11 +1652,26 @@ class _HistorialSancionesScreenState extends State<HistorialSancionesScreen>
           return false;
         }
 
-        // Filtro por rango de fechas
+        // Filtro por rango de fechas (solo comparar fechas, no horas)
         if (_rangoFechas != null) {
-          final fechaSancion = sancion.fecha;
-          if (fechaSancion.isBefore(_rangoFechas!.start) ||
-              fechaSancion.isAfter(_rangoFechas!.end)) {
+          final fechaSancion = DateTime(
+            sancion.fecha.year,
+            sancion.fecha.month,
+            sancion.fecha.day,
+          );
+          final inicioRango = DateTime(
+            _rangoFechas!.start.year,
+            _rangoFechas!.start.month,
+            _rangoFechas!.start.day,
+          );
+          final finRango = DateTime(
+            _rangoFechas!.end.year,
+            _rangoFechas!.end.month,
+            _rangoFechas!.end.day,
+          );
+
+          if (fechaSancion.isBefore(inicioRango) ||
+              fechaSancion.isAfter(finRango)) {
             return false;
           }
         }

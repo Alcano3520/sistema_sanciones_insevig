@@ -30,6 +30,7 @@ class DetalleSancionScreen extends StatefulWidget {
 class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
   late SancionModel _sancion;
   bool _isLoading = false;
+  bool _hasChanges = false; // ✅ Track si hubo cambios para notificar al cerrar
 
   @override
   void initState() {
@@ -39,23 +40,34 @@ class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text('Detalle de Sanción'),
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: _compartirSancion,
-            tooltip: 'Compartir',
+    return WillPopScope(
+      // ✅ Interceptar el botón de retroceso para devolver si hubo cambios
+      onWillPop: () async {
+        Navigator.pop(context, _hasChanges);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: const Text('Detalle de Sanción'),
+          backgroundColor: const Color(0xFF1E3A8A),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            // ✅ Botón de retroceso personalizado que devuelve cambios
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context, _hasChanges),
           ),
-          _buildActionsMenu(),
-        ],
-      ),
-      body: SingleChildScrollView(
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: _compartirSancion,
+              tooltip: 'Compartir',
+            ),
+            _buildActionsMenu(),
+          ],
+        ),
+        body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,6 +112,7 @@ class _DetalleSancionScreenState extends State<DetalleSancionScreen> {
           ],
         ),
       ),
+      ), // ✅ Cerrar WillPopScope
     );
   }
 
@@ -894,6 +907,7 @@ ID: ${_sancion.id}
       if (sancionActualizada != null) {
         setState(() {
           _sancion = sancionActualizada;
+          _hasChanges = true; // ✅ Marcar que hubo cambios
         });
       }
 
@@ -988,6 +1002,7 @@ ID: ${_sancion.id}
       if (sancionActualizada != null) {
         setState(() {
           _sancion = sancionActualizada;
+          _hasChanges = true; // ✅ Marcar que hubo cambios
         });
 
         ScaffoldMessenger.of(context).showSnackBar(

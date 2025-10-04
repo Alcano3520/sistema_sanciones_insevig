@@ -420,12 +420,24 @@ class _FiltrosDialogState extends State<FiltrosDialog> {
 
   void _setRangoPredefinido(int dias) {
     final ahora = DateTime.now();
-    final inicio = ahora.subtract(Duration(days: dias));
+    DateTime inicio;
+    DateTime fin;
+
+    if (dias == 0) {
+      // "Hoy": desde las 00:00 hasta las 23:59 del día actual
+      inicio = DateTime(ahora.year, ahora.month, ahora.day);
+      fin = DateTime(ahora.year, ahora.month, ahora.day, 23, 59, 59);
+    } else {
+      // Otros rangos: desde hace X días a las 00:00 hasta hoy a las 23:59
+      inicio = DateTime(ahora.year, ahora.month, ahora.day)
+          .subtract(Duration(days: dias));
+      fin = DateTime(ahora.year, ahora.month, ahora.day, 23, 59, 59);
+    }
 
     setState(() {
       _rangoFechas = DateTimeRange(
         start: inicio,
-        end: ahora,
+        end: fin,
       );
     });
   }
