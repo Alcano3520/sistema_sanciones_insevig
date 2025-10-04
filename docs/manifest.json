@@ -1,11 +1,11 @@
 {
-    "name": "sistema_sanciones_insevig",
-    "short_name": "sistema_sanciones_insevig",
+    "name": "INSEVIG - Sanciones y Amonestaciones",
+    "short_name": "INSEVIG Sanciones",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1E3A8A",
+    "theme_color": "#1E3A8A",
+    "description": "Sistema de Gestión de Sanciones, Amonestaciones y Méritos - INSEVIG",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
