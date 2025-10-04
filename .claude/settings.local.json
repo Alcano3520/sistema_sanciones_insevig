@@ -3,7 +3,13 @@
     "allow": [
       "Bash(flutter:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)",
+      "Bash(dir:*)",
+      "Bash(\"build\\windows\\x64\\runner\\Release\\sistema_sanciones_insevig.exe\")",
+      "Bash(sistema_sanciones_insevig.exe)",
+      "Bash(.buildwindowsx64runnerReleasesistema_sanciones_insevig.exe)"
     ],
     "deny": [],
     "ask": []
