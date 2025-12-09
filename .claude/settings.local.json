@@ -9,7 +9,11 @@
       "Bash(dir:*)",
       "Bash(\"build\\windows\\x64\\runner\\Release\\sistema_sanciones_insevig.exe\")",
       "Bash(sistema_sanciones_insevig.exe)",
-      "Bash(.buildwindowsx64runnerReleasesistema_sanciones_insevig.exe)"
+      "Bash(.buildwindowsx64runnerReleasesistema_sanciones_insevig.exe)",
+      "Bash(gh auth:*)",
+      "Bash(where:*)",
+      "Bash(del .githubworkflowsstatic.yml)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
