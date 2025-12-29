@@ -77,6 +77,16 @@ class AuthProvider with ChangeNotifier {
     try {
       print('🔍 Cargando perfil para usuario ID: $userId');
 
+      // ✅ VALIDAR que userId sea un UUID válido
+      final uuidRegex = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
+      if (!uuidRegex.hasMatch(userId)) {
+        print('❌ ERROR: El userId no es un UUID válido: $userId');
+        _setError('Error de configuración: ID de usuario inválido');
+        return;
+      }
+
       // ✅ CORREGIDO: Usar 'profiles' en lugar de 'usuarios'
       final response = await _supabase
           .from('profiles') // ✅ Tabla correcta
@@ -84,12 +94,28 @@ class AuthProvider with ChangeNotifier {
           .eq('id', userId)
           .single();
 
+      // 🔍 DEBUG: Mostrar datos recibidos
+      print('📋 Datos del perfil recibidos:');
+      print('   - id: ${response['id']}');
+      print('   - email: ${response['email']}');
+      print('   - full_name: ${response['full_name']}');
+      print('   - role: ${response['role']}');
+      print('   - department: ${response['department']}');
+
+      // ✅ VALIDAR que el ID en la respuesta también sea UUID
+      final responseId = response['id']?.toString() ?? '';
+      if (!uuidRegex.hasMatch(responseId)) {
+        print('❌ ERROR: El ID en profiles no es UUID válido: $responseId');
+        _setError('Error de configuración: Perfil con ID inválido en la base de datos');
+        return;
+      }
+
       _currentUser = UserModel.fromMap(response);
       _clearError();
       notifyListeners();
 
       print(
-          '✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role})');
+          '✅ Usuario cargado: ${_currentUser?.fullName} (${_currentUser?.role}) - ID: ${_currentUser?.id}');
     } catch (e) {
       print('❌ Error cargando perfil desde PROFILES: $e');
       _setError('Error cargando perfil del usuario');
