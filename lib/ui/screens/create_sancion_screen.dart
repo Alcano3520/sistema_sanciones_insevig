@@ -1082,14 +1082,27 @@ class _CreateSancionScreenState extends State<CreateSancionScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final sancionRepository = SancionRepository.instance;
 
+      // ✅ VALIDACIÓN: Verificar que el ID del usuario sea un UUID válido
+      final supervisorId = authProvider.currentUser!.id;
+      final uuidRegex = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
+      if (!uuidRegex.hasMatch(supervisorId)) {
+        setState(() => _isLoading = false);
+        _mostrarError(
+            'Error de configuración: Tu perfil de usuario no está configurado correctamente. '
+            'Contacta al administrador para corregir tu cuenta.');
+        print('❌ ERROR: supervisor_id no es un UUID válido: $supervisorId');
+        return;
+      }
+
       // 📥 IMPORTANTE: Establecer 'pendiente' según el status inicial
       final bool isPendiente =
           status == 'enviado'; // Solo es pendiente si se envía
 
       // ✅ USAR EL ID ORIGINAL (UUID) PARA GUARDAR EN LA BASE DE DATOS
       final sancion = SancionModel(
-        supervisorId:
-            authProvider.currentUser!.id, // ✅ USAR UUID (NO el nombre)
+        supervisorId: supervisorId, // ✅ USAR UUID validado
         empleadoCod: _empleadoSeleccionado!.cod,
         empleadoNombre: _empleadoSeleccionado!.displayName,
         puesto: _puestoController.text.trim(),
